@@ -47,6 +47,7 @@ module Gemba
       'per_game_settings'  => false,
       'tip_dismiss_ms'     => 4000,
       'recording_compression' => 1,
+      'pause_on_focus_loss'  => true,
     }.freeze
 
     # Settings that can be overridden per ROM. Maps config key → locale key.
@@ -388,6 +389,15 @@ module Gemba
 
     def recording_compression=(val)
       global['recording_compression'] = val.to_i.clamp(1, 9)
+    end
+
+    # @return [Boolean] whether to pause emulation when window loses focus
+    def pause_on_focus_loss?
+      global['pause_on_focus_loss']
+    end
+
+    def pause_on_focus_loss=(val)
+      global['pause_on_focus_loss'] = !!val
     end
 
     # @return [String] directory for .grec recording files

@@ -82,6 +82,7 @@ module Gemba
       @save_mgr = nil  # created when ROM loaded
       @recorder = nil
       @recording_compression = @config.recording_compression
+      @pause_on_focus_loss = @config.pause_on_focus_loss?
       check_writable_dirs
 
       win_w = GBA_W * @scale
@@ -128,6 +129,7 @@ module Gemba
         on_quick_slot_change:   method(:apply_quick_slot),
         on_backup_change:       method(:apply_backup),
         on_compression_change:  method(:apply_recording_compression),
+        on_pause_on_focus_loss_change: method(:apply_pause_on_focus_loss),
         on_open_config_dir:     method(:open_config_dir),
         on_open_recordings_dir: method(:open_recordings_dir),
         on_close:               method(:on_child_window_close),
@@ -454,6 +456,7 @@ module Gemba
       @config.quick_save_slot = @quick_save_slot
       @config.save_state_backup = @save_state_backup
       @config.recording_compression = @recording_compression
+      @config.pause_on_focus_loss = @pause_on_focus_loss
 
       @kb_map.save_to_config
       @gp_map.save_to_config
@@ -592,6 +595,7 @@ module Gemba
       @app.set_variable(SettingsWindow::VAR_QUICK_SLOT, @quick_save_slot.to_s)
       @app.set_variable(SettingsWindow::VAR_SS_BACKUP, @save_state_backup ? '1' : '0')
       @app.set_variable(SettingsWindow::VAR_REC_COMPRESSION, @recording_compression.to_s)
+      @app.set_variable(SettingsWindow::VAR_PAUSE_FOCUS, @pause_on_focus_loss ? '1' : '0')
     end
 
     # Returns the currently active input map based on settings window mode.
@@ -669,6 +673,39 @@ module Gemba
                    title: 'mGBA Player', message: msg)
       @app.destroy('.')
       exit 1
+    end
+
+    FOCUS_POLL_MS = 200
+
+    def start_focus_poll
+      @had_focus = true
+      @app.after(FOCUS_POLL_MS) { focus_poll_tick }
+    end
+
+    def focus_poll_tick
+      return unless @running
+
+      has_focus = @viewport.renderer.input_focus?
+
+      if @had_focus && !has_focus
+        # Lost focus
+        if @pause_on_focus_loss && @core && !@paused
+          @was_paused_before_focus_loss = true
+          toggle_pause
+        end
+      elsif !@had_focus && has_focus
+        # Gained focus
+        if @was_paused_before_focus_loss && @paused
+          @was_paused_before_focus_loss = false
+          toggle_pause
+        end
+      end
+
+      @had_focus = has_focus
+      @app.after(FOCUS_POLL_MS) { focus_poll_tick }
+    rescue StandardError
+      # Renderer may be destroyed during shutdown
+      nil
     end
 
     def start_gamepad_probe
@@ -763,6 +800,8 @@ module Gemba
 
       @viewport.bind('FocusIn')  { @has_focus = true }
       @viewport.bind('FocusOut') { @has_focus = false }
+
+      start_focus_poll
 
       # Alt+Return fullscreen toggle (emulator convention)
       @app.command(:bind, @viewport.frame.path, '<Alt-Return>', proc { toggle_fullscreen })
@@ -989,6 +1028,11 @@ module Gemba
 
     def apply_recording_compression(val)
       @recording_compression = val.to_i.clamp(1, 9)
+    end
+
+    def apply_pause_on_focus_loss(val)
+      @pause_on_focus_loss = val
+      @was_paused_before_focus_loss = false unless val
     end
 
     def open_recordings_dir

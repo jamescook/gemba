@@ -132,6 +132,7 @@ module Gemba
     VAR_QUICK_SLOT     = '::mgba_quick_slot'
     VAR_SS_BACKUP      = '::mgba_ss_backup'
     VAR_REC_COMPRESSION = '::mgba_rec_compression'
+    VAR_PAUSE_FOCUS     = '::gemba_pause_focus_loss'
 
     # GBA button → widget path mapping
     GBA_BUTTONS = {
@@ -397,6 +398,22 @@ module Gemba
           mark_dirty
         })
       @app.command(:pack, SHOW_FPS_CHECK, side: :left)
+
+      # Pause on focus loss checkbox
+      pause_focus_row = "#{frame}.pause_focus_row"
+      @app.command('ttk::frame', pause_focus_row)
+      @app.command(:pack, pause_focus_row, fill: :x, padx: 10, pady: 5)
+
+      @app.set_variable(VAR_PAUSE_FOCUS, '1')
+      @app.command('ttk::checkbutton', "#{pause_focus_row}.check",
+        text: translate('settings.pause_on_focus_loss'),
+        variable: VAR_PAUSE_FOCUS,
+        command: proc { |*|
+          val = @app.get_variable(VAR_PAUSE_FOCUS) == '1'
+          @callbacks[:on_pause_on_focus_loss_change]&.call(val)
+          mark_dirty
+        })
+      @app.command(:pack, "#{pause_focus_row}.check", side: :left)
 
       # Toast duration
       toast_row = "#{frame}.toast_row"

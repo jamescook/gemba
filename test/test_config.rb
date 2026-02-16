@@ -849,4 +849,25 @@ class TestMGBAConfig < Minitest::Test
     dir = new_config.recordings_dir
     assert dir.end_with?('recordings'), "Expected recordings dir to end with 'recordings', got: #{dir}"
   end
+
+  # -- Pause on focus loss ---------------------------------------------------
+
+  def test_pause_on_focus_loss_default
+    assert new_config.pause_on_focus_loss?
+  end
+
+  def test_set_pause_on_focus_loss
+    c = new_config
+    c.pause_on_focus_loss = false
+    refute c.pause_on_focus_loss?
+  end
+
+  def test_round_trip_pause_on_focus_loss
+    c = new_config
+    c.pause_on_focus_loss = false
+    c.save!
+
+    c2 = Gemba::Config.new(path: @path)
+    refute c2.pause_on_focus_loss?
+  end
 end

@@ -62,6 +62,7 @@ settings:
   toast_duration: "Toast Duration:"
   maintain_aspect: "Maintain aspect ratio"
   show_fps: "Show FPS"
+  pause_on_focus_loss: "Pause when window loses focus"
   volume: "Volume:"
   mute: "Mute"
   dead_zone: "Dead zone:"

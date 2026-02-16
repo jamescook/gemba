@@ -812,4 +812,74 @@ class TestMGBAPlayer < Minitest::Test
     assert_includes stdout, "PASS", "Expected PASS in output\n#{output.join("\n")}"
     assert_match(/running=1 paused=50 resumed=1/, stdout)
   end
+
+  # E2E: verify focus loss pauses emulation and focus regain resumes it.
+  # Uses thread_timer_ms as a proxy for paused state (50=idle/paused, 1=fast/running).
+  def test_pause_on_focus_loss
+    skip "Run: ruby gemba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
+
+    code = <<~RUBY
+      require "gemba"
+      require "support/player_helpers"
+
+      player = Gemba::Player.new("#{TEST_ROM}")
+      app = player.app
+
+      poll_until_ready(player) do
+        renderer = player.viewport.renderer
+
+        # Confirm running (fast event loop)
+        ms_running = app.interp.thread_timer_ms
+        unless ms_running == 1
+          $stderr.puts "FAIL: expected running at 1ms, got \#{ms_running}"
+          exit 1
+        end
+
+        # Hide the SDL2 window to drop input focus
+        renderer.hide_window
+
+        # Wait for focus poll to detect the change (polls every 200ms)
+        app.after(300) do
+          ms_lost = app.interp.thread_timer_ms
+          unless ms_lost == 50
+            $stderr.puts "FAIL: expected paused (50ms) after focus loss, got \#{ms_lost}"
+            exit 1
+          end
+
+          # WORKAROUND: SDL_ShowWindow/SDL_RaiseWindow don't update
+          # SDL_WINDOW_INPUT_FOCUS without pumping the Cocoa event loop,
+          # so we can't test auto-resume on focus regain here. Instead
+          # we manually unpause with 'p' to verify the auto-pause state
+          # is correct and resumable. The auto-resume path works in
+          # production (Tk's mainloop pumps Cocoa) but is untested in CI.
+          renderer.show_window
+          renderer.raise_window
+          app.command(:event, 'generate', player.viewport.frame.path, '<KeyPress>', keysym: 'p')
+          app.command(:event, 'generate', player.viewport.frame.path, '<KeyRelease>', keysym: 'p')
+
+          app.after(100) do
+            ms_regained = app.interp.thread_timer_ms
+            unless ms_regained == 1
+              $stderr.puts "FAIL: expected resumed (1ms) after manual unpause, got \#{ms_regained}"
+              exit 1
+            end
+
+            $stdout.puts "PASS"
+            player.running = false
+          end
+        end
+      end
+
+      player.run
+    RUBY
+
+    success, stdout, stderr, _status = tk_subprocess(code)
+
+    output = []
+    output << "STDOUT:\n#{stdout}" unless stdout.empty?
+    output << "STDERR:\n#{stderr}" unless stderr.empty?
+
+    assert success, "Pause on focus loss test failed\n#{output.join("\n")}"
+    assert_includes stdout, "PASS", "Expected PASS in output\n#{output.join("\n")}"
+  end
 end
