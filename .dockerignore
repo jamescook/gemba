@@ -1,0 +1,16 @@
+# Don't send build artifacts to Docker daemon
+vendor/
+coverage/
+tmp/
+**/*.gem
+**/*.bundle
+**/*.so
+**/*.o
+**/*.dSYM
+**/Makefile
+**/mkmf.log
+.git
+.gitignore
+.dockerignore
+README.md
+CHANGELOG.md

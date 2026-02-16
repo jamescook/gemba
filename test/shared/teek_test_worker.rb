@@ -1,0 +1,388 @@
+# frozen_string_literal: true
+
+# Persistent Tk worker process for fast test execution.
+#
+# Instead of spawning a new Ruby process for each test this class keeps a single Tk interpreter
+# alive and resets state between tests. Trad-off is dealing with tests/code that mutate
+# global state.
+#
+# Uses pipe-based IPC (no threads) to avoid Tk threading issues.
+#
+# Usage:
+#   Teek::TestWorker.start
+#   result = Teek::TestWorker.run_test("label = TkLabel.new(root); ...")
+#   Teek::TestWorker.stop
+
+require 'minitest'
+require 'stringio'
+require 'fileutils'
+require 'tmpdir'
+require 'json'
+require 'open3'
+
+module Teek; end
+class Teek::TestWorker
+  SOCKET_DIR = File.join(Dir.tmpdir, 'teek_test_worker')
+  PID_FILE = File.join(SOCKET_DIR, 'worker.pid')
+  READY_FILE = File.join(SOCKET_DIR, 'ready')
+
+  class << self
+    def start
+      return if running?
+
+      FileUtils.mkdir_p(SOCKET_DIR)
+      cleanup_stale_files
+
+      # Build load path args
+      load_paths = $LOAD_PATH.select { |p| p.include?(File.dirname(File.dirname(__FILE__))) }
+      load_path_args = load_paths.flat_map { |p| ["-I", p] }
+
+      # Spawn worker with pipes
+      @stdin_w, @stdout_r, @stderr_r, @wait_thread = Open3.popen3(
+        RbConfig.ruby, *load_path_args, __FILE__, 'server'
+      )
+
+      File.write(PID_FILE, @wait_thread.pid.to_s)
+
+      # Wait for ready signal
+      wait_for_ready
+    end
+
+    def stop
+      return unless running?
+
+      begin
+        send_command('shutdown')
+      rescue
+        # Already dead
+      end
+
+      @stdin_w&.close
+      @stdout_r&.close
+      @stderr_r&.close
+      @wait_thread&.value rescue nil
+
+      @stdin_w = @stdout_r = @stderr_r = @wait_thread = nil
+      cleanup_stale_files
+    end
+
+    # Default timeout for test execution (can be overridden via TK_TEST_TIMEOUT env var)
+    DEFAULT_TIMEOUT = 60
+
+    def run_test(code, pipe_capture: false, timeout: nil, source_file: nil, source_line: nil)
+      start unless running?
+      timeout ||= Integer(ENV['TK_TEST_TIMEOUT'] || DEFAULT_TIMEOUT)
+      send_command('run', { code: code, pipe_capture: pipe_capture,
+                            source_file: source_file, source_line: source_line }, timeout: timeout)
+    end
+
+    def running?
+      @wait_thread&.alive? && @stdin_w && !@stdin_w.closed?
+    end
+
+    private
+
+    def send_command(cmd, data = nil, timeout: nil)
+      msg = JSON.generate({ cmd: cmd, data: data })
+      @stdin_w.puts(msg)
+      @stdin_w.flush
+
+      # Wait for response with timeout
+      if timeout
+        ready = IO.select([@stdout_r], nil, nil, timeout)
+        unless ready
+          # Kill the worker on timeout
+          Process.kill('KILL', @wait_thread.pid) rescue nil
+          raise "Test timed out after #{timeout}s"
+        end
+      end
+
+      response = @stdout_r.gets
+      unless response
+        # Try to get error info
+        err = @stderr_r.read_nonblock(4096) rescue "[no output]"
+        err_text = "Worker died: #{err}"
+
+        raise err_text
+      end
+
+      JSON.parse(response, symbolize_names: true)
+    end
+
+    def wait_for_ready(timeout: 10)
+      deadline = Time.now + timeout
+
+      until File.exist?(READY_FILE)
+        raise "Teek::TestWorker failed to start within #{timeout}s" if Time.now > deadline
+        sleep 0.05
+      end
+    end
+
+    def cleanup_stale_files
+      File.unlink(PID_FILE) if File.exist?(PID_FILE)
+      File.unlink(READY_FILE) if File.exist?(READY_FILE)
+    end
+  end
+
+  # Eval context for test code — provides minitest assertions and test helpers.
+  class TestContext
+    include Minitest::Assertions
+    require_relative 'screenshot_helper'
+    include ScreenshotHelper
+    attr_accessor :assertions
+    attr_reader :app
+
+    def initialize(app)
+      @app = app
+      @assertions = 0
+    end
+
+    # Resolve a path relative to the project root.
+    # Use for test fixtures that live in known locations.
+    #
+    #   fixture_path("teek-sdl2/assets/test_red_8x8.png")
+    #
+    def fixture_path(*parts)
+      File.expand_path(File.join(*parts), File.expand_path("..", __dir__))
+    end
+
+    # Retry until expected value is returned or timeout.
+    def wait_for_display(expected, timeout: 1.0)
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
+      result = nil
+      while Process.clock_gettime(Process::CLOCK_MONOTONIC) < deadline
+        @app.update
+        result = yield
+        break if result.to_s == expected
+        sleep 0.02
+      end
+      result
+    end
+
+    # Wait until block returns truthy or timeout.
+    def wait_until(timeout: 1.0)
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
+      result = nil
+      while Process.clock_gettime(Process::CLOCK_MONOTONIC) < deadline
+        @app.update
+        result = yield
+        break if result
+        sleep 0.02
+      end
+      result
+    end
+  end
+
+  # Server-side: runs in subprocess
+  class Server
+    def initialize
+      require 'teek'
+
+      # Test-only extension to reset widget auto-naming counters between tests.
+      Teek::App.include(Module.new {
+        def reset_widget_counters!
+          @widget_counters = Hash.new(0)
+        end
+      })
+
+      @app = Teek::App.new
+
+      # Override Tk's default bgerror dialog with a stderr handler.
+      # Without this, any background error (e.g. from `after` callbacks)
+      # shows a modal dialog that blocks headless/CI test runs.
+      @app.tcl_eval(<<~'TCL')
+        proc _teek_test_bgerror {msg opts} {
+          puts stderr "bgerror: $msg"
+        }
+        interp bgerror {} _teek_test_bgerror
+      TCL
+
+      @test_count = 0
+    end
+
+    def run
+      # Signal ready
+      File.write(READY_FILE, '')
+
+      # Main loop - read commands from stdin
+      while (line = $stdin.gets)
+        msg = JSON.parse(line, symbolize_names: true)
+
+        result = case msg[:cmd]
+        when 'run'
+          data = msg[:data]
+          run_test(data[:code], pipe_capture: data[:pipe_capture],
+                   source_file: data[:source_file], source_line: data[:source_line])
+        when 'shutdown'
+          # Write coverage BEFORE responding (parent closes pipes after response)
+          # This must happen here, not in at_exit, because the parent process
+          # closes pipes immediately after receiving the response.
+          SimpleCov.result if ENV['COVERAGE'] && defined?(SimpleCov)
+          shutdown
+          break
+        when 'ping'
+          { pong: true }
+        else
+          { error: "Unknown command: #{msg[:cmd]}" }
+        end
+
+        $stdout.puts(JSON.generate(result))
+        $stdout.flush
+      end
+    end
+
+    def run_test(code, pipe_capture: false, source_file: nil, source_line: nil)
+      @test_count += 1
+      # Use instance variable to avoid shadowing by test code's local variables
+      @_test_result = { success: true, stdout: "", stderr: "", test_number: @test_count }
+
+      # Pipe-based capture is needed for Ractor tests (StringIO isn't thread-safe)
+      @pipe_capture = pipe_capture
+      @source_file = source_file
+      @source_line = source_line
+
+      begin
+        # Capture stdout/stderr
+        old_stdout, old_stderr = $stdout, $stderr
+        if pipe_capture
+          @out_r, out_w = IO.pipe
+          @err_r, err_w = IO.pipe
+          out_w.sync = true
+          err_w.sync = true
+          $stdout = out_w
+          $stderr = err_w
+        else
+          captured_out = StringIO.new
+          captured_err = StringIO.new
+          $stdout = captured_out
+          $stderr = captured_err
+        end
+
+        # Execute test code with minitest assertions available
+        ctx = TestContext.new(@app)
+        eval_file = @source_file || "(test)"
+        eval_line = @source_line || 1
+        ctx.instance_eval(code, eval_file, eval_line)
+
+        if @pipe_capture
+          $stdout.close
+          $stderr.close
+          @_test_result[:stdout] = @out_r.read
+          @_test_result[:stderr] = @err_r.read
+        else
+          @_test_result[:stdout] = captured_out.string
+          @_test_result[:stderr] = captured_err.string
+        end
+      rescue Exception => e
+        @_test_result[:success] = false
+        @_test_result[:error_class] = e.class.name
+        @_test_result[:error_message] = e.message
+        @_test_result[:backtrace] = e.backtrace || []
+        if @pipe_capture
+          $stdout.close rescue nil
+          $stderr.close rescue nil
+          @_test_result[:stdout] = @out_r.read rescue ""
+          @_test_result[:stderr] = @err_r.read rescue ""
+        else
+          @_test_result[:stdout] = captured_out.string if captured_out
+          @_test_result[:stderr] = captured_err.string if captured_err
+        end
+
+        # Extract code context if error is in eval'd code
+        bt_pattern = @source_file ? /#{Regexp.escape(@source_file)}:(\d+)/ : /\(test\):(\d+)/
+        if (line_match = e.backtrace&.first&.match(bt_pattern))
+          line_num = line_match[1].to_i
+          code_lines = code.lines
+          # Convert absolute line number back to code array index
+          code_index = @source_line ? line_num - @source_line : line_num - 1
+          start_idx = [code_index - 2, 0].max
+          end_idx = [code_index + 2, code_lines.size - 1].min
+          context_lines = (start_idx..end_idx).map do |i|
+            abs_line = @source_line ? i + @source_line : i + 1
+            prefix = (i == code_index) ? ">>>" : "   "
+            "#{prefix} #{abs_line}: #{code_lines[i]}"
+          end
+          @_test_result[:code_context] = context_lines.join
+        end
+      ensure
+        $stdout, $stderr = old_stdout, old_stderr
+        if @pipe_capture
+          @out_r&.close rescue nil
+          @err_r&.close rescue nil
+        end
+        reset_tk_state!
+      end
+
+      @_test_result
+    end
+
+    def shutdown
+      @app.destroy('.') rescue nil
+      { shutdown: true }
+    end
+
+    private
+
+    def reset_tk_state!
+      # Destroy all children of root, then withdraw
+      children = @app.tcl_eval('winfo children .').split
+      children.each do |child|
+        @app.destroy(child) rescue nil
+      end
+      @app.hide
+
+      # Reset WM properties (these persist between tests)
+      @app.tcl_eval('wm minsize . 1 1')
+      @app.tcl_eval('wm maxsize . 0 0') rescue nil
+      @app.set_window_geometry('')
+
+      reset_grid_config!
+      @app.reset_widget_counters!
+    end
+
+    # Reset grid geometry manager state for a widget.
+    # Column/row weights, minsize, pad, uniform settings persist after
+    # children are removed, so we must explicitly clear them.
+    def reset_grid_config!(path = '.')
+      result = @app.tcl_eval("grid size #{path}")
+      cols, rows = result.to_s.split.map(&:to_i)
+      return if cols == 0 && rows == 0
+
+      @app.tcl_eval("grid anchor #{path} nw")
+      @app.tcl_eval("grid propagate #{path} 1")
+
+      cols.times do |c|
+        @app.tcl_eval("grid columnconfigure #{path} #{c} -weight 0 -minsize 0 -pad 0 -uniform {}")
+      end
+
+      rows.times do |r|
+        @app.tcl_eval("grid rowconfigure #{path} #{r} -weight 0 -minsize 0 -pad 0 -uniform {}")
+      end
+    end
+  end
+end
+
+# Run as server if executed with 'server' argument
+if ARGV[0] == 'server'
+  require 'open3'
+
+  # Set up SimpleCov for coverage collection in the worker process
+  if ENV['COVERAGE']
+    require 'simplecov'
+    require_relative 'simplecov_config'
+
+    coverage_name = ENV['COVERAGE_NAME'] || 'default'
+    SimpleCov.coverage_dir "#{SimpleCovConfig::PROJECT_ROOT}/coverage/results/#{coverage_name}_worker_#{Process.pid}"
+    SimpleCov.command_name "tk_worker:#{coverage_name}:#{Process.pid}"
+    SimpleCov.print_error_status = false
+    SimpleCov.formatter SimpleCov::Formatter::SimpleFormatter
+
+    SimpleCov.start do
+      SimpleCovConfig.apply_filters(self)
+      track_files "#{SimpleCovConfig::PROJECT_ROOT}/lib/**/*.rb"
+    end
+  end
+
+  FileUtils.mkdir_p(Teek::TestWorker::SOCKET_DIR)
+  Teek::TestWorker::Server.new.run
+end

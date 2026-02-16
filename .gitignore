@@ -1,0 +1,34 @@
+# Compiled C extension
+*.bundle
+*.so
+*.o
+*.def
+*.dSYM
+*.log
+Makefile
+
+# Vendor build artifacts (rebuilt with `rake deps`)
+vendor/
+
+# Gem build
+*.gem
+pkg/
+
+# Coverage
+coverage/
+
+# Local dep copies for Docker builds (populated by rake docker:build)
+_build_deps/
+
+# Beads issue tracker (local DB, synced via JSONL)
+.beads/
+
+# Tool versions (developer-specific)
+mise.toml
+
+# Bundler lock (path: gems make this machine-specific)
+Gemfile.lock
+
+# OS
+.DS_Store
+tmp/

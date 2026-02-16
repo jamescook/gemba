@@ -1,0 +1,208 @@
+# syntax=docker/dockerfile:1
+# Test Dockerfile for teek-mgba on Ubuntu 25.04
+#
+# Supports TCL_VERSION=9.0 (default) and TCL_VERSION=8.6 for testing
+# against both Tcl/Tk versions.
+#
+# Usage:
+#   docker build -f Dockerfile.ci-test -t teek-mgba-ci-9 .
+#   docker run --rm teek-mgba-ci-9
+#
+#   Or use rake tasks:
+#     rake docker:test                    # Test with Tcl 9.0
+#     TCL_VERSION=8.6 rake docker:test    # Test with Tcl 8.6
+
+# Ruby source - just grab pre-built Ruby, no compilation needed
+ARG RUBY_VERSION=3.4
+FROM ruby:${RUBY_VERSION}-slim AS ruby-source
+
+#############################################
+# BUILDER STAGE - compile extension only
+#############################################
+FROM ubuntu:25.04 AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Skip docs/man pages to speed up apt installs
+RUN echo 'path-exclude=/usr/share/doc/*' > /etc/dpkg/dpkg.cfg.d/excludes && \
+    echo 'path-exclude=/usr/share/man/*' >> /etc/dpkg/dpkg.cfg.d/excludes && \
+    echo 'path-exclude=/usr/share/locale/*' >> /etc/dpkg/dpkg.cfg.d/excludes
+
+COPY --from=ruby-source /usr/local /usr/local
+ENV PATH="/usr/local/bin:${PATH}"
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libyaml-dev \
+    libffi-dev \
+    libreadline-dev \
+    zlib1g-dev \
+    libssl-dev \
+    libx11-dev \
+    libxcursor-dev \
+    libsdl2-dev \
+    libsdl2-ttf-dev \
+    libsdl2-image-dev \
+    libsdl2-mixer-dev \
+    libsdl2-gfx-dev \
+    libmgba-dev
+
+# Tcl/Tk dev packages for compilation
+ARG TCL_VERSION=9.0
+ENV TCL_VERSION=${TCL_VERSION}
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    if [ "${TCL_VERSION}" = "8.6" ]; then \
+        apt-get update && apt-get install -y --no-install-recommends tcl-dev tk-dev; \
+    else \
+        apt-get update && apt-get install -y --no-install-recommends tcl9.0-dev tk9.0-dev libtommath-dev; \
+    fi
+
+# Ubuntu 25.04 pkg-config bug: tk9.0.pc requires "tcl" but only tcl9.0.pc exists
+RUN if [ "${TCL_VERSION}" != "8.6" ]; then \
+        MULTIARCH=$(dpkg-architecture -qDEB_HOST_MULTIARCH) && \
+        ln -sf tcl9.0.pc /usr/lib/${MULTIARCH}/pkgconfig/tcl.pc && \
+        ln -sf tk9.0.pc /usr/lib/${MULTIARCH}/pkgconfig/tk.pc; \
+    fi
+
+WORKDIR /app
+
+# Optional: local teek/teek-sdl2 for unreleased gem changes.
+# Populated by `rake docker:build` when sibling repos are detected.
+ARG TEEK_PATH=""
+ARG TEEK_SDL2_PATH=""
+COPY _build_deps/ /deps/
+ENV TEEK_PATH=${TEEK_PATH}
+ENV TEEK_SDL2_PATH=${TEEK_SDL2_PATH}
+
+# Copy only what's needed for bundle install first (for layer caching)
+COPY Gemfile teek-mgba.gemspec ./
+COPY lib/teek/mgba/version.rb lib/teek/mgba/version.rb
+
+ENV BUNDLE_PATH=/usr/local/bundle
+RUN --mount=type=cache,target=/bundle-cache \
+    if [ -d /bundle-cache/ruby ]; then \
+        echo "Restoring cached gems..." && \
+        mkdir -p $BUNDLE_PATH && \
+        cp -a /bundle-cache/* $BUNDLE_PATH/; \
+    fi && \
+    bundle install && \
+    cp -a $BUNDLE_PATH/* /bundle-cache/
+
+# Compile C extensions in local deps (path: gems don't auto-compile)
+RUN for extconf in /deps/*/ext/*/extconf.rb; do \
+        [ -f "$extconf" ] || continue; \
+        ext_dir=$(dirname "$extconf"); \
+        gem_dir=$(dirname "$(dirname "$ext_dir")"); \
+        echo "Compiling local dep extension: $ext_dir"; \
+        (cd "$ext_dir" && ruby extconf.rb && make -j$(nproc)) && \
+        find "$ext_dir" -name "*.so" -exec cp {} "$gem_dir/lib/" \; ; \
+    done
+
+# Now copy source code (after bundle install so changes don't invalidate gem cache)
+COPY Rakefile ./
+COPY ext/ ext/
+COPY lib/ lib/
+
+# Compile teek-mgba C extension
+RUN MAKEFLAGS="-j$(nproc)" bundle exec rake compile
+
+#############################################
+# RUNTIME STAGE - slim image for running tests
+#############################################
+FROM ubuntu:25.04 AS runtime
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# UTF-8 locale for Ruby's default external encoding.
+ENV LANG=C.UTF-8
+
+# Skip docs/man pages
+RUN echo 'path-exclude=/usr/share/doc/*' > /etc/dpkg/dpkg.cfg.d/excludes && \
+    echo 'path-exclude=/usr/share/man/*' >> /etc/dpkg/dpkg.cfg.d/excludes && \
+    echo 'path-exclude=/usr/share/locale/*' >> /etc/dpkg/dpkg.cfg.d/excludes
+
+ARG TCL_VERSION=9.0
+ENV TCL_VERSION=${TCL_VERSION}
+
+# Base runtime packages
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+    xvfb \
+    xdotool \
+    iproute2 \
+    netcat-openbsd \
+    ffmpeg \
+    imagemagick \
+    bwidget \
+    make \
+    libyaml-0-2 \
+    libffi8 \
+    libreadline8 \
+    zlib1g \
+    libssl3t64 \
+    libxcursor1 \
+    libsdl2-2.0-0 \
+    libsdl2-ttf-2.0-0 \
+    libsdl2-image-2.0-0 \
+    libsdl2-mixer-2.0-0 \
+    libsdl2-gfx-1.0-0 \
+    libmgba0.10t64 \
+    pulseaudio
+
+# Tcl/Tk version-specific packages
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    if [ "${TCL_VERSION}" = "8.6" ]; then \
+        apt-get update && apt-get install -y --no-install-recommends tcl tk libtk-img; \
+    else \
+        apt-get update && apt-get install -y --no-install-recommends tcl9.0 tk9.0 && \
+        ln -sf /usr/bin/tclsh9.0 /usr/bin/tclsh; \
+    fi
+
+# libtk-img for Tcl 9 (not in Ubuntu 25.04, fetch from Debian)
+RUN if [ "${TCL_VERSION}" != "8.6" ]; then \
+        apt-get update && apt-get install -y --no-install-recommends wget && \
+        ARCH=$(dpkg --print-architecture) && \
+        DEBIAN_POOL="http://ftp.us.debian.org/debian/pool/main" && \
+        wget -O /tmp/libjpeg62-turbo.deb "${DEBIAN_POOL}/libj/libjpeg-turbo/libjpeg62-turbo_2.1.5-4_${ARCH}.deb" && \
+        TKIMG_PKG=$(wget -qO- "${DEBIAN_POOL}/libt/libtk-img/" | grep -o "libtk-img_2\.1[^\"]*_${ARCH}\.deb" | sort -V | tail -1) && \
+        wget -O /tmp/libtk-img.deb "${DEBIAN_POOL}/libt/libtk-img/${TKIMG_PKG}" && \
+        dpkg -i --force-depends /tmp/libjpeg62-turbo.deb /tmp/libtk-img.deb && \
+        apt-get install -f -y --no-install-recommends && \
+        rm /tmp/libjpeg62-turbo.deb /tmp/libtk-img.deb && \
+        apt-get purge -y wget && apt-get autoremove -y && \
+        rm -rf /var/lib/apt/lists/*; \
+    fi
+
+# Copy Ruby and gems from builder
+COPY --from=builder /usr/local /usr/local
+ENV PATH="/usr/local/bin:${PATH}"
+ENV BUNDLE_PATH=/usr/local/bundle
+
+WORKDIR /app
+
+# Local deps (compiled in builder) — empty when using published gems
+COPY --from=builder /deps /deps
+ARG TEEK_PATH=""
+ARG TEEK_SDL2_PATH=""
+ENV TEEK_PATH=${TEEK_PATH}
+ENV TEEK_SDL2_PATH=${TEEK_SDL2_PATH}
+
+# Copy compiled extension and build state from builder
+COPY --from=builder /app/lib /app/lib
+COPY --from=builder /app/ext /app/ext
+COPY --from=builder /app/Rakefile /app/Rakefile
+COPY --from=builder /app/Gemfile /app/Gemfile
+COPY --from=builder /app/Gemfile.lock /app/Gemfile.lock
+COPY --from=builder /app/teek-mgba.gemspec /app/
+
+# Copy tests and assets directly from context (not cached with compilation)
+COPY test/ test/
+COPY assets/ assets/
+COPY scripts/ scripts/
+
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["xvfb-run", "-a", "bundle", "exec", "rake", "test"]
