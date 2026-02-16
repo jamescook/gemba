@@ -19,7 +19,7 @@ class TestMGBAPlayer < Minitest::Test
       player = Gemba::Player.new("#{TEST_ROM}")
       app = player.app
 
-      poll_until_ready(app) { player.running = false }
+      poll_until_ready(player) { player.running = false }
 
       player.run
     RUBY
@@ -44,7 +44,7 @@ class TestMGBAPlayer < Minitest::Test
       player = Gemba::Player.new("#{TEST_ROM}")
       app = player.app
 
-      poll_until_ready(app) do
+      poll_until_ready(player) do
         vp = player.viewport
         frame = vp.frame.path
 
@@ -88,7 +88,7 @@ class TestMGBAPlayer < Minitest::Test
       player = Gemba::Player.new("#{TEST_ROM}")
       app = player.app
 
-      poll_until_ready(app) do
+      poll_until_ready(player) do
         vp = player.viewport
         frame = vp.frame.path
 
@@ -137,7 +137,7 @@ class TestMGBAPlayer < Minitest::Test
       config.states_dir = states_dir
       config.save_state_debounce = 0.1
 
-      poll_until_ready(app) do
+      poll_until_ready(player) do
         core = player.save_mgr.core
         state_dir = player.save_mgr.state_dir
         vp = player.viewport
@@ -258,7 +258,7 @@ class TestMGBAPlayer < Minitest::Test
       config.states_dir = states_dir
       config.save_state_debounce = 5.0  # long debounce
 
-      poll_until_ready(app) do
+      poll_until_ready(player) do
         vp = player.viewport
         frame_path = vp.frame.path
 
@@ -332,7 +332,7 @@ class TestMGBAPlayer < Minitest::Test
       # Redirect config to a temp file so we can verify persistence
       config.path = config_path
 
-      poll_until_ready(app) do
+      poll_until_ready(player) do
         nb       = Gemba::SettingsWindow::NB
         ss_tab   = Gemba::SettingsWindow::SS_TAB
         slot_combo = Gemba::SettingsWindow::SS_SLOT_COMBO
@@ -448,7 +448,7 @@ class TestMGBAPlayer < Minitest::Test
       player = Gemba::Player.new("#{TEST_ROM}")
       app = player.app
 
-      poll_until_ready(app) do
+      poll_until_ready(player) do
         vp = player.viewport
         frame = vp.frame.path
 
@@ -551,7 +551,7 @@ class TestMGBAPlayer < Minitest::Test
       # Stub tk_messageBox so it never blocks
       app.tcl_eval('proc tk_messageBox {args} { return "ok" }')
 
-      poll_until_ready(app) do
+      poll_until_ready(player) do
         # Simulate dropping a ROM file onto the window
         app.tcl_eval('event generate . <<DropFile>> -data {#{TEST_ROM}}')
         app.update
@@ -594,7 +594,7 @@ class TestMGBAPlayer < Minitest::Test
       app.tcl_eval('set ::msgbox_calls {}')
       app.tcl_eval('proc tk_messageBox {args} { lappend ::msgbox_calls $args; return "ok" }')
 
-      poll_until_ready(app) do
+      poll_until_ready(player) do
         # Drop a .txt file — should be rejected
         app.tcl_eval('event generate . <<DropFile>> -data {/tmp/readme.txt}')
         app.update
@@ -637,7 +637,7 @@ class TestMGBAPlayer < Minitest::Test
       app.tcl_eval('set ::msgbox_calls {}')
       app.tcl_eval('proc tk_messageBox {args} { lappend ::msgbox_calls $args; return "ok" }')
 
-      poll_until_ready(app) do
+      poll_until_ready(player) do
         # Drop two ROM files — should be rejected
         app.tcl_eval('event generate . <<DropFile>> -data {#{TEST_ROM} /tmp/other.gba}')
         app.update
@@ -685,7 +685,7 @@ class TestMGBAPlayer < Minitest::Test
         config = player.config
         config.recordings_dir = rec_dir
 
-        poll_until_ready(app) do
+        poll_until_ready(player) do
           vp = player.viewport
           frame = vp.frame.path
 
@@ -758,7 +758,7 @@ class TestMGBAPlayer < Minitest::Test
       player = Gemba::Player.new("#{TEST_ROM}")
       app = player.app
 
-      poll_until_ready(app) do
+      poll_until_ready(player) do
         vp = player.viewport
         frame = vp.frame.path
 

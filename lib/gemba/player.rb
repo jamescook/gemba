@@ -147,9 +147,19 @@ module Gemba
       @rom_path = nil
       @initial_rom = rom_path
       @modal_child = nil  # tracks which child window is open
+      @sdl2_ready = false
+      @animate_started = false
 
-      # Block interaction until SDL2 is ready
-      @app.command('tk', 'busy', '.')
+      # Status label (shown when no ROM loaded)
+      @status_label = '.status_overlay'
+      @app.command(:label, @status_label,
+        text: translate('player.open_rom_hint'),
+        fg: '#888888', bg: '#000000',
+        font: '{TkDefaultFont} 11')
+      @app.command(:place, @status_label,
+        relx: 0.5, rely: 0.85, anchor: :center)
+
+      setup_drop_target
     end
 
     # @return [Teek::App]
@@ -168,7 +178,24 @@ module Gemba
     attr_reader :recorder
 
     # @return [Boolean] whether the main loop is running
-    attr_accessor :running
+    attr_reader :running
+
+    # @return [Boolean] true after SDL2 viewport/audio/renderer are initialized
+    def sdl2_ready? = @sdl2_ready
+
+    # @return [Boolean] true when the player is ready for interaction.
+    #   With a ROM: waits for SDL2 init and ROM load. Without: immediately ready.
+    def ready? = @initial_rom ? !!@core : true
+
+    def running=(val)
+      @running = val
+      return if val
+      # Without the animate loop (no SDL2 yet), exit mainloop directly
+      unless @sdl2_ready
+        cleanup
+        @app.command(:destroy, '.')
+      end
+    end
 
     # @return [Integer] current video scale multiplier
     attr_reader :scale
@@ -199,16 +226,11 @@ module Gemba
     attr_reader :gp_map
 
     def run
-      @sdl2_init_started = false
-      @app.after(1) do
-        @sdl2_init_started = true
-        init_sdl2
+      if @initial_rom
+        @app.after(1) { load_rom(@initial_rom) }
       end
       @app.mainloop
     ensure
-      unless @sdl2_init_started
-        $stderr.puts "FATAL: init_sdl2 callback never fired (event loop exited early)"
-      end
       cleanup
     end
 
@@ -220,18 +242,17 @@ module Gemba
     # main thread before macOS has a chance to display the window,
     # causing a brief spinning beach ball.
     def init_sdl2
+      return if @sdl2_ready
+
+      @app.command('tk', 'busy', '.')
+
       win_w = GBA_W * @scale
       win_h = GBA_H * @scale
 
       @viewport = Teek::SDL2::Viewport.new(@app, width: win_w, height: win_h, vsync: false)
       @viewport.pack(fill: :both, expand: true)
 
-      # Status label overlaid on viewport (shown when no ROM loaded)
-      @status_label = '.status_overlay'
-      @app.command(:label, @status_label,
-        text: translate('player.open_rom_hint'),
-        fg: '#888888', bg: '#000000',
-        font: '{TkDefaultFont} 11')
+      # Reposition status label onto viewport frame
       @app.command(:place, @status_label,
         in: @viewport.frame.path,
         relx: 0.5, rely: 0.85, anchor: :center)
@@ -288,12 +309,11 @@ module Gemba
       start_gamepad_probe
 
       setup_input
-      setup_drop_target
-
-      load_rom(@initial_rom) if @initial_rom
 
       # Apply fullscreen before unblocking (set via CLI --fullscreen)
       @app.command(:wm, 'attributes', '.', '-fullscreen', 1) if @fullscreen
+
+      @sdl2_ready = true
 
       # Unblock interaction now that SDL2 is ready
       @app.command('tk', 'busy', 'forget', '.')
@@ -301,8 +321,6 @@ module Gemba
       # Auto-focus viewport for keyboard input
       @app.tcl_eval("focus -force #{@viewport.frame.path}")
       @app.update
-
-      animate
     rescue => e
       # Surface init failures visibly — Tk's event loop can swallow
       # exceptions from `after` callbacks, causing silent hangs.
@@ -1052,10 +1070,9 @@ module Gemba
     end
 
     def load_rom(path)
-      # Menu callbacks (Open ROM, Recent) can fire before init_sdl2 because
-      # macOS renders the menu bar at the OS level, outside tk busy's reach.
-      # @stream is nil until init_sdl2; the ROM will load via @initial_rom.
-      return unless @stream
+      # Lazy-init SDL2 on first ROM load. Before this, the window shows
+      # only Tk widgets (menu bar, status label) — no black viewport.
+      init_sdl2 unless @sdl2_ready
 
       # Resolve ZIP archives to a bare ROM path
       rom_path = begin
@@ -1123,6 +1140,11 @@ module Gemba
       else
         @toast&.show(translate('toast.created_sav', name: sav_name))
       end
+
+      # Start the emulation loop (first ROM load only).
+      # Subsequent load_rom calls just swap the core — animate is already running.
+      animate unless @animate_started
+      @animate_started = true
     end
 
     def open_recent_rom(path)

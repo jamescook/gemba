@@ -11,19 +11,20 @@
 #
 # before the `event generate` call. See test_recording_toggle for an example.
 
-# Polls `tk busy status .` until the Player finishes SDL2 init
-# (viewport, audio, renderer), then yields the block.
+# Polls until the Player is ready, then yields the block.
 #
-# The Player sets `tk busy .` before init and clears it after,
-# so this fires as soon as the player is actually ready — no
-# speculative sleeps.
+# When a ROM is loaded, SDL2 initializes lazily on first load_rom call.
+# poll_until_ready waits for sdl2_ready? in that case. When no ROM is
+# loaded (e.g. drop target tests), the player is immediately interactive
+# so we just defer one tick for the event loop to settle.
 #
-# @param app [Teek::App]
-# @param timeout_ms [Integer] max wait before aborting (default 10s)
-def poll_until_ready(app, timeout_ms: 5_000, &block)
+# @param player [Gemba::Player]
+# @param timeout_ms [Integer] max wait before aborting (default 5s)
+def poll_until_ready(player, timeout_ms: 5_000, &block)
+  app = player.app
   deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout_ms / 1000.0
   check = proc do
-    if app.tcl_eval("tk busy status .") == "0"
+    if player.ready?
       block.call
     elsif Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
       $stderr.puts "FAIL: Player not ready within #{timeout_ms}ms"
