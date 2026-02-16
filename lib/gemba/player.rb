@@ -36,6 +36,8 @@ module Gemba
     FADE_IN_FRAMES     = (AUDIO_FREQ * 0.02).to_i  # ~20ms = 882 samples
     GAMEPAD_PROBE_MS   = 2000
     GAMEPAD_LISTEN_MS  = 50
+    EVENT_LOOP_FAST_MS = 1   # 1ms — needed for smooth emulation frame pacing
+    EVENT_LOOP_IDLE_MS = 50  # 50ms — sufficient for UI interaction when idle/paused
 
     # Modal child window types → locale keys for the window title overlay
     MODAL_LABELS = {
@@ -46,7 +48,7 @@ module Gemba
 
     def initialize(rom_path = nil, sound: true, fullscreen: false, frames: nil)
       @app = Teek::App.new
-      @app.interp.thread_timer_ms = 1  # need fast event dispatch for emulation
+      @app.interp.thread_timer_ms = EVENT_LOOP_IDLE_MS
       @app.show
 
       @sound = sound
@@ -497,6 +499,7 @@ module Gemba
       return unless @core && !@core.destroyed?
       unless @rewind_enabled
         @toast&.show(translate('toast.no_rewind'))
+        render_if_paused
         return
       end
       if @core.rewind_pop == true
@@ -504,10 +507,11 @@ module Gemba
         @stream.clear
         @audio_fade_in = FADE_IN_FRAMES
         @rewind_frame_counter = 0
-        render_frame
         @toast&.show(translate('toast.rewound'))
+        render_frame
       else
         @toast&.show(translate('toast.no_rewind'))
+        render_if_paused
       end
     end
 
@@ -838,7 +842,10 @@ module Gemba
         @stream.pause
         @toast&.show(translate('toast.paused'), permanent: true)
         @app.command(@emu_menu, :entryconfigure, 0, label: translate('menu.resume'))
+        render_frame # show paused toast on screen
+        set_event_loop_speed(:idle)
       else
+        set_event_loop_speed(:fast)
         @toast&.destroy
         @stream.clear
         @audio_fade_in = FADE_IN_FRAMES
@@ -1093,6 +1100,7 @@ module Gemba
       @rewind_frame_counter = 0
       @paused = false
       @stream.resume
+      set_event_loop_speed(:fast)
       @app.command(:place, :forget, @status_label) rescue nil
       @app.set_window_title("mGBA \u2014 #{@core.title}")
       @app.command(@view_menu, :entryconfigure, 1, state: :normal)
@@ -1170,18 +1178,9 @@ module Gemba
       end
 
       if @paused
-        dest = compute_dest_rect
-        @viewport.render do |r|
-          r.clear(0, 0, 0)
-          r.copy(@texture, nil, dest)
-          if @recorder&.recording?
-            rx = (dest ? dest[0] : 0) + 12
-            ry = (dest ? dest[1] : 0) + 12
-            r.fill_circle(rx, ry, 5, 220, 30, 30, 200)
-          end
-          @hud.draw(r, dest, show_fps: @show_fps)
-          @toast&.draw(r, dest)
-        end
+        # No-op: the last frame is already on screen (rendered on pause
+        # entry or by render_if_paused). The animate loop keeps running
+        # at 100ms just to check @running.
         return
       end
 
@@ -1318,6 +1317,20 @@ module Gemba
         end
         @stream.queue(pcm)
       end
+    end
+
+    # Re-render while paused (e.g. after rewind, toast, or settings change).
+    # No-op when running — the animate loop handles rendering.
+    def render_if_paused
+      render_frame if @paused && @core && @texture
+    end
+
+    # Switch Tcl event loop polling rate.
+    # :fast  — 1ms, needed for smooth emulation frame pacing
+    # :idle  — 50ms, sufficient for UI when paused or no ROM loaded
+    def set_event_loop_speed(mode)
+      ms = mode == :fast ? EVENT_LOOP_FAST_MS : EVENT_LOOP_IDLE_MS
+      @app.interp.thread_timer_ms = ms
     end
 
     def render_frame(ff_indicator: false)

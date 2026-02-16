@@ -737,4 +737,79 @@ class TestMGBAPlayer < Minitest::Test
     assert success, "Recording toggle test failed\n#{output.join("\n")}"
     assert_includes stdout, "PASS", "Expected .grec file to be created\n#{output.join("\n")}"
   end
+
+  # -- Pause CPU optimization (thread_timer_ms) --------------------------------
+
+  def test_event_loop_constants
+    require "gemba/player"
+    assert_equal 1,  Gemba::Player::EVENT_LOOP_FAST_MS, "fast loop should be 1ms"
+    assert_equal 50, Gemba::Player::EVENT_LOOP_IDLE_MS, "idle loop should be 50ms"
+  end
+
+  # E2E: verify thread_timer_ms switches between idle (50ms) and fast (1ms)
+  # when pausing and unpausing the emulator.
+  def test_pause_switches_event_loop_speed
+    skip "Run: ruby gemba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
+
+    code = <<~RUBY
+      require "gemba"
+      require "support/player_helpers"
+
+      player = Gemba::Player.new("#{TEST_ROM}")
+      app = player.app
+
+      poll_until_ready(app) do
+        vp = player.viewport
+        frame = vp.frame.path
+
+        # Before pause: should be fast (1ms) since ROM is running
+        ms_running = app.interp.thread_timer_ms
+        unless ms_running == 1
+          $stderr.puts "FAIL: expected thread_timer_ms=1 while running, got \#{ms_running}"
+          exit 1
+        end
+
+        # Pause (p key — default hotkey)
+        app.command(:event, 'generate', frame, '<KeyPress>', keysym: 'p')
+        app.update
+
+        app.after(50) do
+          ms_paused = app.interp.thread_timer_ms
+          unless ms_paused == 50
+            $stderr.puts "FAIL: expected thread_timer_ms=50 while paused, got \#{ms_paused}"
+            exit 1
+          end
+
+          # Unpause (p key again)
+          app.tcl_eval("focus -force \#{frame}")
+          app.command(:event, 'generate', frame, '<KeyPress>', keysym: 'p')
+          app.update
+
+          app.after(50) do
+            ms_resumed = app.interp.thread_timer_ms
+            unless ms_resumed == 1
+              $stderr.puts "FAIL: expected thread_timer_ms=1 after resume, got \#{ms_resumed}"
+              exit 1
+            end
+
+            $stdout.puts "PASS"
+            $stdout.puts "running=\#{ms_running} paused=\#{ms_paused} resumed=\#{ms_resumed}"
+            player.running = false
+          end
+        end
+      end
+
+      player.run
+    RUBY
+
+    success, stdout, stderr, _status = tk_subprocess(code)
+
+    output = []
+    output << "STDOUT:\n#{stdout}" unless stdout.empty?
+    output << "STDERR:\n#{stderr}" unless stderr.empty?
+
+    assert success, "Pause event loop speed test failed\n#{output.join("\n")}"
+    assert_includes stdout, "PASS", "Expected PASS in output\n#{output.join("\n")}"
+    assert_match(/running=1 paused=50 resumed=1/, stdout)
+  end
 end

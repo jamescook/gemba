@@ -2,8 +2,9 @@
 # frozen_string_literal: true
 
 # When running from a development checkout (not installed as a gem),
-# add lib/ to the load path.
+# add lib/ to the load path and activate Bundler for gem dependencies.
 if File.exist?(File.expand_path("../lib/gemba.rb", __dir__))
+  require "bundler/setup"
   path = File.expand_path("../lib", __dir__)
   $LOAD_PATH.unshift(path) unless $LOAD_PATH.include?(path)
 end
