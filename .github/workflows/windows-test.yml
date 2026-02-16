@@ -1,0 +1,112 @@
+name: Windows CI
+
+on:
+  workflow_dispatch:
+    inputs:
+      ruby_version:
+        description: 'Ruby version to test'
+        required: true
+        default: '3.4'
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-windows:
+    name: test (ruby ${{ github.event.inputs.ruby_version }}, Windows)
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: ${{ github.event.inputs.ruby_version }}
+        bundler-cache: true
+
+    - name: Locate MSYS2
+      id: msys2
+      shell: bash
+      run: |
+        MSYS2_ROOT=$(ruby -e "puts RbConfig::CONFIG['prefix']")/msys64
+        echo "root=$MSYS2_ROOT" >> "$GITHUB_OUTPUT"
+
+    - name: Snapshot MSYS2 DB version
+      id: msys2-db
+      shell: bash
+      run: |
+        MSYS2_ROOT="${{ steps.msys2.outputs.root }}"
+        # Hash the sync DB to detect when upstream packages change
+        DB_HASH=$(cat "$MSYS2_ROOT"/var/lib/pacman/sync/*.db | sha256sum | cut -c1-16)
+        echo "hash=$DB_HASH" >> "$GITHUB_OUTPUT"
+
+    - name: Restore MSYS2 installed packages
+      id: msys2-cache
+      uses: actions/cache/restore@v5
+      with:
+        path: |
+          ${{ steps.msys2.outputs.root }}/var/cache/pacman/pkg
+          ${{ steps.msys2.outputs.root }}/var/lib/pacman/local
+          ${{ steps.msys2.outputs.root }}/ucrt64
+        key: msys2-installed-${{ runner.os }}-ruby${{ github.event.inputs.ruby_version }}-${{ steps.msys2-db.outputs.hash }}-${{ hashFiles('.github/workflows/windows-test.yml') }}
+
+    - name: Install MSYS2 packages
+      if: steps.msys2-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        MSYS2_ROOT="${{ steps.msys2.outputs.root }}"
+
+        $MSYS2_ROOT/usr/bin/pacman -S --needed --noconfirm \
+          mingw-w64-ucrt-x86_64-tcl \
+          mingw-w64-ucrt-x86_64-tk \
+          mingw-w64-ucrt-x86_64-tkimg \
+          mingw-w64-ucrt-x86_64-SDL2 \
+          mingw-w64-ucrt-x86_64-SDL2_ttf \
+          mingw-w64-ucrt-x86_64-SDL2_image \
+          mingw-w64-ucrt-x86_64-SDL2_mixer \
+          mingw-w64-ucrt-x86_64-SDL2_gfx \
+          mingw-w64-ucrt-x86_64-mgba \
+          mingw-w64-ucrt-x86_64-imagemagick
+
+    - name: Restore compiled extension
+      id: ext-cache
+      uses: actions/cache/restore@v5
+      with:
+        path: lib/*.so
+        key: windows-ext-ruby${{ github.event.inputs.ruby_version }}-${{ hashFiles('ext/**/*.c', 'ext/**/*.h', 'ext/**/extconf.rb', 'Rakefile', 'Gemfile.lock') }}
+
+    - name: Compile native extension
+      run: bundle exec rake compile 2>&1 | tee compile-output.log
+
+    - name: Run tests
+      timeout-minutes: 5
+      run: bundle exec rake test TESTOPTS="-v"
+
+    - name: Save MSYS2 installed packages
+      if: always() && steps.msys2-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v5
+      with:
+        path: |
+          ${{ steps.msys2.outputs.root }}/var/cache/pacman/pkg
+          ${{ steps.msys2.outputs.root }}/var/lib/pacman/local
+          ${{ steps.msys2.outputs.root }}/ucrt64
+        key: msys2-installed-${{ runner.os }}-ruby${{ github.event.inputs.ruby_version }}-${{ steps.msys2-db.outputs.hash }}-${{ hashFiles('.github/workflows/windows-test.yml') }}
+
+    - name: Save compiled extension
+      if: always() && steps.ext-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v5
+      with:
+        path: lib/*.so
+        key: windows-ext-ruby${{ github.event.inputs.ruby_version }}-${{ hashFiles('ext/**/*.c', 'ext/**/*.h', 'ext/**/extconf.rb', 'Rakefile', 'Gemfile.lock') }}
+
+    - name: Upload build and test logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-logs-ruby${{ github.event.inputs.ruby_version }}
+        path: |
+          compile-output.log
+          ext/gemba/mkmf.log
+        retention-days: 7
