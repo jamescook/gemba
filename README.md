@@ -1,4 +1,4 @@
-# teek-mgba
+# gemba
 
 A GBA emulator frontend powered by [teek](https://github.com/jamescook/teek) and [libmgba](https://github.com/mgba-emu/mgba).
 
@@ -9,7 +9,7 @@ Tk-based settings UI.
 ## Usage
 
 ```
-teek-mgba [options] [ROM_FILE]
+gemba [options] [ROM_FILE]
 ```
 
 If no ROM file is given, the player opens empty — use the menu to load a ROM.
@@ -58,10 +58,10 @@ Currently supported:
 To force a specific language:
 
 ```ruby
-Teek::MGBA.user_config.locale = 'ja'
+Gemba.user_config.locale = 'ja'
 ```
 
-Adding a new language: create `lib/teek/mgba/locales/<code>.yml` following
+Adding a new language: create `lib/gemba/locales/<code>.yml` following
 the structure in `en.yml`.
 
 ## License

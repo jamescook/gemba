@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Generates a minimal valid GBA ROM for testing teek-mgba.
+# Generates a minimal valid GBA ROM for testing gemba.
 #
 # The ROM contains a valid GBA header (entry branch, title, fixed byte,
 # complement checksum) and an ARM infinite loop. mGBA will load it,
@@ -12,10 +12,10 @@
 #   https://problemkaputt.de/gbatek-gba-cartridge-header.htm
 #
 # Usage:
-#   ruby teek-mgba/scripts/generate_test_rom.rb
+#   ruby gemba/scripts/generate_test_rom.rb
 #
 # Output:
-#   teek-mgba/test/fixtures/test.gba
+#   gemba/test/fixtures/test.gba
 
 rom = ("\x00".b) * 512
 
@@ -26,10 +26,10 @@ rom[0, 4] = [0xEA000006].pack("V")
 rom[0x20, 4] = [0xEAFFFFFE].pack("V")
 
 # 0xA0..0xAB: Game title (12 bytes, padded with NUL)
-rom[0xA0, 12] = "TEEKTEST".ljust(12, "\x00")
+rom[0xA0, 12] = "GEMBATEST".ljust(12, "\x00")
 
-# 0xAC..0xAF: Game code (B=GBA, TK=Teek, E=English)
-rom[0xAC, 4] = "BTKE"
+# 0xAC..0xAF: Game code (B=GBA, GB=Gemba, E=English)
+rom[0xAC, 4] = "BGBE"
 
 # 0xB0..0xB1: Maker code
 rom[0xB0, 2] = "01"

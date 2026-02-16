@@ -1,13 +1,13 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
-require "teek_mgba"
-require_relative "../lib/teek/mgba/version"
-require_relative "../lib/teek/mgba/cli"
+require "gemba"
+require_relative "../lib/gemba/version"
+require_relative "../lib/gemba/cli"
 
 class TestCLI < Minitest::Test
   def parse(args)
-    Teek::MGBA::CLI.parse(args)
+    Gemba::CLI.parse(args)
   end
 
   # -- ROM argument --
@@ -144,7 +144,7 @@ class TestCLI < Minitest::Test
   def test_help_output_includes_banner
     opts = parse([])
     help = opts[:parser].to_s
-    assert_includes help, "Usage: teek-mgba"
+    assert_includes help, "Usage: gemba"
     assert_includes help, "GBA emulator"
   end
 
@@ -173,7 +173,7 @@ class TestCLI < Minitest::Test
 
   def test_apply_overrides_config
     config = MockConfig.new
-    Teek::MGBA::CLI.apply(config, { scale: 2, volume: 50, mute: true, show_fps: true })
+    Gemba::CLI.apply(config, { scale: 2, volume: 50, mute: true, show_fps: true })
     assert_equal 2, config.scale
     assert_equal 50, config.volume
     assert config.muted
@@ -182,7 +182,7 @@ class TestCLI < Minitest::Test
 
   def test_apply_skips_unset_options
     config = MockConfig.new
-    Teek::MGBA::CLI.apply(config, {})
+    Gemba::CLI.apply(config, {})
     assert_equal 3, config.scale
     assert_equal 100, config.volume
     refute config.muted
@@ -190,56 +190,56 @@ class TestCLI < Minitest::Test
 
   def test_apply_locale
     config = MockConfig.new
-    Teek::MGBA::CLI.apply(config, { locale: 'ja' })
+    Gemba::CLI.apply(config, { locale: 'ja' })
     assert_equal 'ja', config.locale
   end
 
   def test_apply_turbo_speed
     config = MockConfig.new
-    Teek::MGBA::CLI.apply(config, { turbo_speed: 3 })
+    Gemba::CLI.apply(config, { turbo_speed: 3 })
     assert_equal 3, config.turbo_speed
   end
 
   # -- subcommand dispatch --
 
   def test_subcommands_constant
-    assert_includes Teek::MGBA::CLI::SUBCOMMANDS, 'record'
-    assert_includes Teek::MGBA::CLI::SUBCOMMANDS, 'decode'
-    assert_includes Teek::MGBA::CLI::SUBCOMMANDS, 'info'
+    assert_includes Gemba::CLI::SUBCOMMANDS, 'record'
+    assert_includes Gemba::CLI::SUBCOMMANDS, 'decode'
+    assert_includes Gemba::CLI::SUBCOMMANDS, 'info'
   end
 
   # -- record subcommand parsing --
 
   def test_parse_record_frames_and_rom
-    opts = Teek::MGBA::CLI.parse_record(["--frames", "100", "game.gba"])
+    opts = Gemba::CLI.parse_record(["--frames", "100", "game.gba"])
     assert_equal 100, opts[:frames]
     assert_equal File.expand_path("game.gba"), opts[:rom]
   end
 
   def test_parse_record_output
-    opts = Teek::MGBA::CLI.parse_record(["-o", "out.trec", "--frames", "10", "game.gba"])
-    assert_equal "out.trec", opts[:output]
+    opts = Gemba::CLI.parse_record(["-o", "out.grec", "--frames", "10", "game.gba"])
+    assert_equal "out.grec", opts[:output]
   end
 
   def test_parse_record_help
-    opts = Teek::MGBA::CLI.parse_record(["--help"])
+    opts = Gemba::CLI.parse_record(["--help"])
     assert opts[:help]
   end
 
   # -- decode subcommand parsing --
 
   def test_parse_decode_trec
-    opts = Teek::MGBA::CLI.parse_decode(["recording.trec"])
-    assert_equal "recording.trec", opts[:trec]
+    opts = Gemba::CLI.parse_decode(["recording.grec"])
+    assert_equal "recording.grec", opts[:trec]
   end
 
   def test_parse_decode_output
-    opts = Teek::MGBA::CLI.parse_decode(["-o", "out.mkv", "recording.trec"])
+    opts = Gemba::CLI.parse_decode(["-o", "out.mkv", "recording.grec"])
     assert_equal "out.mkv", opts[:output]
   end
 
   def test_parse_decode_codecs
-    opts = Teek::MGBA::CLI.parse_decode(["--video-codec", "libx265", "--audio-codec", "opus", "r.trec"])
+    opts = Gemba::CLI.parse_decode(["--video-codec", "libx265", "--audio-codec", "opus", "r.grec"])
     assert_equal "libx265", opts[:video_codec]
     assert_equal "opus", opts[:audio_codec]
   end
@@ -267,7 +267,7 @@ class TestCLI < Minitest::Test
 
   def test_frames_without_rom_exits
     assert_raises(SystemExit) do
-      Teek::MGBA::CLI.run(["--frames", "100"])
+      Gemba::CLI.run(["--frames", "100"])
     end
   end
 

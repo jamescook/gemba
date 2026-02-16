@@ -1,26 +1,26 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
-require "teek/mgba/headless"
+require "gemba/headless"
 require "tmpdir"
 
 class TestRecorder < Minitest::Test
   TEST_ROM = File.expand_path("fixtures/test.gba", __dir__)
 
   def setup
-    skip "Run: ruby teek-mgba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
+    skip "Run: ruby gemba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
   end
 
   def test_record_and_decode_round_trip
     skip "ffmpeg not installed" unless ffmpeg_available?
 
     Dir.mktmpdir do |dir|
-      trec_path = File.join(dir, "test.trec")
+      trec_path = File.join(dir, "test.grec")
       output_path = File.join(dir, "test.mp4")
       frames = 10
 
       # Record
-      Teek::MGBA::HeadlessPlayer.open(TEST_ROM) do |player|
+      Gemba::HeadlessPlayer.open(TEST_ROM) do |player|
         player.start_recording(trec_path)
         player.step(frames)
         player.stop_recording
@@ -30,7 +30,7 @@ class TestRecorder < Minitest::Test
       assert_operator File.size(trec_path), :>, 32 # at least header
 
       # Decode → encode
-      info = Teek::MGBA::RecorderDecoder.decode(trec_path, output_path)
+      info = Gemba::RecorderDecoder.decode(trec_path, output_path)
 
       assert_equal 240, info[:width]
       assert_equal 160, info[:height]
@@ -47,9 +47,9 @@ class TestRecorder < Minitest::Test
 
   def test_decode_without_ffmpeg_raises
     Dir.mktmpdir do |dir|
-      trec_path = File.join(dir, "test.trec")
+      trec_path = File.join(dir, "test.grec")
 
-      Teek::MGBA::HeadlessPlayer.open(TEST_ROM) do |player|
+      Gemba::HeadlessPlayer.open(TEST_ROM) do |player|
         player.start_recording(trec_path)
         player.step(1)
         player.stop_recording
@@ -57,8 +57,8 @@ class TestRecorder < Minitest::Test
 
       output_path = File.join(dir, "test.mp4")
       with_empty_path do
-        assert_raises(Teek::MGBA::RecorderDecoder::FfmpegNotFound) do
-          Teek::MGBA::RecorderDecoder.decode(trec_path, output_path)
+        assert_raises(Gemba::RecorderDecoder::FfmpegNotFound) do
+          Gemba::RecorderDecoder.decode(trec_path, output_path)
         end
       end
     end
@@ -66,9 +66,9 @@ class TestRecorder < Minitest::Test
 
   def test_delta_compression_reduces_size
     Dir.mktmpdir do |dir|
-      trec_path = File.join(dir, "test.trec")
+      trec_path = File.join(dir, "test.grec")
 
-      Teek::MGBA::HeadlessPlayer.open(TEST_ROM) do |player|
+      Gemba::HeadlessPlayer.open(TEST_ROM) do |player|
         player.start_recording(trec_path)
         player.step(30)
         player.stop_recording
@@ -76,15 +76,15 @@ class TestRecorder < Minitest::Test
 
       trec_size = File.size(trec_path)
       raw_size = 240 * 160 * 4 * 30 # ~4.6MB uncompressed video alone
-      assert_operator trec_size, :<, raw_size, "Compressed .trec should be smaller than raw"
+      assert_operator trec_size, :<, raw_size, "Compressed .grec should be smaller than raw"
     end
   end
 
   def test_recording_state
     Dir.mktmpdir do |dir|
-      trec_path = File.join(dir, "test.trec")
+      trec_path = File.join(dir, "test.grec")
 
-      Teek::MGBA::HeadlessPlayer.open(TEST_ROM) do |player|
+      Gemba::HeadlessPlayer.open(TEST_ROM) do |player|
         refute player.recording?
         player.start_recording(trec_path)
         assert player.recording?
@@ -97,9 +97,9 @@ class TestRecorder < Minitest::Test
 
   def test_close_stops_recording
     Dir.mktmpdir do |dir|
-      trec_path = File.join(dir, "test.trec")
+      trec_path = File.join(dir, "test.grec")
 
-      player = Teek::MGBA::HeadlessPlayer.new(TEST_ROM)
+      player = Gemba::HeadlessPlayer.new(TEST_ROM)
       player.start_recording(trec_path)
       player.step(5)
       player.close # should stop recording gracefully
@@ -111,10 +111,10 @@ class TestRecorder < Minitest::Test
 
   def test_double_start_raises
     Dir.mktmpdir do |dir|
-      Teek::MGBA::HeadlessPlayer.open(TEST_ROM) do |player|
-        player.start_recording(File.join(dir, "a.trec"))
+      Gemba::HeadlessPlayer.open(TEST_ROM) do |player|
+        player.start_recording(File.join(dir, "a.grec"))
         assert_raises(RuntimeError) do
-          player.start_recording(File.join(dir, "b.trec"))
+          player.start_recording(File.join(dir, "b.grec"))
         end
         player.stop_recording
       end
@@ -123,9 +123,9 @@ class TestRecorder < Minitest::Test
 
   def test_header_format
     Dir.mktmpdir do |dir|
-      trec_path = File.join(dir, "test.trec")
+      trec_path = File.join(dir, "test.grec")
 
-      Teek::MGBA::HeadlessPlayer.open(TEST_ROM) do |player|
+      Gemba::HeadlessPlayer.open(TEST_ROM) do |player|
         player.start_recording(trec_path)
         player.step(1)
         player.stop_recording
@@ -133,7 +133,7 @@ class TestRecorder < Minitest::Test
 
       File.open(trec_path, 'rb') do |f|
         header = f.read(32)
-        assert_equal "TEEKREC\0", header[0, 8]
+        assert_equal "GEMBAREC", header[0, 8]
         assert_equal 1, header[8].unpack1('C') # version
         w, h = header[9, 4].unpack('v2')
         assert_equal 240, w
@@ -144,9 +144,9 @@ class TestRecorder < Minitest::Test
 
   def test_footer_present
     Dir.mktmpdir do |dir|
-      trec_path = File.join(dir, "test.trec")
+      trec_path = File.join(dir, "test.grec")
 
-      Teek::MGBA::HeadlessPlayer.open(TEST_ROM) do |player|
+      Gemba::HeadlessPlayer.open(TEST_ROM) do |player|
         player.start_recording(trec_path)
         player.step(5)
         player.stop_recording
@@ -157,7 +157,7 @@ class TestRecorder < Minitest::Test
         footer = f.read(8)
         frame_count, magic = footer.unpack('Va4')
         assert_equal 5, frame_count
-        assert_equal "TEND", magic
+        assert_equal "GEND", magic
       end
     end
   end

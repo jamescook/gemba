@@ -13,10 +13,10 @@ class TestMGBAPlayer < Minitest::Test
   # the test fails — catching exit-hang regressions.
   def test_exit_with_rom_loaded_does_not_hang
     code = <<~RUBY
-      require "teek/mgba"
+      require "gemba"
       require "support/player_helpers"
 
-      player = Teek::MGBA::Player.new("#{TEST_ROM}")
+      player = Gemba::Player.new("#{TEST_ROM}")
       app = player.app
 
       poll_until_ready(app) { player.running = false }
@@ -38,10 +38,10 @@ class TestMGBAPlayer < Minitest::Test
   # causes a hang or crash the subprocess will time out.
   def test_fullscreen_toggle_does_not_hang
     code = <<~RUBY
-      require "teek/mgba"
+      require "gemba"
       require "support/player_helpers"
 
-      player = Teek::MGBA::Player.new("#{TEST_ROM}")
+      player = Gemba::Player.new("#{TEST_ROM}")
       app = player.app
 
       poll_until_ready(app) do
@@ -82,10 +82,10 @@ class TestMGBAPlayer < Minitest::Test
   # the quit key never reaches the KeyPress handler — causing a hang.
   def test_exit_during_turbo_does_not_hang
     code = <<~RUBY
-      require "teek/mgba"
+      require "gemba"
       require "support/player_helpers"
 
-      player = Teek::MGBA::Player.new("#{TEST_ROM}")
+      player = Gemba::Player.new("#{TEST_ROM}")
       app = player.app
 
       poll_until_ready(app) do
@@ -118,18 +118,18 @@ class TestMGBAPlayer < Minitest::Test
   # Verifies state file + screenshot are created, backup rotation works,
   # and the core remains functional after load.
   def test_quick_save_and_load_creates_files_and_restores_state
-    skip "Run: ruby teek-mgba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
+    skip "Run: ruby gemba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
 
     code = <<~RUBY
-      require "teek/mgba"
+      require "gemba"
       require "tmpdir"
       require "fileutils"
       require "support/player_helpers"
 
       # Use a temp dir for all config/states so we don't pollute the real one
-      states_dir = Dir.mktmpdir("teek-states-test")
+      states_dir = Dir.mktmpdir("gemba-states-test")
 
-      player = Teek::MGBA::Player.new("#{TEST_ROM}")
+      player = Gemba::Player.new("#{TEST_ROM}")
       app = player.app
       config = player.config
 
@@ -241,17 +241,17 @@ class TestMGBAPlayer < Minitest::Test
 
   # E2E: verify debounce blocks rapid-fire saves.
   def test_quick_save_debounce_blocks_rapid_fire
-    skip "Run: ruby teek-mgba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
+    skip "Run: ruby gemba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
 
     code = <<~RUBY
-      require "teek/mgba"
+      require "gemba"
       require "tmpdir"
       require "fileutils"
       require "support/player_helpers"
 
-      states_dir = Dir.mktmpdir("teek-debounce-test")
+      states_dir = Dir.mktmpdir("gemba-debounce-test")
 
-      player = Teek::MGBA::Player.new("#{TEST_ROM}")
+      player = Gemba::Player.new("#{TEST_ROM}")
       app = player.app
       config = player.config
 
@@ -313,19 +313,19 @@ class TestMGBAPlayer < Minitest::Test
   # E2E: open Settings via menu, navigate to Save States tab,
   # change quick save slot from 1 → 10, click Save, verify persisted.
   def test_settings_change_quick_slot_and_save
-    skip "Run: ruby teek-mgba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
+    skip "Run: ruby gemba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
 
     code = <<~RUBY
-      require "teek/mgba"
+      require "gemba"
       require "tmpdir"
       require "json"
       require "fileutils"
       require "support/player_helpers"
 
-      config_dir = Dir.mktmpdir("teek-settings-test")
+      config_dir = Dir.mktmpdir("gemba-settings-test")
       config_path = File.join(config_dir, "settings.json")
 
-      player = Teek::MGBA::Player.new("#{TEST_ROM}")
+      player = Gemba::Player.new("#{TEST_ROM}")
       app = player.app
       config = player.config
 
@@ -333,11 +333,11 @@ class TestMGBAPlayer < Minitest::Test
       config.path = config_path
 
       poll_until_ready(app) do
-        nb       = Teek::MGBA::SettingsWindow::NB
-        ss_tab   = Teek::MGBA::SettingsWindow::SS_TAB
-        slot_combo = Teek::MGBA::SettingsWindow::SS_SLOT_COMBO
-        save_btn = Teek::MGBA::SettingsWindow::SAVE_BTN
-        var_slot = Teek::MGBA::SettingsWindow::VAR_QUICK_SLOT
+        nb       = Gemba::SettingsWindow::NB
+        ss_tab   = Gemba::SettingsWindow::SS_TAB
+        slot_combo = Gemba::SettingsWindow::SS_SLOT_COMBO
+        save_btn = Gemba::SettingsWindow::SAVE_BTN
+        var_slot = Gemba::SettingsWindow::VAR_QUICK_SLOT
 
         # Open Settings > Save States via the Settings menu (index 3)
         app.command('.menubar.settings', :invoke, 3)
@@ -397,11 +397,11 @@ class TestMGBAPlayer < Minitest::Test
   # -- Audio fade ramp (pure function, no Tk/SDL2 needed) --------------------
 
   def test_fade_ramp_attenuates_first_samples
-    require "teek/mgba/player"
+    require "gemba/player"
     # 10 stereo frames of max-amplitude int16
     pcm = ([32767, 32767] * 10).pack('s*')
     total = 10
-    result, remaining = Teek::MGBA::Player.apply_fade_ramp(pcm, total, total)
+    result, remaining = Gemba::Player.apply_fade_ramp(pcm, total, total)
     samples = result.unpack('s*')
 
     # First stereo pair: gain = 1 - 10/10 = 0.0 → should be 0
@@ -416,17 +416,17 @@ class TestMGBAPlayer < Minitest::Test
   end
 
   def test_fade_ramp_returns_remaining_when_pcm_shorter_than_fade
-    require "teek/mgba/player"
+    require "gemba/player"
     # Only 2 stereo frames but fade wants 10
     pcm = ([20000, 20000] * 2).pack('s*')
-    _result, remaining = Teek::MGBA::Player.apply_fade_ramp(pcm, 10, 10)
+    _result, remaining = Gemba::Player.apply_fade_ramp(pcm, 10, 10)
     assert_equal 8, remaining, "should have 8 fade samples remaining"
   end
 
   def test_fade_ramp_noop_when_remaining_zero
-    require "teek/mgba/player"
+    require "gemba/player"
     pcm = ([10000, -10000] * 4).pack('s*')
-    result, remaining = Teek::MGBA::Player.apply_fade_ramp(pcm, 0, 10)
+    result, remaining = Gemba::Player.apply_fade_ramp(pcm, 0, 10)
     assert_equal pcm, result, "should not modify samples when remaining is 0"
     assert_equal 0, remaining
   end
@@ -436,16 +436,16 @@ class TestMGBAPlayer < Minitest::Test
   # closes Settings, opens picker via F6, tries Settings menu (blocked),
   # closes picker. Checks window visibility via `wm state`.
   def test_modal_child_blocks_concurrent_windows
-    skip "Run: ruby teek-mgba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
+    skip "Run: ruby gemba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
 
     code = <<~RUBY
-      require "teek/mgba"
+      require "gemba"
       require "support/player_helpers"
 
-      sw_top = Teek::MGBA::SettingsWindow::TOP
-      sp_top = Teek::MGBA::SaveStatePicker::TOP
+      sw_top = Gemba::SettingsWindow::TOP
+      sp_top = Gemba::SaveStatePicker::TOP
 
-      player = Teek::MGBA::Player.new("#{TEST_ROM}")
+      player = Gemba::Player.new("#{TEST_ROM}")
       app = player.app
 
       poll_until_ready(app) do
@@ -539,13 +539,13 @@ class TestMGBAPlayer < Minitest::Test
   # -- File drop (DND) --------------------------------------------------------
 
   def test_drop_rom_file_loads_game
-    skip "Run: ruby teek-mgba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
+    skip "Run: ruby gemba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
 
     code = <<~RUBY
-      require "teek/mgba"
+      require "gemba"
       require "support/player_helpers"
 
-      player = Teek::MGBA::Player.new
+      player = Gemba::Player.new
       app = player.app
 
       # Stub tk_messageBox so it never blocks
@@ -577,17 +577,17 @@ class TestMGBAPlayer < Minitest::Test
     output << "STDERR:\n#{stderr}" unless stderr.empty?
 
     assert success, "Drop ROM test failed\n#{output.join("\n")}"
-    assert_includes stdout, "TITLE=TEEKTEST", "Expected ROM to load via drop\n#{output.join("\n")}"
+    assert_includes stdout, "TITLE=GEMBATEST", "Expected ROM to load via drop\n#{output.join("\n")}"
   end
 
   def test_drop_unsupported_file_shows_error
-    skip "Run: ruby teek-mgba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
+    skip "Run: ruby gemba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
 
     code = <<~RUBY
-      require "teek/mgba"
+      require "gemba"
       require "support/player_helpers"
 
-      player = Teek::MGBA::Player.new
+      player = Gemba::Player.new
       app = player.app
 
       # Capture tk_messageBox calls instead of blocking
@@ -624,13 +624,13 @@ class TestMGBAPlayer < Minitest::Test
   end
 
   def test_drop_multiple_files_shows_error
-    skip "Run: ruby teek-mgba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
+    skip "Run: ruby gemba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
 
     code = <<~RUBY
-      require "teek/mgba"
+      require "gemba"
       require "support/player_helpers"
 
-      player = Teek::MGBA::Player.new
+      player = Gemba::Player.new
       app = player.app
 
       # Capture tk_messageBox calls instead of blocking
@@ -667,20 +667,20 @@ class TestMGBAPlayer < Minitest::Test
   end
 
   # E2E: press F10 to start recording, run a few frames with the red dot
-  # indicator rendering, press F10 to stop, verify .trec file was created.
+  # indicator rendering, press F10 to stop, verify .grec file was created.
   def test_recording_toggle_creates_trec_file
-    skip "Run: ruby teek-mgba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
+    skip "Run: ruby gemba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
 
     code = <<~RUBY
-      require "teek/mgba"
+      require "gemba"
       require "tmpdir"
       require "fileutils"
       require "support/player_helpers"
 
-      rec_dir = Dir.mktmpdir("teek-rec-test")
+      rec_dir = Dir.mktmpdir("gemba-rec-test")
 
       begin
-        player = Teek::MGBA::Player.new("#{TEST_ROM}")
+        player = Gemba::Player.new("#{TEST_ROM}")
         app = player.app
         config = player.config
         config.recordings_dir = rec_dir
@@ -708,11 +708,11 @@ class TestMGBAPlayer < Minitest::Test
             app.update
 
             app.after(50) do
-              trec_files = Dir.glob(File.join(rec_dir, "*.trec"))
+              trec_files = Dir.glob(File.join(rec_dir, "*.grec"))
               if trec_files.empty?
-                puts "FAIL: no .trec file found"
+                puts "FAIL: no .grec file found"
               elsif File.size(trec_files.first) < 32
-                puts "FAIL: .trec too small (\#{File.size(trec_files.first)} bytes)"
+                puts "FAIL: .grec too small (\#{File.size(trec_files.first)} bytes)"
               else
                 puts "PASS: \#{File.basename(trec_files.first)} (\#{File.size(trec_files.first)} bytes)"
               end
@@ -735,6 +735,6 @@ class TestMGBAPlayer < Minitest::Test
     output << "STDERR:\n#{stderr}" unless stderr.empty?
 
     assert success, "Recording toggle test failed\n#{output.join("\n")}"
-    assert_includes stdout, "PASS", "Expected .trec file to be created\n#{output.join("\n")}"
+    assert_includes stdout, "PASS", "Expected .grec file to be created\n#{output.join("\n")}"
   end
 end

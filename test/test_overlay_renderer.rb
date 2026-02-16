@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
-require_relative "../lib/teek/mgba/overlay_renderer"
+require_relative "../lib/gemba/overlay_renderer"
 
 class TestOverlayRenderer < Minitest::Test
   class MockTexture
@@ -54,7 +54,7 @@ class TestOverlayRenderer < Minitest::Test
 
   def setup
     @font = MockFont.new
-    @hud = Teek::MGBA::OverlayRenderer.new(font: @font, blend_mode: BLEND_MODE)
+    @hud = Gemba::OverlayRenderer.new(font: @font, blend_mode: BLEND_MODE)
   end
 
   # -- initial state ---------------------------------------------------------

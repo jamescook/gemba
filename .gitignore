@@ -29,6 +29,10 @@ mise.toml
 # Bundler lock (path: gems make this machine-specific)
 Gemfile.lock
 
+# YARD
+.yardoc/
+doc/
+
 # OS
 .DS_Store
 tmp/

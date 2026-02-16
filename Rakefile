@@ -6,9 +6,9 @@ require 'rake/testtask'
 
 # -- Compile -----------------------------------------------------------------
 
-ext_dir = File.expand_path('ext/teek_mgba', __dir__)
+ext_dir = File.expand_path('ext/gemba', __dir__)
 lib_dir = File.expand_path('lib', __dir__)
-so_name = "teek_mgba.#{RbConfig::CONFIG['DLEXT']}"
+so_name = "gemba_ext.#{RbConfig::CONFIG['DLEXT']}"
 
 desc "Compile C extension"
 task :compile do
@@ -82,11 +82,142 @@ task :deps do
   puts "libmgba built and installed to #{install_dir}"
 end
 
+# -- Documentation -----------------------------------------------------------
+
+namespace :docs do
+  desc "Install docs dependencies (docs_site/Gemfile)"
+  task :setup do
+    Dir.chdir('docs_site') do
+      Bundler.with_unbundled_env { sh 'bundle install' }
+    end
+  end
+
+  task :yard_clean do
+    FileUtils.rm_rf('doc')
+    FileUtils.rm_rf('docs_site/_api')
+    FileUtils.rm_rf('docs_site/_site')
+    FileUtils.rm_rf('docs_site/.jekyll-cache')
+    FileUtils.rm_f('docs_site/assets/js/search-data.json')
+    FileUtils.rm_f('docs_site/internals.md')
+  end
+
+  # Copy INTERNALS.md from repo root into docs_site/ with Jekyll front matter.
+  # Source of truth stays at the repo root (visible on GitHub).
+  task :copy_internals do
+    content = File.read('INTERNALS.md')
+    front_matter = "---\nlayout: default\ntitle: Internals\nnav_order: 80\n---\n\n"
+    File.write('docs_site/internals.md', front_matter + content)
+  end
+
+  desc "Generate YARD JSON (uses docs_site/Gemfile)"
+  task yard_json: :yard_clean do
+    Bundler.with_unbundled_env do
+      sh 'BUNDLE_GEMFILE=docs_site/Gemfile bundle exec yard doc'
+    end
+  end
+
+  desc "Generate per-method coverage JSON from SimpleCov data"
+  task :method_coverage do
+    if Dir.exist?('coverage/results')
+      require_relative 'lib/gemba/method_coverage_service'
+      Gemba::MethodCoverageService.new(coverage_dir: 'coverage').call
+    else
+      puts "No coverage data found (run tests with COVERAGE=1 first)"
+    end
+  end
+
+  desc "Generate API docs (YARD JSON -> HTML)"
+  task yard: [:yard_json, :method_coverage] do
+    Bundler.with_unbundled_env do
+      sh 'BUNDLE_GEMFILE=docs_site/Gemfile bundle exec ruby docs_site/build_api_docs.rb'
+    end
+  end
+
+  # Pulled from teek — no recordings yet, but keeping in case we add demos later.
+  desc "Bless recordings from recordings/ into docs_site/assets/recordings/"
+  task :bless_recordings do
+    require 'fileutils'
+    src = 'recordings'
+    dest = 'docs_site/assets/recordings'
+    FileUtils.mkdir_p(dest)
+    videos = Dir.glob("#{src}/*.{mp4,webm}")
+    if videos.empty?
+      puts "No recordings in #{src}/ to bless."
+      next
+    end
+    videos.each do |path|
+      FileUtils.cp(path, dest)
+      puts "  #{File.basename(path)} -> #{dest}/"
+    end
+    puts "Blessed #{videos.size} recording(s)."
+  end
+
+  desc "Generate recordings gallery page"
+  task :recordings do
+    sh 'ruby docs_site/build_recordings.rb'
+  end
+
+  desc "Generate full docs site (YARD + Jekyll)"
+  task generate: [:yard, :copy_internals] do
+    Dir.chdir('docs_site') do
+      Bundler.with_unbundled_env { sh 'bundle exec jekyll build' }
+    end
+    puts "Docs generated in docs_site/_site/"
+  end
+
+  desc "Serve docs locally (watches lib/ and ext/ for changes, regenerates API docs)"
+  task serve: [:yard, :copy_internals] do
+    require 'listen'
+
+    # Use absolute paths so Dir.chdir('docs_site') for Jekyll doesn't confuse Listen.
+    root = __dir__
+    gemfile = File.join(root, 'docs_site', 'Gemfile')
+
+    rebuild_docs = proc do |modified, added, _removed|
+      changed = (modified + added).select { |f| f.end_with?('.rb', '.c', '.h', '.erb', '.md') }
+      next if changed.empty?
+      puts "\n--- Changed: #{changed.map { |f| f.sub("#{root}/", '') }.join(', ')}"
+      puts "--- Regenerating API docs..."
+      Bundler.with_unbundled_env do
+        system("BUNDLE_GEMFILE=#{gemfile} bundle exec yard doc --quiet", chdir: root) &&
+          system("BUNDLE_GEMFILE=#{gemfile} bundle exec ruby docs_site/build_api_docs.rb", chdir: root)
+      end
+      # Re-copy INTERNALS.md in case it changed
+      Rake::Task['docs:copy_internals'].execute
+      puts "--- Done. Jekyll will pick up changes automatically."
+    end
+
+    listener = Listen.to(
+      File.join(root, 'lib'),
+      File.join(root, 'ext'),
+      File.join(root, 'docs_site', 'templates'),
+      only: /\.(rb|c|h|erb)$/,
+      &rebuild_docs
+    )
+    root_listener = Listen.to(root, only: /\.md$/) do |mod, add, _rem|
+      # Only care about top-level markdown files (INTERNALS.md, README.md, etc.)
+      changed = (mod + add).select { |f| File.dirname(f) == root }
+      rebuild_docs.call(changed, [], []) unless changed.empty?
+    end
+    listener.start
+    root_listener.start
+    puts "Watching lib/, ext/, docs_site/templates/, *.md for changes"
+
+    Dir.chdir(File.join(root, 'docs_site')) do
+      Bundler.with_unbundled_env { sh 'bundle exec jekyll serve --watch --livereload' }
+    end
+  end
+end
+
+# Aliases for convenience
+task doc: 'docs:yard'
+task yard: 'docs:yard'
+
 # -- Docker ------------------------------------------------------------------
 
 namespace :docker do
   DOCKERFILE = 'Dockerfile.ci-test'
-  DOCKER_LABEL = 'project=teek-mgba'
+  DOCKER_LABEL = 'project=gemba'
   BUILD_DEPS_DIR = '_build_deps'
 
   # Copy local teek/teek-sdl2 source into _build_deps/ for Docker builds.
@@ -138,7 +269,7 @@ namespace :docker do
 
   def docker_image_name(tcl_version, ruby_version = nil)
     ruby_version ||= ruby_version_from_env
-    base = tcl_version == '8.6' ? 'teek-mgba-ci-8' : 'teek-mgba-ci-9'
+    base = tcl_version == '8.6' ? 'gemba-ci-8' : 'gemba-ci-9'
     ruby_version == '4.0' ? base : "#{base}-ruby#{ruby_version}"
   end
 
@@ -212,7 +343,7 @@ namespace :docker do
     cmd += " -e TESTOPTS='#{ENV['TESTOPTS']}'" if ENV['TESTOPTS']
     if ENV['COVERAGE'] == '1'
       cmd += " -e COVERAGE=1"
-      cmd += " -e COVERAGE_NAME=#{ENV['COVERAGE_NAME'] || 'mgba'}"
+      cmd += " -e COVERAGE_NAME=#{ENV['COVERAGE_NAME'] || 'gemba'}"
     end
     cmd += " #{image_name}"
     cmd += " xvfb-run -a bundle exec rake test"

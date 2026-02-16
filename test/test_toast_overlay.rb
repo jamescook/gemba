@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
-require_relative "../lib/teek/mgba/toast_overlay"
+require_relative "../lib/gemba/toast_overlay"
 
 class TestToastOverlay < Minitest::Test
   # Minimal texture mock — records destroy calls.
@@ -78,7 +78,7 @@ class TestToastOverlay < Minitest::Test
   def setup
     @renderer = MockRenderer.new
     @font = MockFont.new
-    @toast = Teek::MGBA::ToastOverlay.new(
+    @toast = Gemba::ToastOverlay.new(
       renderer: @renderer, font: @font, duration: 1.5, bg_fn: STUB_BG_FN
     )
   end

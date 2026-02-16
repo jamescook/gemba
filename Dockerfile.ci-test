@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1
-# Test Dockerfile for teek-mgba on Ubuntu 25.04
+# Test Dockerfile for gemba on Ubuntu 25.04
 #
 # Supports TCL_VERSION=9.0 (default) and TCL_VERSION=8.6 for testing
 # against both Tcl/Tk versions.
 #
 # Usage:
-#   docker build -f Dockerfile.ci-test -t teek-mgba-ci-9 .
-#   docker run --rm teek-mgba-ci-9
+#   docker build -f Dockerfile.ci-test -t gemba-ci-9 .
+#   docker run --rm gemba-ci-9
 #
 #   Or use rake tasks:
 #     rake docker:test                    # Test with Tcl 9.0
@@ -77,8 +77,8 @@ ENV TEEK_PATH=${TEEK_PATH}
 ENV TEEK_SDL2_PATH=${TEEK_SDL2_PATH}
 
 # Copy only what's needed for bundle install first (for layer caching)
-COPY Gemfile teek-mgba.gemspec ./
-COPY lib/teek/mgba/version.rb lib/teek/mgba/version.rb
+COPY Gemfile gemba.gemspec ./
+COPY lib/gemba/version.rb lib/gemba/version.rb
 
 ENV BUNDLE_PATH=/usr/local/bundle
 RUN --mount=type=cache,target=/bundle-cache \
@@ -105,7 +105,7 @@ COPY Rakefile ./
 COPY ext/ ext/
 COPY lib/ lib/
 
-# Compile teek-mgba C extension
+# Compile gemba C extension
 RUN MAKEFLAGS="-j$(nproc)" bundle exec rake compile
 
 #############################################
@@ -195,7 +195,7 @@ COPY --from=builder /app/ext /app/ext
 COPY --from=builder /app/Rakefile /app/Rakefile
 COPY --from=builder /app/Gemfile /app/Gemfile
 COPY --from=builder /app/Gemfile.lock /app/Gemfile.lock
-COPY --from=builder /app/teek-mgba.gemspec /app/
+COPY --from=builder /app/gemba.gemspec /app/
 
 # Copy tests and assets directly from context (not cached with compilation)
 COPY test/ test/

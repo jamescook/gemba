@@ -22,7 +22,7 @@ def ruby_version_compatible?(gem_path)
     if linked =~ /libruby[.-](\d+\.\d+)/
       linked_version = $1
       if linked_version != current
-        warn "teek-mgba Gemfile: skipping local #{gem_path} " \
+        warn "gemba Gemfile: skipping local #{gem_path} " \
              "(extension linked to Ruby #{linked_version}, running #{current})"
         return false
       end

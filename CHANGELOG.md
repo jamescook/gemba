@@ -1,8 +1,8 @@
-# Changelog — teek-mgba
+# Changelog — gemba
 
-> **Beta**: teek-mgba is functional but the API may change between minor versions.
+> **Beta**: gemba is functional but the API may change between minor versions.
 
-All notable changes to teek-mgba will be documented in this file.
+All notable changes to gemba will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 

@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
-require_relative "../lib/teek/mgba/input_mappings"
+require_relative "../lib/gemba/input_mappings"
 
 class TestVirtualKeyboard < Minitest::Test
   def setup
-    @kb = Teek::MGBA::VirtualKeyboard.new
+    @kb = Gemba::VirtualKeyboard.new
   end
 
   def test_button_false_initially

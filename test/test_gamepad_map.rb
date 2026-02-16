@@ -1,15 +1,15 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
-require "teek_mgba"
-require_relative "../lib/teek/mgba/config"
-require_relative "../lib/teek/mgba/input_mappings"
+require "gemba"
+require_relative "../lib/gemba/config"
+require_relative "../lib/gemba/input_mappings"
 require_relative "support/input_mocks"
 
 class TestGamepadMap < Minitest::Test
   def setup
     @config = MockInputConfig.new
-    @map = Teek::MGBA::GamepadMap.new(@config)
+    @map = Gemba::GamepadMap.new(@config)
   end
 
   def test_default_labels
@@ -34,7 +34,7 @@ class TestGamepadMap < Minitest::Test
     @map.set_dead_zone(12000)
     @map.reset!
     assert_equal 'a', @map.labels[:a]
-    assert_equal Teek::MGBA::GamepadMap::DEFAULT_DEAD_ZONE, @map.dead_zone
+    assert_equal Gemba::GamepadMap::DEFAULT_DEAD_ZONE, @map.dead_zone
   end
 
   def test_mask_no_device
@@ -46,7 +46,7 @@ class TestGamepadMap < Minitest::Test
     @map.device = gp
     gp.buttons_pressed.add(:a)
     mask = @map.mask
-    assert_equal Teek::MGBA::KEY_A, mask & Teek::MGBA::KEY_A
+    assert_equal Gemba::KEY_A, mask & Gemba::KEY_A
   end
 
   def test_mask_closed_device

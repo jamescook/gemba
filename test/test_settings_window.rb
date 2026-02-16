@@ -10,28 +10,28 @@ class TestMGBASettingsWindow < Minitest::Test
 
   def test_scale_combobox_defaults_to_3x
     assert_tk_app("scale combobox defaults to 3x") do
-      require "teek/mgba/settings_window"
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {})
+      require "gemba/settings_window"
+      sw = Gemba::SettingsWindow.new(app, callbacks: {})
       sw.show
       app.update
 
-      assert_equal '3x', app.get_variable(Teek::MGBA::SettingsWindow::VAR_SCALE)
+      assert_equal '3x', app.get_variable(Gemba::SettingsWindow::VAR_SCALE)
     end
   end
 
   def test_selecting_2x_scale_fires_callback
     assert_tk_app("selecting 2x scale fires on_scale_change") do
-      require "teek/mgba/settings_window"
+      require "gemba/settings_window"
       received = nil
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {
+      sw = Gemba::SettingsWindow.new(app, callbacks: {
         on_scale_change: proc { |s| received = s }
       })
       sw.show
       app.update
 
       # Simulate user selecting "2x" from the combobox
-      app.set_variable(Teek::MGBA::SettingsWindow::VAR_SCALE, '2x')
-      app.command(:event, 'generate', Teek::MGBA::SettingsWindow::SCALE_COMBO, '<<ComboboxSelected>>')
+      app.set_variable(Gemba::SettingsWindow::VAR_SCALE, '2x')
+      app.command(:event, 'generate', Gemba::SettingsWindow::SCALE_COMBO, '<<ComboboxSelected>>')
       app.update
 
       assert_equal 2, received
@@ -40,16 +40,16 @@ class TestMGBASettingsWindow < Minitest::Test
 
   def test_selecting_4x_scale_fires_callback
     assert_tk_app("selecting 4x scale fires on_scale_change") do
-      require "teek/mgba/settings_window"
+      require "gemba/settings_window"
       received = nil
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {
+      sw = Gemba::SettingsWindow.new(app, callbacks: {
         on_scale_change: proc { |s| received = s }
       })
       sw.show
       app.update
 
-      app.set_variable(Teek::MGBA::SettingsWindow::VAR_SCALE, '4x')
-      app.command(:event, 'generate', Teek::MGBA::SettingsWindow::SCALE_COMBO, '<<ComboboxSelected>>')
+      app.set_variable(Gemba::SettingsWindow::VAR_SCALE, '4x')
+      app.command(:event, 'generate', Gemba::SettingsWindow::SCALE_COMBO, '<<ComboboxSelected>>')
       app.update
 
       assert_equal 4, received
@@ -60,27 +60,27 @@ class TestMGBASettingsWindow < Minitest::Test
 
   def test_volume_defaults_to_100
     assert_tk_app("volume defaults to 100") do
-      require "teek/mgba/settings_window"
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {})
+      require "gemba/settings_window"
+      sw = Gemba::SettingsWindow.new(app, callbacks: {})
       sw.show
       app.update
 
-      assert_equal '100', app.get_variable(Teek::MGBA::SettingsWindow::VAR_VOLUME)
+      assert_equal '100', app.get_variable(Gemba::SettingsWindow::VAR_VOLUME)
     end
   end
 
   def test_dragging_volume_to_50_fires_callback
     assert_tk_app("dragging volume to 50 fires on_volume_change") do
-      require "teek/mgba/settings_window"
+      require "gemba/settings_window"
       received = nil
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {
+      sw = Gemba::SettingsWindow.new(app, callbacks: {
         on_volume_change: proc { |v| received = v }
       })
       sw.show
       app.update
 
       # Simulate user dragging volume slider to 50
-      app.command(Teek::MGBA::SettingsWindow::VOLUME_SCALE, 'set', 50)
+      app.command(Gemba::SettingsWindow::VOLUME_SCALE, 'set', 50)
       app.update
 
       assert_in_delta 0.5, received, 0.01
@@ -89,15 +89,15 @@ class TestMGBASettingsWindow < Minitest::Test
 
   def test_volume_at_zero
     assert_tk_app("volume at zero") do
-      require "teek/mgba/settings_window"
+      require "gemba/settings_window"
       received = nil
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {
+      sw = Gemba::SettingsWindow.new(app, callbacks: {
         on_volume_change: proc { |v| received = v }
       })
       sw.show
       app.update
 
-      app.command(Teek::MGBA::SettingsWindow::VOLUME_SCALE, 'set', 0)
+      app.command(Gemba::SettingsWindow::VOLUME_SCALE, 'set', 0)
       app.update
 
       assert_in_delta 0.0, received, 0.01
@@ -108,27 +108,27 @@ class TestMGBASettingsWindow < Minitest::Test
 
   def test_mute_defaults_to_off
     assert_tk_app("mute defaults to off") do
-      require "teek/mgba/settings_window"
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {})
+      require "gemba/settings_window"
+      sw = Gemba::SettingsWindow.new(app, callbacks: {})
       sw.show
       app.update
 
-      assert_equal '0', app.get_variable(Teek::MGBA::SettingsWindow::VAR_MUTE)
+      assert_equal '0', app.get_variable(Gemba::SettingsWindow::VAR_MUTE)
     end
   end
 
   def test_clicking_mute_fires_callback
     assert_tk_app("clicking mute fires on_mute_change") do
-      require "teek/mgba/settings_window"
+      require "gemba/settings_window"
       received = nil
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {
+      sw = Gemba::SettingsWindow.new(app, callbacks: {
         on_mute_change: proc { |m| received = m }
       })
       sw.show
       app.update
 
       # Simulate user clicking the mute checkbox
-      app.command(Teek::MGBA::SettingsWindow::MUTE_CHECK, 'invoke')
+      app.command(Gemba::SettingsWindow::MUTE_CHECK, 'invoke')
       app.update
 
       assert_equal true, received
@@ -137,19 +137,19 @@ class TestMGBASettingsWindow < Minitest::Test
 
   def test_clicking_mute_twice_unmutes
     assert_tk_app("clicking mute twice unmutes") do
-      require "teek/mgba/settings_window"
+      require "gemba/settings_window"
       received = nil
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {
+      sw = Gemba::SettingsWindow.new(app, callbacks: {
         on_mute_change: proc { |m| received = m }
       })
       sw.show
       app.update
 
-      app.command(Teek::MGBA::SettingsWindow::MUTE_CHECK, 'invoke')
+      app.command(Gemba::SettingsWindow::MUTE_CHECK, 'invoke')
       app.update
       assert_equal true, received
 
-      app.command(Teek::MGBA::SettingsWindow::MUTE_CHECK, 'invoke')
+      app.command(Gemba::SettingsWindow::MUTE_CHECK, 'invoke')
       app.update
       assert_equal false, received
     end
@@ -159,29 +159,29 @@ class TestMGBASettingsWindow < Minitest::Test
 
   def test_settings_starts_hidden
     assert_tk_app("settings starts hidden") do
-      require "teek/mgba/settings_window"
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {})
+      require "gemba/settings_window"
+      sw = Gemba::SettingsWindow.new(app, callbacks: {})
       app.update
 
-      assert_equal 'withdrawn', app.command(:wm, 'state', Teek::MGBA::SettingsWindow::TOP)
+      assert_equal 'withdrawn', app.command(:wm, 'state', Gemba::SettingsWindow::TOP)
     end
   end
 
   def test_show_and_hide
     assert_tk_app("show makes window visible, hide withdraws it") do
-      require "teek/mgba/settings_window"
+      require "gemba/settings_window"
       app.show
       app.update
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app, callbacks: {})
 
       sw.show
-      app.command(:focus, '-force', Teek::MGBA::SettingsWindow::TOP)
+      app.command(:focus, '-force', Gemba::SettingsWindow::TOP)
       app.update
-      assert_equal 'normal', app.command(:wm, 'state', Teek::MGBA::SettingsWindow::TOP)
+      assert_equal 'normal', app.command(:wm, 'state', Gemba::SettingsWindow::TOP)
 
       sw.hide
       app.update
-      assert_equal 'withdrawn', app.command(:wm, 'state', Teek::MGBA::SettingsWindow::TOP)
+      assert_equal 'withdrawn', app.command(:wm, 'state', Gemba::SettingsWindow::TOP)
     end
   end
 
@@ -189,32 +189,32 @@ class TestMGBASettingsWindow < Minitest::Test
 
   def test_gamepad_tab_exists
     assert_tk_app("gamepad tab exists in notebook") do
-      require "teek/mgba/settings_window"
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {})
+      require "gemba/settings_window"
+      sw = Gemba::SettingsWindow.new(app, callbacks: {})
       sw.show
       app.update
 
-      tabs = app.command(Teek::MGBA::SettingsWindow::NB, 'tabs')
-      assert_includes tabs, Teek::MGBA::SettingsWindow::GAMEPAD_TAB
+      tabs = app.command(Gemba::SettingsWindow::NB, 'tabs')
+      assert_includes tabs, Gemba::SettingsWindow::GAMEPAD_TAB
     end
   end
 
   def test_deadzone_defaults_to_25
     assert_tk_app("dead zone defaults to 25") do
-      require "teek/mgba/settings_window"
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {})
+      require "gemba/settings_window"
+      sw = Gemba::SettingsWindow.new(app, callbacks: {})
       sw.show
       app.update
 
-      assert_equal '25', app.get_variable(Teek::MGBA::SettingsWindow::VAR_DEADZONE)
+      assert_equal '25', app.get_variable(Gemba::SettingsWindow::VAR_DEADZONE)
     end
   end
 
   def test_deadzone_change_fires_callback
     assert_tk_app("dead zone change fires on_deadzone_change") do
-      require "teek/mgba/settings_window"
+      require "gemba/settings_window"
       received = nil
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {
+      sw = Gemba::SettingsWindow.new(app, callbacks: {
         on_deadzone_change: proc { |t| received = t }
       })
       sw.show
@@ -222,11 +222,11 @@ class TestMGBASettingsWindow < Minitest::Test
 
       # Switch to gamepad mode (dead zone is disabled in keyboard mode)
       sw.update_gamepad_list(['Keyboard Only', 'Test Gamepad'])
-      app.set_variable(Teek::MGBA::SettingsWindow::VAR_GAMEPAD, 'Test Gamepad')
-      app.command(:event, 'generate', Teek::MGBA::SettingsWindow::GAMEPAD_COMBO, '<<ComboboxSelected>>')
+      app.set_variable(Gemba::SettingsWindow::VAR_GAMEPAD, 'Test Gamepad')
+      app.command(:event, 'generate', Gemba::SettingsWindow::GAMEPAD_COMBO, '<<ComboboxSelected>>')
       app.update
 
-      app.command(Teek::MGBA::SettingsWindow::DEADZONE_SCALE, 'set', 15)
+      app.command(Gemba::SettingsWindow::DEADZONE_SCALE, 'set', 15)
       app.update
 
       # 15% of 32767 ≈ 4915
@@ -236,34 +236,34 @@ class TestMGBASettingsWindow < Minitest::Test
 
   def test_clicking_gba_button_enters_listen_mode
     assert_tk_app("clicking GBA button enters listen mode") do
-      require "teek/mgba/settings_window"
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {})
+      require "gemba/settings_window"
+      sw = Gemba::SettingsWindow.new(app, callbacks: {})
       sw.show
       app.update
 
       # Click the A button
-      app.command(Teek::MGBA::SettingsWindow::GP_BTN_A, 'invoke')
+      app.command(Gemba::SettingsWindow::GP_BTN_A, 'invoke')
       app.update
 
       assert_equal :a, sw.listening_for
-      text = app.command(Teek::MGBA::SettingsWindow::GP_BTN_A, 'cget', '-text')
+      text = app.command(Gemba::SettingsWindow::GP_BTN_A, 'cget', '-text')
       assert_equal "Press\u2026", text
     end
   end
 
   def test_capture_mapping_updates_button_label
     assert_tk_app("capture_mapping updates button label") do
-      require "teek/mgba/settings_window"
+      require "gemba/settings_window"
       received_gba = nil
       received_key = nil
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {
+      sw = Gemba::SettingsWindow.new(app, callbacks: {
         on_keyboard_map_change: proc { |g, b| received_gba = g; received_key = b }
       })
       sw.show
       app.update
 
       # Default mode is keyboard — enter listen mode for A
-      app.command(Teek::MGBA::SettingsWindow::GP_BTN_A, 'invoke')
+      app.command(Gemba::SettingsWindow::GP_BTN_A, 'invoke')
       app.update
 
       # Simulate keyboard key capture
@@ -273,19 +273,19 @@ class TestMGBASettingsWindow < Minitest::Test
       assert_nil sw.listening_for
       assert_equal :a, received_gba
       assert_equal 'q', received_key
-      text = app.command(Teek::MGBA::SettingsWindow::GP_BTN_A, 'cget', '-text')
+      text = app.command(Gemba::SettingsWindow::GP_BTN_A, 'cget', '-text')
       assert_equal 'q', text
     end
   end
 
   def test_gamepad_selector_defaults_to_keyboard_only
     assert_tk_app("gamepad selector defaults to Keyboard Only") do
-      require "teek/mgba/settings_window"
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {})
+      require "gemba/settings_window"
+      sw = Gemba::SettingsWindow.new(app, callbacks: {})
       sw.show
       app.update
 
-      assert_equal 'Keyboard Only', app.get_variable(Teek::MGBA::SettingsWindow::VAR_GAMEPAD)
+      assert_equal 'Keyboard Only', app.get_variable(Gemba::SettingsWindow::VAR_GAMEPAD)
     end
   end
 
@@ -293,81 +293,81 @@ class TestMGBASettingsWindow < Minitest::Test
 
   def test_undo_starts_disabled
     assert_tk_app("undo button starts disabled") do
-      require "teek/mgba/settings_window"
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {})
+      require "gemba/settings_window"
+      sw = Gemba::SettingsWindow.new(app, callbacks: {})
       sw.show
       app.update
 
-      state = app.command(Teek::MGBA::SettingsWindow::GP_UNDO_BTN, 'cget', '-state')
+      state = app.command(Gemba::SettingsWindow::GP_UNDO_BTN, 'cget', '-state')
       assert_equal 'disabled', state
     end
   end
 
   def test_undo_enabled_after_remap
     assert_tk_app("undo enabled after capturing a mapping") do
-      require "teek/mgba/settings_window"
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {})
+      require "gemba/settings_window"
+      sw = Gemba::SettingsWindow.new(app, callbacks: {})
       sw.show
       app.update
 
-      app.command(Teek::MGBA::SettingsWindow::GP_BTN_A, 'invoke')
+      app.command(Gemba::SettingsWindow::GP_BTN_A, 'invoke')
       app.update
       sw.capture_mapping(:x)
       app.update
 
-      state = app.command(Teek::MGBA::SettingsWindow::GP_UNDO_BTN, 'cget', '-state')
+      state = app.command(Gemba::SettingsWindow::GP_UNDO_BTN, 'cget', '-state')
       assert_equal 'normal', state
     end
   end
 
   def test_undo_fires_callback_and_disables
     assert_tk_app("undo fires on_undo_gamepad and disables itself") do
-      require "teek/mgba/settings_window"
+      require "gemba/settings_window"
       undo_called = false
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {
+      sw = Gemba::SettingsWindow.new(app, callbacks: {
         on_undo_gamepad: proc { undo_called = true }
       })
       sw.show
       app.update
 
       # Remap to enable undo
-      app.command(Teek::MGBA::SettingsWindow::GP_BTN_A, 'invoke')
+      app.command(Gemba::SettingsWindow::GP_BTN_A, 'invoke')
       app.update
       sw.capture_mapping(:x)
       app.update
 
       # Click undo
-      app.command(Teek::MGBA::SettingsWindow::GP_UNDO_BTN, 'invoke')
+      app.command(Gemba::SettingsWindow::GP_UNDO_BTN, 'invoke')
       app.update
 
       assert undo_called
-      state = app.command(Teek::MGBA::SettingsWindow::GP_UNDO_BTN, 'cget', '-state')
+      state = app.command(Gemba::SettingsWindow::GP_UNDO_BTN, 'cget', '-state')
       assert_equal 'disabled', state
     end
   end
 
   def test_reset_disables_undo
     assert_tk_app("reset to defaults disables undo button") do
-      require "teek/mgba/settings_window"
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {})
+      require "gemba/settings_window"
+      sw = Gemba::SettingsWindow.new(app, callbacks: {})
       sw.show
       app.update
 
       # Remap to enable undo
-      app.command(Teek::MGBA::SettingsWindow::GP_BTN_A, 'invoke')
+      app.command(Gemba::SettingsWindow::GP_BTN_A, 'invoke')
       app.update
       sw.capture_mapping(:x)
       app.update
 
-      state = app.command(Teek::MGBA::SettingsWindow::GP_UNDO_BTN, 'cget', '-state')
+      state = app.command(Gemba::SettingsWindow::GP_UNDO_BTN, 'cget', '-state')
       assert_equal 'normal', state
 
       # refresh_gamepad simulates what reset/undo would do from the player side
-      sw.refresh_gamepad(Teek::MGBA::SettingsWindow::DEFAULT_GP_LABELS, 25)
+      sw.refresh_gamepad(Gemba::SettingsWindow::DEFAULT_GP_LABELS, 25)
       app.update
 
       # Verify labels restored
-      text = app.command(Teek::MGBA::SettingsWindow::GP_BTN_A, 'cget', '-text')
+      text = app.command(Gemba::SettingsWindow::GP_BTN_A, 'cget', '-text')
       assert_equal 'a', text
     end
   end
@@ -376,27 +376,27 @@ class TestMGBASettingsWindow < Minitest::Test
 
   def test_aspect_ratio_defaults_to_on
     assert_tk_app("aspect ratio checkbox defaults to on") do
-      require "teek/mgba/settings_window"
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {})
+      require "gemba/settings_window"
+      sw = Gemba::SettingsWindow.new(app, callbacks: {})
       sw.show
       app.update
 
-      assert_equal '1', app.get_variable(Teek::MGBA::SettingsWindow::VAR_ASPECT_RATIO)
+      assert_equal '1', app.get_variable(Gemba::SettingsWindow::VAR_ASPECT_RATIO)
     end
   end
 
   def test_unchecking_aspect_ratio_fires_callback
     assert_tk_app("unchecking aspect ratio fires on_aspect_ratio_change") do
-      require "teek/mgba/settings_window"
+      require "gemba/settings_window"
       received = nil
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {
+      sw = Gemba::SettingsWindow.new(app, callbacks: {
         on_aspect_ratio_change: proc { |keep| received = keep }
       })
       sw.show
       app.update
 
       # Simulate user unchecking the checkbox
-      app.command(Teek::MGBA::SettingsWindow::ASPECT_CHECK, 'invoke')
+      app.command(Gemba::SettingsWindow::ASPECT_CHECK, 'invoke')
       app.update
 
       assert_equal false, received
@@ -405,18 +405,18 @@ class TestMGBASettingsWindow < Minitest::Test
 
   def test_checking_aspect_ratio_fires_callback
     assert_tk_app("re-checking aspect ratio fires callback with true") do
-      require "teek/mgba/settings_window"
+      require "gemba/settings_window"
       received = nil
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {
+      sw = Gemba::SettingsWindow.new(app, callbacks: {
         on_aspect_ratio_change: proc { |keep| received = keep }
       })
       sw.show
       app.update
 
       # Uncheck then re-check
-      app.command(Teek::MGBA::SettingsWindow::ASPECT_CHECK, 'invoke')
+      app.command(Gemba::SettingsWindow::ASPECT_CHECK, 'invoke')
       app.update
-      app.command(Teek::MGBA::SettingsWindow::ASPECT_CHECK, 'invoke')
+      app.command(Gemba::SettingsWindow::ASPECT_CHECK, 'invoke')
       app.update
 
       assert_equal true, received
@@ -427,26 +427,26 @@ class TestMGBASettingsWindow < Minitest::Test
 
   def test_show_fps_defaults_to_on
     assert_tk_app("show fps checkbox defaults to on") do
-      require "teek/mgba/settings_window"
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {})
+      require "gemba/settings_window"
+      sw = Gemba::SettingsWindow.new(app, callbacks: {})
       sw.show
       app.update
 
-      assert_equal '1', app.get_variable(Teek::MGBA::SettingsWindow::VAR_SHOW_FPS)
+      assert_equal '1', app.get_variable(Gemba::SettingsWindow::VAR_SHOW_FPS)
     end
   end
 
   def test_unchecking_show_fps_fires_callback
     assert_tk_app("unchecking show fps fires on_show_fps_change") do
-      require "teek/mgba/settings_window"
+      require "gemba/settings_window"
       received = nil
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {
+      sw = Gemba::SettingsWindow.new(app, callbacks: {
         on_show_fps_change: proc { |show| received = show }
       })
       sw.show
       app.update
 
-      app.command(Teek::MGBA::SettingsWindow::SHOW_FPS_CHECK, 'invoke')
+      app.command(Gemba::SettingsWindow::SHOW_FPS_CHECK, 'invoke')
       app.update
 
       assert_equal false, received
@@ -457,8 +457,8 @@ class TestMGBASettingsWindow < Minitest::Test
 
   def test_starts_in_keyboard_mode
     assert_tk_app("starts in keyboard mode") do
-      require "teek/mgba/settings_window"
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {})
+      require "gemba/settings_window"
+      sw = Gemba::SettingsWindow.new(app, callbacks: {})
       sw.show
       app.update
 
@@ -468,79 +468,79 @@ class TestMGBASettingsWindow < Minitest::Test
 
   def test_keyboard_mode_labels_show_keysyms
     assert_tk_app("keyboard mode shows keysym labels") do
-      require "teek/mgba/settings_window"
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {})
+      require "gemba/settings_window"
+      sw = Gemba::SettingsWindow.new(app, callbacks: {})
       sw.show
       app.update
 
-      text = app.command(Teek::MGBA::SettingsWindow::GP_BTN_A, 'cget', '-text')
+      text = app.command(Gemba::SettingsWindow::GP_BTN_A, 'cget', '-text')
       assert_equal 'z', text
-      text = app.command(Teek::MGBA::SettingsWindow::GP_BTN_START, 'cget', '-text')
+      text = app.command(Gemba::SettingsWindow::GP_BTN_START, 'cget', '-text')
       assert_equal 'Return', text
     end
   end
 
   def test_switching_to_gamepad_mode_changes_labels
     assert_tk_app("switching to gamepad shows gamepad labels") do
-      require "teek/mgba/settings_window"
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {})
+      require "gemba/settings_window"
+      sw = Gemba::SettingsWindow.new(app, callbacks: {})
       sw.show
       app.update
 
       sw.update_gamepad_list(['Keyboard Only', 'Test Gamepad'])
-      app.set_variable(Teek::MGBA::SettingsWindow::VAR_GAMEPAD, 'Test Gamepad')
-      app.command(:event, 'generate', Teek::MGBA::SettingsWindow::GAMEPAD_COMBO, '<<ComboboxSelected>>')
+      app.set_variable(Gemba::SettingsWindow::VAR_GAMEPAD, 'Test Gamepad')
+      app.command(:event, 'generate', Gemba::SettingsWindow::GAMEPAD_COMBO, '<<ComboboxSelected>>')
       app.update
 
       refute sw.keyboard_mode?
-      text = app.command(Teek::MGBA::SettingsWindow::GP_BTN_A, 'cget', '-text')
+      text = app.command(Gemba::SettingsWindow::GP_BTN_A, 'cget', '-text')
       assert_equal 'a', text
-      text = app.command(Teek::MGBA::SettingsWindow::GP_BTN_START, 'cget', '-text')
+      text = app.command(Gemba::SettingsWindow::GP_BTN_START, 'cget', '-text')
       assert_equal 'start', text
     end
   end
 
   def test_deadzone_disabled_in_keyboard_mode
     assert_tk_app("dead zone slider disabled in keyboard mode") do
-      require "teek/mgba/settings_window"
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {})
+      require "gemba/settings_window"
+      sw = Gemba::SettingsWindow.new(app, callbacks: {})
       sw.show
       app.update
 
-      state = app.command(Teek::MGBA::SettingsWindow::DEADZONE_SCALE, 'cget', '-state')
+      state = app.command(Gemba::SettingsWindow::DEADZONE_SCALE, 'cget', '-state')
       assert_equal 'disabled', state
     end
   end
 
   def test_deadzone_enabled_in_gamepad_mode
     assert_tk_app("dead zone slider enabled in gamepad mode") do
-      require "teek/mgba/settings_window"
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {})
+      require "gemba/settings_window"
+      sw = Gemba::SettingsWindow.new(app, callbacks: {})
       sw.show
       app.update
 
       sw.update_gamepad_list(['Keyboard Only', 'Test Gamepad'])
-      app.set_variable(Teek::MGBA::SettingsWindow::VAR_GAMEPAD, 'Test Gamepad')
-      app.command(:event, 'generate', Teek::MGBA::SettingsWindow::GAMEPAD_COMBO, '<<ComboboxSelected>>')
+      app.set_variable(Gemba::SettingsWindow::VAR_GAMEPAD, 'Test Gamepad')
+      app.command(:event, 'generate', Gemba::SettingsWindow::GAMEPAD_COMBO, '<<ComboboxSelected>>')
       app.update
 
-      state = app.command(Teek::MGBA::SettingsWindow::DEADZONE_SCALE, 'cget', '-state')
+      state = app.command(Gemba::SettingsWindow::DEADZONE_SCALE, 'cget', '-state')
       assert_equal 'normal', state
     end
   end
 
   def test_keyboard_capture_fires_keyboard_callback
     assert_tk_app("keyboard capture fires on_keyboard_map_change") do
-      require "teek/mgba/settings_window"
+      require "gemba/settings_window"
       received_gba = nil
       received_key = nil
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {
+      sw = Gemba::SettingsWindow.new(app, callbacks: {
         on_keyboard_map_change: proc { |g, k| received_gba = g; received_key = k }
       })
       sw.show
       app.update
 
-      app.command(Teek::MGBA::SettingsWindow::GP_BTN_B, 'invoke')
+      app.command(Gemba::SettingsWindow::GP_BTN_B, 'invoke')
       app.update
       sw.capture_mapping('space')
       app.update
@@ -552,24 +552,24 @@ class TestMGBASettingsWindow < Minitest::Test
 
   def test_switching_mode_cancels_listen
     assert_tk_app("switching input mode cancels active listen") do
-      require "teek/mgba/settings_window"
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {})
+      require "gemba/settings_window"
+      sw = Gemba::SettingsWindow.new(app, callbacks: {})
       sw.show
       app.update
 
       # Start listening in keyboard mode
-      app.command(Teek::MGBA::SettingsWindow::GP_BTN_A, 'invoke')
+      app.command(Gemba::SettingsWindow::GP_BTN_A, 'invoke')
       app.update
       assert_equal :a, sw.listening_for
 
       # Switch to gamepad mode — should cancel listen
       sw.update_gamepad_list(['Keyboard Only', 'Test Gamepad'])
-      app.set_variable(Teek::MGBA::SettingsWindow::VAR_GAMEPAD, 'Test Gamepad')
-      app.command(:event, 'generate', Teek::MGBA::SettingsWindow::GAMEPAD_COMBO, '<<ComboboxSelected>>')
+      app.set_variable(Gemba::SettingsWindow::VAR_GAMEPAD, 'Test Gamepad')
+      app.command(:event, 'generate', Gemba::SettingsWindow::GAMEPAD_COMBO, '<<ComboboxSelected>>')
       app.update
 
       assert_nil sw.listening_for
-      text = app.command(Teek::MGBA::SettingsWindow::GP_BTN_A, 'cget', '-text')
+      text = app.command(Gemba::SettingsWindow::GP_BTN_A, 'cget', '-text')
       assert_equal 'a', text  # reverted to gamepad default (not "Press...")
     end
   end
@@ -578,7 +578,7 @@ class TestMGBASettingsWindow < Minitest::Test
 
   def test_virtual_gamepad_listen_and_capture
     assert_tk_app("virtual gamepad button press captured in listen mode") do
-      require "teek/mgba/settings_window"
+      require "gemba/settings_window"
       require "teek/sdl2"
       gp_cls = Teek::SDL2::Gamepad
 
@@ -588,7 +588,7 @@ class TestMGBASettingsWindow < Minitest::Test
 
       received_gba = nil
       received_gp = nil
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {
+      sw = Gemba::SettingsWindow.new(app, callbacks: {
         on_gamepad_map_change: proc { |g, b| received_gba = g; received_gp = b }
       })
       sw.show
@@ -596,13 +596,13 @@ class TestMGBASettingsWindow < Minitest::Test
 
       # Switch to gamepad mode (default is keyboard)
       sw.update_gamepad_list(['Keyboard Only', gp.name])
-      app.set_variable(Teek::MGBA::SettingsWindow::VAR_GAMEPAD, gp.name)
-      app.command(:event, 'generate', Teek::MGBA::SettingsWindow::GAMEPAD_COMBO, '<<ComboboxSelected>>')
+      app.set_variable(Gemba::SettingsWindow::VAR_GAMEPAD, gp.name)
+      app.command(:event, 'generate', Gemba::SettingsWindow::GAMEPAD_COMBO, '<<ComboboxSelected>>')
       app.update
       refute sw.keyboard_mode?
 
       # Enter listen mode for B button
-      app.command(Teek::MGBA::SettingsWindow::GP_BTN_B, 'invoke')
+      app.command(Gemba::SettingsWindow::GP_BTN_B, 'invoke')
       app.update
       assert_equal :b, sw.listening_for
 
@@ -623,7 +623,7 @@ class TestMGBASettingsWindow < Minitest::Test
       assert_equal :b, received_gba
       assert_equal :x, received_gp
 
-      text = app.command(Teek::MGBA::SettingsWindow::GP_BTN_B, 'cget', '-text')
+      text = app.command(Gemba::SettingsWindow::GP_BTN_B, 'cget', '-text')
       assert_equal 'x', text
 
       gp.set_virtual_button(:x, false)
@@ -637,11 +637,11 @@ class TestMGBASettingsWindow < Minitest::Test
 
   def test_kb_mapping_rejected_when_conflicting_with_hotkey
     assert_tk_app("keyboard mapping rejected when key conflicts with hotkey") do
-      require "teek/mgba/settings_window"
-      require "teek/mgba/hotkey_map"
+      require "gemba/settings_window"
+      require "gemba/hotkey_map"
       received = false
       conflict_msg = nil
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {
+      sw = Gemba::SettingsWindow.new(app, callbacks: {
         on_keyboard_map_change: proc { |*| received = true },
         on_validate_kb_mapping: ->(keysym) {
           # Simulate: 'F5' is the Quick Save hotkey
@@ -653,7 +653,7 @@ class TestMGBASettingsWindow < Minitest::Test
       app.update
 
       # Try to bind GBA A to F5 (conflicts with hotkey)
-      app.command(Teek::MGBA::SettingsWindow::GP_BTN_A, 'invoke')
+      app.command(Gemba::SettingsWindow::GP_BTN_A, 'invoke')
       app.update
       sw.capture_mapping('F5')
       app.update
@@ -661,7 +661,7 @@ class TestMGBASettingsWindow < Minitest::Test
       refute received, "on_keyboard_map_change should not fire for rejected key"
       assert_equal '"F5" is assigned to hotkey: Quick save', conflict_msg
       # Label should revert to original default
-      text = app.command(Teek::MGBA::SettingsWindow::GP_BTN_A, 'cget', '-text')
+      text = app.command(Gemba::SettingsWindow::GP_BTN_A, 'cget', '-text')
       assert_equal 'z', text
       assert_nil sw.listening_for
     end
@@ -669,31 +669,31 @@ class TestMGBASettingsWindow < Minitest::Test
 
   def test_kb_mapping_accepted_when_no_conflict
     assert_tk_app("keyboard mapping accepted when no conflict") do
-      require "teek/mgba/settings_window"
-      require "teek/mgba/hotkey_map"
+      require "gemba/settings_window"
+      require "gemba/hotkey_map"
       received_gba = nil
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {
+      sw = Gemba::SettingsWindow.new(app, callbacks: {
         on_keyboard_map_change: proc { |g, _| received_gba = g },
         on_validate_kb_mapping: ->(_) { nil },
       })
       sw.show
       app.update
 
-      app.command(Teek::MGBA::SettingsWindow::GP_BTN_A, 'invoke')
+      app.command(Gemba::SettingsWindow::GP_BTN_A, 'invoke')
       app.update
       sw.capture_mapping('m')
       app.update
 
       assert_equal :a, received_gba
-      text = app.command(Teek::MGBA::SettingsWindow::GP_BTN_A, 'cget', '-text')
+      text = app.command(Gemba::SettingsWindow::GP_BTN_A, 'cget', '-text')
       assert_equal 'm', text
     end
   end
 
   def test_gamepad_mapping_skips_validation
     assert_tk_app("gamepad mode skips keyboard validation") do
-      require "teek/mgba/settings_window"
-      require "teek/mgba/hotkey_map"
+      require "gemba/settings_window"
+      require "gemba/hotkey_map"
       require "teek/sdl2"
       gp_cls = Teek::SDL2::Gamepad
       gp_cls.init_subsystem
@@ -701,7 +701,7 @@ class TestMGBASettingsWindow < Minitest::Test
       gp = gp_cls.open(idx)
 
       received_gba = nil
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {
+      sw = Gemba::SettingsWindow.new(app, callbacks: {
         on_gamepad_map_change: proc { |g, _| received_gba = g },
         on_validate_kb_mapping: ->(_) { "should not be called" },
       })
@@ -710,12 +710,12 @@ class TestMGBASettingsWindow < Minitest::Test
 
       # Switch to gamepad mode
       sw.update_gamepad_list(['Keyboard Only', gp.name])
-      app.set_variable(Teek::MGBA::SettingsWindow::VAR_GAMEPAD, gp.name)
-      app.command(:event, 'generate', Teek::MGBA::SettingsWindow::GAMEPAD_COMBO, '<<ComboboxSelected>>')
+      app.set_variable(Gemba::SettingsWindow::VAR_GAMEPAD, gp.name)
+      app.command(:event, 'generate', Gemba::SettingsWindow::GAMEPAD_COMBO, '<<ComboboxSelected>>')
       app.update
 
       # Gamepad capture — no keyboard validation applies
-      app.command(Teek::MGBA::SettingsWindow::GP_BTN_A, 'invoke')
+      app.command(Gemba::SettingsWindow::GP_BTN_A, 'invoke')
       app.update
       sw.capture_mapping(:x)
       app.update
@@ -732,27 +732,27 @@ class TestMGBASettingsWindow < Minitest::Test
 
   def test_pixel_filter_defaults_to_nearest
     assert_tk_app("pixel filter defaults to Nearest Neighbor") do
-      require "teek/mgba/settings_window"
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {})
+      require "gemba/settings_window"
+      sw = Gemba::SettingsWindow.new(app, callbacks: {})
       sw.show
       app.update
 
-      assert_equal 'Nearest Neighbor', app.get_variable(Teek::MGBA::SettingsWindow::VAR_FILTER)
+      assert_equal 'Nearest Neighbor', app.get_variable(Gemba::SettingsWindow::VAR_FILTER)
     end
   end
 
   def test_selecting_bilinear_fires_callback
     assert_tk_app("selecting Bilinear fires on_filter_change") do
-      require "teek/mgba/settings_window"
+      require "gemba/settings_window"
       received = nil
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {
+      sw = Gemba::SettingsWindow.new(app, callbacks: {
         on_filter_change: proc { |f| received = f }
       })
       sw.show
       app.update
 
-      app.set_variable(Teek::MGBA::SettingsWindow::VAR_FILTER, 'Bilinear')
-      app.command(:event, 'generate', Teek::MGBA::SettingsWindow::FILTER_COMBO, '<<ComboboxSelected>>')
+      app.set_variable(Gemba::SettingsWindow::VAR_FILTER, 'Bilinear')
+      app.command(:event, 'generate', Gemba::SettingsWindow::FILTER_COMBO, '<<ComboboxSelected>>')
       app.update
 
       assert_equal 'linear', received
@@ -763,26 +763,26 @@ class TestMGBASettingsWindow < Minitest::Test
 
   def test_integer_scale_defaults_to_off
     assert_tk_app("integer scale checkbox defaults to off") do
-      require "teek/mgba/settings_window"
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {})
+      require "gemba/settings_window"
+      sw = Gemba::SettingsWindow.new(app, callbacks: {})
       sw.show
       app.update
 
-      assert_equal '0', app.get_variable(Teek::MGBA::SettingsWindow::VAR_INTEGER_SCALE)
+      assert_equal '0', app.get_variable(Gemba::SettingsWindow::VAR_INTEGER_SCALE)
     end
   end
 
   def test_clicking_integer_scale_fires_callback
     assert_tk_app("clicking integer scale fires on_integer_scale_change") do
-      require "teek/mgba/settings_window"
+      require "gemba/settings_window"
       received = nil
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {
+      sw = Gemba::SettingsWindow.new(app, callbacks: {
         on_integer_scale_change: proc { |v| received = v }
       })
       sw.show
       app.update
 
-      app.command(Teek::MGBA::SettingsWindow::INTEGER_SCALE_CHECK, 'invoke')
+      app.command(Gemba::SettingsWindow::INTEGER_SCALE_CHECK, 'invoke')
       app.update
 
       assert_equal true, received
@@ -793,26 +793,26 @@ class TestMGBASettingsWindow < Minitest::Test
 
   def test_color_correction_defaults_to_off
     assert_tk_app("color correction checkbox defaults to off") do
-      require "teek/mgba/settings_window"
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {})
+      require "gemba/settings_window"
+      sw = Gemba::SettingsWindow.new(app, callbacks: {})
       sw.show
       app.update
 
-      assert_equal '0', app.get_variable(Teek::MGBA::SettingsWindow::VAR_COLOR_CORRECTION)
+      assert_equal '0', app.get_variable(Gemba::SettingsWindow::VAR_COLOR_CORRECTION)
     end
   end
 
   def test_clicking_color_correction_fires_callback
     assert_tk_app("clicking color correction fires on_color_correction_change") do
-      require "teek/mgba/settings_window"
+      require "gemba/settings_window"
       received = nil
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {
+      sw = Gemba::SettingsWindow.new(app, callbacks: {
         on_color_correction_change: proc { |v| received = v }
       })
       sw.show
       app.update
 
-      app.command(Teek::MGBA::SettingsWindow::COLOR_CORRECTION_CHECK, 'invoke')
+      app.command(Gemba::SettingsWindow::COLOR_CORRECTION_CHECK, 'invoke')
       app.update
 
       assert_equal true, received
@@ -821,18 +821,18 @@ class TestMGBASettingsWindow < Minitest::Test
 
   def test_unchecking_color_correction_fires_false
     assert_tk_app("unchecking color correction fires callback with false") do
-      require "teek/mgba/settings_window"
+      require "gemba/settings_window"
       received = nil
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {
+      sw = Gemba::SettingsWindow.new(app, callbacks: {
         on_color_correction_change: proc { |v| received = v }
       })
       sw.show
       app.update
 
       # Check then uncheck
-      app.command(Teek::MGBA::SettingsWindow::COLOR_CORRECTION_CHECK, 'invoke')
+      app.command(Gemba::SettingsWindow::COLOR_CORRECTION_CHECK, 'invoke')
       app.update
-      app.command(Teek::MGBA::SettingsWindow::COLOR_CORRECTION_CHECK, 'invoke')
+      app.command(Gemba::SettingsWindow::COLOR_CORRECTION_CHECK, 'invoke')
       app.update
 
       assert_equal false, received
@@ -843,26 +843,26 @@ class TestMGBASettingsWindow < Minitest::Test
 
   def test_frame_blending_defaults_to_off
     assert_tk_app("frame blending checkbox defaults to off") do
-      require "teek/mgba/settings_window"
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {})
+      require "gemba/settings_window"
+      sw = Gemba::SettingsWindow.new(app, callbacks: {})
       sw.show
       app.update
 
-      assert_equal '0', app.get_variable(Teek::MGBA::SettingsWindow::VAR_FRAME_BLENDING)
+      assert_equal '0', app.get_variable(Gemba::SettingsWindow::VAR_FRAME_BLENDING)
     end
   end
 
   def test_clicking_frame_blending_fires_callback
     assert_tk_app("clicking frame blending fires on_frame_blending_change") do
-      require "teek/mgba/settings_window"
+      require "gemba/settings_window"
       received = nil
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {
+      sw = Gemba::SettingsWindow.new(app, callbacks: {
         on_frame_blending_change: proc { |v| received = v }
       })
       sw.show
       app.update
 
-      app.command(Teek::MGBA::SettingsWindow::FRAME_BLENDING_CHECK, 'invoke')
+      app.command(Gemba::SettingsWindow::FRAME_BLENDING_CHECK, 'invoke')
       app.update
 
       assert_equal true, received
@@ -871,18 +871,18 @@ class TestMGBASettingsWindow < Minitest::Test
 
   def test_unchecking_frame_blending_fires_false
     assert_tk_app("unchecking frame blending fires callback with false") do
-      require "teek/mgba/settings_window"
+      require "gemba/settings_window"
       received = nil
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {
+      sw = Gemba::SettingsWindow.new(app, callbacks: {
         on_frame_blending_change: proc { |v| received = v }
       })
       sw.show
       app.update
 
       # Check then uncheck
-      app.command(Teek::MGBA::SettingsWindow::FRAME_BLENDING_CHECK, 'invoke')
+      app.command(Gemba::SettingsWindow::FRAME_BLENDING_CHECK, 'invoke')
       app.update
-      app.command(Teek::MGBA::SettingsWindow::FRAME_BLENDING_CHECK, 'invoke')
+      app.command(Gemba::SettingsWindow::FRAME_BLENDING_CHECK, 'invoke')
       app.update
 
       assert_equal false, received
@@ -893,36 +893,36 @@ class TestMGBASettingsWindow < Minitest::Test
 
   def test_per_game_checkbox_defaults_disabled
     assert_tk_app("per-game checkbox defaults disabled") do
-      require "teek/mgba/settings_window"
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {})
+      require "gemba/settings_window"
+      sw = Gemba::SettingsWindow.new(app, callbacks: {})
       sw.show
       app.update
 
-      state = app.command(Teek::MGBA::SettingsWindow::PER_GAME_CHECK, 'state')
+      state = app.command(Gemba::SettingsWindow::PER_GAME_CHECK, 'state')
       assert_includes state, 'disabled'
     end
   end
 
   def test_set_per_game_available_enables_checkbox
     assert_tk_app("set_per_game_available enables checkbox") do
-      require "teek/mgba/settings_window"
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {})
+      require "gemba/settings_window"
+      sw = Gemba::SettingsWindow.new(app, callbacks: {})
       sw.show
       app.update
 
       sw.set_per_game_available(true)
       app.update
 
-      state = app.command(Teek::MGBA::SettingsWindow::PER_GAME_CHECK, 'state')
+      state = app.command(Gemba::SettingsWindow::PER_GAME_CHECK, 'state')
       refute_includes state, 'disabled'
     end
   end
 
   def test_per_game_toggle_fires_callback
     assert_tk_app("per-game toggle fires on_per_game_toggle") do
-      require "teek/mgba/settings_window"
+      require "gemba/settings_window"
       received = nil
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {
+      sw = Gemba::SettingsWindow.new(app, callbacks: {
         on_per_game_toggle: proc { |v| received = v }
       })
       sw.show
@@ -930,7 +930,7 @@ class TestMGBASettingsWindow < Minitest::Test
 
       sw.set_per_game_available(true)
       app.update
-      app.command(Teek::MGBA::SettingsWindow::PER_GAME_CHECK, 'invoke')
+      app.command(Gemba::SettingsWindow::PER_GAME_CHECK, 'invoke')
       app.update
 
       assert_equal true, received
@@ -939,23 +939,23 @@ class TestMGBASettingsWindow < Minitest::Test
 
   def test_set_per_game_active_syncs_variable
     assert_tk_app("set_per_game_active syncs variable") do
-      require "teek/mgba/settings_window"
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {})
+      require "gemba/settings_window"
+      sw = Gemba::SettingsWindow.new(app, callbacks: {})
       sw.show
       app.update
 
       sw.set_per_game_active(true)
-      assert_equal '1', app.get_variable(Teek::MGBA::SettingsWindow::VAR_PER_GAME)
+      assert_equal '1', app.get_variable(Gemba::SettingsWindow::VAR_PER_GAME)
 
       sw.set_per_game_active(false)
-      assert_equal '0', app.get_variable(Teek::MGBA::SettingsWindow::VAR_PER_GAME)
+      assert_equal '0', app.get_variable(Gemba::SettingsWindow::VAR_PER_GAME)
     end
   end
 
   def test_per_game_disabled_on_gamepad_tab
     assert_tk_app("per-game disabled on gamepad tab") do
-      require "teek/mgba/settings_window"
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {})
+      require "gemba/settings_window"
+      sw = Gemba::SettingsWindow.new(app, callbacks: {})
       sw.show
       app.update
 
@@ -964,18 +964,18 @@ class TestMGBASettingsWindow < Minitest::Test
       app.update
 
       # Switch to gamepad tab — checkbox should become disabled
-      app.command(Teek::MGBA::SettingsWindow::NB, 'select', Teek::MGBA::SettingsWindow::GAMEPAD_TAB)
+      app.command(Gemba::SettingsWindow::NB, 'select', Gemba::SettingsWindow::GAMEPAD_TAB)
       app.update
 
-      state = app.command(Teek::MGBA::SettingsWindow::PER_GAME_CHECK, 'state')
+      state = app.command(Gemba::SettingsWindow::PER_GAME_CHECK, 'state')
       assert_includes state, 'disabled', "Per-game checkbox should be disabled on gamepad tab"
     end
   end
 
   def test_per_game_re_enabled_on_video_tab
     assert_tk_app("per-game re-enabled on video tab") do
-      require "teek/mgba/settings_window"
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {})
+      require "gemba/settings_window"
+      sw = Gemba::SettingsWindow.new(app, callbacks: {})
       sw.show
       app.update
 
@@ -983,12 +983,12 @@ class TestMGBASettingsWindow < Minitest::Test
       app.update
 
       # Switch to gamepad (disables), then back to video (re-enables)
-      app.command(Teek::MGBA::SettingsWindow::NB, 'select', Teek::MGBA::SettingsWindow::GAMEPAD_TAB)
+      app.command(Gemba::SettingsWindow::NB, 'select', Gemba::SettingsWindow::GAMEPAD_TAB)
       app.update
-      app.command(Teek::MGBA::SettingsWindow::NB, 'select', "#{Teek::MGBA::SettingsWindow::NB}.video")
+      app.command(Gemba::SettingsWindow::NB, 'select', "#{Gemba::SettingsWindow::NB}.video")
       app.update
 
-      state = app.command(Teek::MGBA::SettingsWindow::PER_GAME_CHECK, 'state')
+      state = app.command(Gemba::SettingsWindow::PER_GAME_CHECK, 'state')
       refute_includes state, 'disabled', "Per-game checkbox should be enabled on video tab"
     end
   end
@@ -997,39 +997,39 @@ class TestMGBASettingsWindow < Minitest::Test
 
   def test_recording_tab_exists
     assert_tk_app("recording tab exists in notebook") do
-      require "teek/mgba/settings_window"
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {})
+      require "gemba/settings_window"
+      sw = Gemba::SettingsWindow.new(app, callbacks: {})
       sw.show
       app.update
 
-      tabs = app.command(Teek::MGBA::SettingsWindow::NB, 'tabs')
-      assert_includes tabs, Teek::MGBA::SettingsWindow::REC_TAB
+      tabs = app.command(Gemba::SettingsWindow::NB, 'tabs')
+      assert_includes tabs, Gemba::SettingsWindow::REC_TAB
     end
   end
 
   def test_compression_combobox_defaults_to_1
     assert_tk_app("compression combobox defaults to 1") do
-      require "teek/mgba/settings_window"
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {})
+      require "gemba/settings_window"
+      sw = Gemba::SettingsWindow.new(app, callbacks: {})
       sw.show
       app.update
 
-      assert_equal '1', app.get_variable(Teek::MGBA::SettingsWindow::VAR_REC_COMPRESSION)
+      assert_equal '1', app.get_variable(Gemba::SettingsWindow::VAR_REC_COMPRESSION)
     end
   end
 
   def test_selecting_compression_fires_callback
     assert_tk_app("selecting compression fires on_compression_change") do
-      require "teek/mgba/settings_window"
+      require "gemba/settings_window"
       received = nil
-      sw = Teek::MGBA::SettingsWindow.new(app, callbacks: {
+      sw = Gemba::SettingsWindow.new(app, callbacks: {
         on_compression_change: proc { |v| received = v }
       })
       sw.show
       app.update
 
-      app.set_variable(Teek::MGBA::SettingsWindow::VAR_REC_COMPRESSION, '6')
-      app.command(:event, 'generate', Teek::MGBA::SettingsWindow::REC_COMPRESSION_COMBO, '<<ComboboxSelected>>')
+      app.set_variable(Gemba::SettingsWindow::VAR_REC_COMPRESSION, '6')
+      app.command(:event, 'generate', Gemba::SettingsWindow::REC_COMPRESSION_COMBO, '<<ComboboxSelected>>')
       app.update
 
       assert_equal 6, received

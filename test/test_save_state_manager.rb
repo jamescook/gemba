@@ -3,9 +3,9 @@
 require "minitest/autorun"
 require "tmpdir"
 require "json"
-require_relative "../lib/teek/mgba/config"
-require_relative "../lib/teek/mgba/locale"
-require_relative "../lib/teek/mgba/save_state_manager"
+require_relative "../lib/gemba/config"
+require_relative "../lib/gemba/locale"
+require_relative "../lib/gemba/save_state_manager"
 
 class TestSaveStateManager < Minitest::Test
   # Recording mock for the mGBA Core.
@@ -15,7 +15,7 @@ class TestSaveStateManager < Minitest::Test
     attr_reader :calls
     attr_accessor :game_code, :checksum, :destroyed, :save_result, :load_result
 
-    def initialize(game_code: "AGB-BTKE", checksum: 0xDEADBEEF)
+    def initialize(game_code: "AGB-BGBE", checksum: 0xDEADBEEF)
       @calls = []
       @game_code = game_code
       @checksum = checksum
@@ -75,9 +75,9 @@ class TestSaveStateManager < Minitest::Test
   end
 
   def setup
-    @dir = Dir.mktmpdir("teek-mgba-ssm-test")
+    @dir = Dir.mktmpdir("gemba-ssm-test")
     @config_path = File.join(@dir, "settings.json")
-    @config = Teek::MGBA::Config.new(path: @config_path)
+    @config = Gemba::Config.new(path: @config_path)
     @config.save_state_debounce = 0  # disable debounce for tests
     @states_dir = File.join(@dir, "states")
     @config.states_dir = @states_dir
@@ -92,7 +92,7 @@ class TestSaveStateManager < Minitest::Test
   end
 
   def new_manager(core: @core, config: @config, app: @app)
-    mgr = Teek::MGBA::SaveStateManager.new(core: core, config: config, app: app)
+    mgr = Gemba::SaveStateManager.new(core: core, config: config, app: app)
     mgr.state_dir = mgr.state_dir_for_rom(core)
     mgr
   end
@@ -101,7 +101,7 @@ class TestSaveStateManager < Minitest::Test
 
   def test_state_dir_for_rom_includes_game_code_and_crc
     dir = @mgr.state_dir_for_rom(@core)
-    assert_includes dir, "AGB-BTKE"
+    assert_includes dir, "AGB-BGBE"
     assert_includes dir, "DEADBEEF"
   end
 

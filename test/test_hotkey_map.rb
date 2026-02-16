@@ -29,12 +29,12 @@ end
 
 class TestHotkeyMap < Minitest::Test
   def setup
-    require "teek/mgba/hotkey_map"
+    require "gemba/hotkey_map"
   end
 
   def make_map(hotkey_data = {})
     config = MockHotkeyConfig.new(hotkey_data)
-    [Teek::MGBA::HotkeyMap.new(config), config]
+    [Gemba::HotkeyMap.new(config), config]
   end
 
   # -- Defaults -------------------------------------------------------------
@@ -54,7 +54,7 @@ class TestHotkeyMap < Minitest::Test
 
   def test_all_actions_have_defaults
     map, = make_map
-    Teek::MGBA::HotkeyMap::ACTIONS.each do |action|
+    Gemba::HotkeyMap::ACTIONS.each do |action|
       refute_nil map.key_for(action), "Missing default for #{action}"
     end
   end
@@ -229,86 +229,86 @@ class TestHotkeyMap < Minitest::Test
   # -- normalize (class method) ---------------------------------------------
 
   def test_normalize_plain_string
-    assert_equal 'F5', Teek::MGBA::HotkeyMap.normalize('F5')
+    assert_equal 'F5', Gemba::HotkeyMap.normalize('F5')
   end
 
   def test_normalize_single_element_array
-    assert_equal 'q', Teek::MGBA::HotkeyMap.normalize(['q'])
+    assert_equal 'q', Gemba::HotkeyMap.normalize(['q'])
   end
 
   def test_normalize_sorts_modifiers_canonically
-    result = Teek::MGBA::HotkeyMap.normalize(['Shift', 'Control', 's'])
+    result = Gemba::HotkeyMap.normalize(['Shift', 'Control', 's'])
     assert_equal ['Control', 'Shift', 's'], result
   end
 
   def test_normalize_preserves_correct_order
-    result = Teek::MGBA::HotkeyMap.normalize(['Control', 'Shift', 's'])
+    result = Gemba::HotkeyMap.normalize(['Control', 'Shift', 's'])
     assert_equal ['Control', 'Shift', 's'], result
   end
 
   # -- display_name (class method) ------------------------------------------
 
   def test_display_name_plain_string
-    assert_equal 'F5', Teek::MGBA::HotkeyMap.display_name('F5')
+    assert_equal 'F5', Gemba::HotkeyMap.display_name('F5')
   end
 
   def test_display_name_combo
-    result = Teek::MGBA::HotkeyMap.display_name(['Control', 'q'])
+    result = Gemba::HotkeyMap.display_name(['Control', 'q'])
     assert_equal 'Ctrl+Q', result
   end
 
   def test_display_name_multi_modifier
-    result = Teek::MGBA::HotkeyMap.display_name(['Control', 'Shift', 's'])
+    result = Gemba::HotkeyMap.display_name(['Control', 'Shift', 's'])
     assert_equal 'Ctrl+Shift+S', result
   end
 
   # -- modifier helpers (class methods) -------------------------------------
 
   def test_modifier_key_recognizes_modifiers
-    assert Teek::MGBA::HotkeyMap.modifier_key?('Control_L')
-    assert Teek::MGBA::HotkeyMap.modifier_key?('Shift_R')
-    assert Teek::MGBA::HotkeyMap.modifier_key?('Alt_L')
-    assert Teek::MGBA::HotkeyMap.modifier_key?('Meta_L')
-    assert Teek::MGBA::HotkeyMap.modifier_key?('Super_R')
+    assert Gemba::HotkeyMap.modifier_key?('Control_L')
+    assert Gemba::HotkeyMap.modifier_key?('Shift_R')
+    assert Gemba::HotkeyMap.modifier_key?('Alt_L')
+    assert Gemba::HotkeyMap.modifier_key?('Meta_L')
+    assert Gemba::HotkeyMap.modifier_key?('Super_R')
   end
 
   def test_modifier_key_rejects_non_modifiers
-    refute Teek::MGBA::HotkeyMap.modifier_key?('a')
-    refute Teek::MGBA::HotkeyMap.modifier_key?('F5')
-    refute Teek::MGBA::HotkeyMap.modifier_key?('Return')
+    refute Gemba::HotkeyMap.modifier_key?('a')
+    refute Gemba::HotkeyMap.modifier_key?('F5')
+    refute Gemba::HotkeyMap.modifier_key?('Return')
   end
 
   def test_normalize_modifier
-    assert_equal 'Control', Teek::MGBA::HotkeyMap.normalize_modifier('Control_L')
-    assert_equal 'Control', Teek::MGBA::HotkeyMap.normalize_modifier('Control_R')
-    assert_equal 'Shift', Teek::MGBA::HotkeyMap.normalize_modifier('Shift_L')
-    assert_equal 'Alt', Teek::MGBA::HotkeyMap.normalize_modifier('Alt_L')
-    assert_equal 'Alt', Teek::MGBA::HotkeyMap.normalize_modifier('Meta_L')
-    assert_nil Teek::MGBA::HotkeyMap.normalize_modifier('a')
+    assert_equal 'Control', Gemba::HotkeyMap.normalize_modifier('Control_L')
+    assert_equal 'Control', Gemba::HotkeyMap.normalize_modifier('Control_R')
+    assert_equal 'Shift', Gemba::HotkeyMap.normalize_modifier('Shift_L')
+    assert_equal 'Alt', Gemba::HotkeyMap.normalize_modifier('Alt_L')
+    assert_equal 'Alt', Gemba::HotkeyMap.normalize_modifier('Meta_L')
+    assert_nil Gemba::HotkeyMap.normalize_modifier('a')
   end
 
   def test_modifiers_from_state_empty
-    result = Teek::MGBA::HotkeyMap.modifiers_from_state(0)
+    result = Gemba::HotkeyMap.modifiers_from_state(0)
     assert_empty result
   end
 
   def test_modifiers_from_state_shift
-    result = Teek::MGBA::HotkeyMap.modifiers_from_state(1)
+    result = Gemba::HotkeyMap.modifiers_from_state(1)
     assert_equal Set.new(['Shift']), result
   end
 
   def test_modifiers_from_state_control
-    result = Teek::MGBA::HotkeyMap.modifiers_from_state(4)
+    result = Gemba::HotkeyMap.modifiers_from_state(4)
     assert_equal Set.new(['Control']), result
   end
 
   def test_modifiers_from_state_alt
-    result = Teek::MGBA::HotkeyMap.modifiers_from_state(8)
+    result = Gemba::HotkeyMap.modifiers_from_state(8)
     assert_equal Set.new(['Alt']), result
   end
 
   def test_modifiers_from_state_control_shift
-    result = Teek::MGBA::HotkeyMap.modifiers_from_state(5) # 4|1
+    result = Gemba::HotkeyMap.modifiers_from_state(5) # 4|1
     assert_equal Set.new(['Control', 'Shift']), result
   end
 
@@ -321,7 +321,7 @@ class TestHotkeyMap < Minitest::Test
   # -- Rewind action ---------------------------------------------------------
 
   def test_rewind_in_actions
-    assert_includes Teek::MGBA::HotkeyMap::ACTIONS, :rewind
+    assert_includes Gemba::HotkeyMap::ACTIONS, :rewind
   end
 
   def test_rewind_default_is_shift_tab
@@ -349,25 +349,25 @@ class TestHotkeyMap < Minitest::Test
   end
 
   def test_normalize_keysym_iso_left_tab
-    assert_equal 'Tab', Teek::MGBA::HotkeyMap.normalize_keysym('ISO_Left_Tab')
+    assert_equal 'Tab', Gemba::HotkeyMap.normalize_keysym('ISO_Left_Tab')
   end
 
   def test_normalize_keysym_uppercase_letter
-    assert_equal 'q', Teek::MGBA::HotkeyMap.normalize_keysym('Q')
-    assert_equal 's', Teek::MGBA::HotkeyMap.normalize_keysym('S')
-    assert_equal 'a', Teek::MGBA::HotkeyMap.normalize_keysym('A')
+    assert_equal 'q', Gemba::HotkeyMap.normalize_keysym('Q')
+    assert_equal 's', Gemba::HotkeyMap.normalize_keysym('S')
+    assert_equal 'a', Gemba::HotkeyMap.normalize_keysym('A')
   end
 
   def test_normalize_keysym_shifted_numbers
-    assert_equal '1', Teek::MGBA::HotkeyMap.normalize_keysym('exclam')
-    assert_equal '2', Teek::MGBA::HotkeyMap.normalize_keysym('at')
-    assert_equal '0', Teek::MGBA::HotkeyMap.normalize_keysym('parenright')
+    assert_equal '1', Gemba::HotkeyMap.normalize_keysym('exclam')
+    assert_equal '2', Gemba::HotkeyMap.normalize_keysym('at')
+    assert_equal '0', Gemba::HotkeyMap.normalize_keysym('parenright')
   end
 
   def test_normalize_keysym_passthrough
-    assert_equal 'q', Teek::MGBA::HotkeyMap.normalize_keysym('q')
-    assert_equal 'F5', Teek::MGBA::HotkeyMap.normalize_keysym('F5')
-    assert_equal 'Tab', Teek::MGBA::HotkeyMap.normalize_keysym('Tab')
+    assert_equal 'q', Gemba::HotkeyMap.normalize_keysym('q')
+    assert_equal 'F5', Gemba::HotkeyMap.normalize_keysym('F5')
+    assert_equal 'Tab', Gemba::HotkeyMap.normalize_keysym('Tab')
   end
 
   def test_action_for_shift_uppercase_matches_plain_combo
@@ -381,7 +381,7 @@ class TestHotkeyMap < Minitest::Test
   # -- Record action ---------------------------------------------------------
 
   def test_record_in_actions
-    assert_includes Teek::MGBA::HotkeyMap::ACTIONS, :record
+    assert_includes Gemba::HotkeyMap::ACTIONS, :record
   end
 
   def test_record_default_is_f10

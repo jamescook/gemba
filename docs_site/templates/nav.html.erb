@@ -1,0 +1,16 @@
+<div id="nav-breadcrumb" class="nav-breadcrumb"></div>
+<ul class="nav flex-column" data-nav>
+  <li class="nav-item">
+    <a class="nav-link" data-nav-link href="{{ '/' | relative_url }}">Home</a>
+  </li>
+  <%# No demos yet — uncomment when recordings are added
+  <li class="nav-item">
+    <a class="nav-link" data-nav-link href="{{ '/recordings' | relative_url }}">Demos</a>
+  </li>
+  %>
+  <li class="nav-item">
+    <a class="nav-link" data-nav-link href="{{ '/internals' | relative_url }}">Internals</a>
+  </li>
+  <li><hr class="my-2"></li>
+<%= render_nav_tree(nav_tree, 3) %>
+</ul>

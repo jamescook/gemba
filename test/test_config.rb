@@ -3,12 +3,12 @@
 require "minitest/autorun"
 require "tmpdir"
 require "json"
-require_relative "../lib/teek/mgba/config"
-require_relative "../lib/teek/mgba/version"
+require_relative "../lib/gemba/config"
+require_relative "../lib/gemba/version"
 
 class TestMGBAConfig < Minitest::Test
   def setup
-    @dir = Dir.mktmpdir("teek-mgba-test")
+    @dir = Dir.mktmpdir("gemba-test")
     @path = File.join(@dir, "settings.json")
   end
 
@@ -17,17 +17,17 @@ class TestMGBAConfig < Minitest::Test
   end
 
   def new_config
-    Teek::MGBA::Config.new(path: @path)
+    Gemba::Config.new(path: @path)
   end
 
   # -- Platform paths -------------------------------------------------------
 
   def test_default_path_ends_with_settings_json
-    assert Teek::MGBA::Config.default_path.end_with?("teek-mgba/settings.json")
+    assert Gemba::Config.default_path.end_with?("gemba/settings.json")
   end
 
   def test_config_dir_contains_app_name
-    assert_includes Teek::MGBA::Config.config_dir, "teek-mgba"
+    assert_includes Gemba::Config.config_dir, "gemba"
   end
 
   # -- Global defaults ------------------------------------------------------
@@ -97,7 +97,7 @@ class TestMGBAConfig < Minitest::Test
 
   def test_save_creates_directory
     nested = File.join(@dir, "sub", "dir", "settings.json")
-    c = Teek::MGBA::Config.new(path: nested)
+    c = Gemba::Config.new(path: nested)
     c.save!
     assert File.exist?(nested)
   end
@@ -106,7 +106,7 @@ class TestMGBAConfig < Minitest::Test
     c = new_config
     c.save!
     data = JSON.parse(File.read(@path))
-    assert_equal Teek::MGBA::VERSION, data["meta"]["teek_mgba_version"]
+    assert_equal Gemba::VERSION, data["meta"]["gemba_version"]
     assert data.key?("meta")
     assert data["meta"].key?("saved_at")
   end
@@ -118,7 +118,7 @@ class TestMGBAConfig < Minitest::Test
     c.muted = true
     c.save!
 
-    c2 = Teek::MGBA::Config.new(path: @path)
+    c2 = Gemba::Config.new(path: @path)
     assert_equal 2, c2.scale
     assert_equal 42, c2.volume
     assert c2.muted?
@@ -132,7 +132,7 @@ class TestMGBAConfig < Minitest::Test
     c.set_mapping(guid, :a, :x)
     c.save!
 
-    c2 = Teek::MGBA::Config.new(path: @path)
+    c2 = Gemba::Config.new(path: @path)
     assert_equal 15, c2.dead_zone(guid)
     assert_equal "x", c2.mappings(guid)["a"]
     gp = c2.gamepad(guid)
@@ -201,7 +201,7 @@ class TestMGBAConfig < Minitest::Test
 
   def test_keyboard_guid_defaults_to_keysyms
     c = new_config
-    m = c.mappings(Teek::MGBA::Config::KEYBOARD_GUID)
+    m = c.mappings(Gemba::Config::KEYBOARD_GUID)
     assert_equal "z", m["a"]
     assert_equal "x", m["b"]
     assert_equal "Up", m["up"]
@@ -211,12 +211,12 @@ class TestMGBAConfig < Minitest::Test
 
   def test_keyboard_guid_dead_zone_is_zero
     c = new_config
-    assert_equal 0, c.dead_zone(Teek::MGBA::Config::KEYBOARD_GUID)
+    assert_equal 0, c.dead_zone(Gemba::Config::KEYBOARD_GUID)
   end
 
   def test_keyboard_does_not_get_gamepad_defaults
     c = new_config
-    m = c.mappings(Teek::MGBA::Config::KEYBOARD_GUID)
+    m = c.mappings(Gemba::Config::KEYBOARD_GUID)
     # Should NOT have gamepad button names like 'dpad_up'
     refute_includes m.values, "dpad_up"
     refute_includes m.values, "left_shoulder"
@@ -232,15 +232,15 @@ class TestMGBAConfig < Minitest::Test
 
   def test_round_trip_keyboard
     c = new_config
-    c.set_mapping(Teek::MGBA::Config::KEYBOARD_GUID, :a, "q")
+    c.set_mapping(Gemba::Config::KEYBOARD_GUID, :a, "q")
     c.save!
 
-    c2 = Teek::MGBA::Config.new(path: @path)
-    assert_equal "q", c2.mappings(Teek::MGBA::Config::KEYBOARD_GUID)["a"]
+    c2 = Gemba::Config.new(path: @path)
+    assert_equal "q", c2.mappings(Gemba::Config::KEYBOARD_GUID)["a"]
   end
 
   def test_reset_keyboard_restores_defaults
-    guid = Teek::MGBA::Config::KEYBOARD_GUID
+    guid = Gemba::Config::KEYBOARD_GUID
     c = new_config
     c.set_mapping(guid, :a, "q")
     c.reset_gamepad(guid)
@@ -284,7 +284,7 @@ class TestMGBAConfig < Minitest::Test
     c.turbo_volume_pct = 40
     c.save!
 
-    c2 = Teek::MGBA::Config.new(path: @path)
+    c2 = Gemba::Config.new(path: @path)
     assert_equal 3, c2.turbo_speed
     assert_equal 40, c2.turbo_volume_pct
   end
@@ -308,7 +308,7 @@ class TestMGBAConfig < Minitest::Test
     c.keep_aspect_ratio = false
     c.save!
 
-    c2 = Teek::MGBA::Config.new(path: @path)
+    c2 = Gemba::Config.new(path: @path)
     refute c2.keep_aspect_ratio?
   end
 
@@ -329,14 +329,14 @@ class TestMGBAConfig < Minitest::Test
     c.show_fps = false
     c.save!
 
-    c2 = Teek::MGBA::Config.new(path: @path)
+    c2 = Gemba::Config.new(path: @path)
     refute c2.show_fps?
   end
 
   # -- Saves dir -----------------------------------------------------------
 
   def test_defaults_saves_dir
-    assert new_config.saves_dir.end_with?("teek-mgba/saves")
+    assert new_config.saves_dir.end_with?("gemba/saves")
   end
 
   def test_set_saves_dir
@@ -350,12 +350,12 @@ class TestMGBAConfig < Minitest::Test
     c.saves_dir = "/my/saves"
     c.save!
 
-    c2 = Teek::MGBA::Config.new(path: @path)
+    c2 = Gemba::Config.new(path: @path)
     assert_equal "/my/saves", c2.saves_dir
   end
 
   def test_default_saves_dir_class_method
-    assert Teek::MGBA::Config.default_saves_dir.end_with?("teek-mgba/saves")
+    assert Gemba::Config.default_saves_dir.end_with?("gemba/saves")
   end
 
   # -- Recent ROMs ---------------------------------------------------------
@@ -382,7 +382,7 @@ class TestMGBAConfig < Minitest::Test
   def test_add_recent_rom_caps_at_max
     c = new_config
     7.times { |i| c.add_recent_rom("/roms/#{i}.gba") }
-    assert_equal Teek::MGBA::Config::MAX_RECENT_ROMS, c.recent_roms.size
+    assert_equal Gemba::Config::MAX_RECENT_ROMS, c.recent_roms.size
     assert_equal "/roms/6.gba", c.recent_roms.first
     assert_equal "/roms/2.gba", c.recent_roms.last
   end
@@ -416,14 +416,14 @@ class TestMGBAConfig < Minitest::Test
     c.add_recent_rom("/roms/b.gba")
     c.save!
 
-    c2 = Teek::MGBA::Config.new(path: @path)
+    c2 = Gemba::Config.new(path: @path)
     assert_equal ["/roms/b.gba", "/roms/a.gba"], c2.recent_roms
   end
 
   # -- States dir ----------------------------------------------------------
 
   def test_defaults_states_dir
-    assert new_config.states_dir.end_with?("teek-mgba/states")
+    assert new_config.states_dir.end_with?("gemba/states")
   end
 
   def test_set_states_dir
@@ -437,12 +437,12 @@ class TestMGBAConfig < Minitest::Test
     c.states_dir = "/my/states"
     c.save!
 
-    c2 = Teek::MGBA::Config.new(path: @path)
+    c2 = Gemba::Config.new(path: @path)
     assert_equal "/my/states", c2.states_dir
   end
 
   def test_default_states_dir_class_method
-    assert Teek::MGBA::Config.default_states_dir.end_with?("teek-mgba/states")
+    assert Gemba::Config.default_states_dir.end_with?("gemba/states")
   end
 
   # -- Save state debounce -------------------------------------------------
@@ -470,7 +470,7 @@ class TestMGBAConfig < Minitest::Test
     c.save_state_debounce = 1.5
     c.save!
 
-    c2 = Teek::MGBA::Config.new(path: @path)
+    c2 = Gemba::Config.new(path: @path)
     assert_in_delta 1.5, c2.save_state_debounce, 0.01
   end
 
@@ -499,7 +499,7 @@ class TestMGBAConfig < Minitest::Test
     c.quick_save_slot = 7
     c.save!
 
-    c2 = Teek::MGBA::Config.new(path: @path)
+    c2 = Gemba::Config.new(path: @path)
     assert_equal 7, c2.quick_save_slot
   end
 
@@ -522,7 +522,7 @@ class TestMGBAConfig < Minitest::Test
     c.save_state_backup = false
     c.save!
 
-    c2 = Teek::MGBA::Config.new(path: @path)
+    c2 = Gemba::Config.new(path: @path)
     refute c2.save_state_backup?
   end
 
@@ -543,7 +543,7 @@ class TestMGBAConfig < Minitest::Test
     c.locale = 'ja'
     c.save!
 
-    c2 = Teek::MGBA::Config.new(path: @path)
+    c2 = Gemba::Config.new(path: @path)
     assert_equal 'ja', c2.locale
   end
 
@@ -562,19 +562,19 @@ class TestMGBAConfig < Minitest::Test
   end
 
   def test_rom_id
-    assert_equal "AGB-BTKE-DEADBEEF",
-      Teek::MGBA::Config.rom_id("AGB-BTKE", 0xDEADBEEF)
+    assert_equal "AGB-BGBE-DEADBEEF",
+      Gemba::Config.rom_id("AGB-BGBE", 0xDEADBEEF)
   end
 
   def test_rom_id_sanitizes_special_chars
     # Spaces and slashes get replaced; hyphens, dots, underscores are kept
-    assert_equal "AGB_BTKE-0000CAFE",
-      Teek::MGBA::Config.rom_id("AGB BTKE", 0xCAFE)
+    assert_equal "AGB_BGBE-0000CAFE",
+      Gemba::Config.rom_id("AGB BGBE", 0xCAFE)
   end
 
   def test_game_config_path
-    path = Teek::MGBA::Config.game_config_path("AGB_BTKE-DEADBEEF")
-    assert path.end_with?("games/AGB_BTKE-DEADBEEF/settings.json")
+    path = Gemba::Config.game_config_path("AGB_BGBE-DEADBEEF")
+    assert path.end_with?("games/AGB_BGBE-DEADBEEF/settings.json")
   end
 
   def test_activate_game_without_per_game_reads_global
@@ -623,13 +623,13 @@ class TestMGBAConfig < Minitest::Test
     c.save!
 
     assert File.exist?(@path), "Global config should exist"
-    game_path = Teek::MGBA::Config.game_config_path("TESTROM-00000001")
+    game_path = Gemba::Config.game_config_path("TESTROM-00000001")
     assert File.exist?(game_path), "Game config should exist"
 
     game_data = JSON.parse(File.read(game_path))
     assert_equal 1, game_data['scale']
   ensure
-    game_path = Teek::MGBA::Config.game_config_path("TESTROM-00000001")
+    game_path = Gemba::Config.game_config_path("TESTROM-00000001")
     FileUtils.rm_rf(File.dirname(game_path)) if game_path
   end
 
@@ -641,12 +641,12 @@ class TestMGBAConfig < Minitest::Test
     c.volume = 42
     c.save!
 
-    c2 = Teek::MGBA::Config.new(path: @path)
+    c2 = Gemba::Config.new(path: @path)
     c2.activate_game("TESTROM-00000001")
     assert_equal 1, c2.scale
     assert_equal 42, c2.volume
   ensure
-    game_path = Teek::MGBA::Config.game_config_path("TESTROM-00000001")
+    game_path = Gemba::Config.game_config_path("TESTROM-00000001")
     FileUtils.rm_rf(File.dirname(game_path)) if game_path
   end
 
@@ -663,7 +663,7 @@ class TestMGBAConfig < Minitest::Test
     assert_equal 3, c.scale  # falls through to global
   ensure
     %w[ROM_A-00000001 ROM_B-00000002].each do |id|
-      p = Teek::MGBA::Config.game_config_path(id)
+      p = Gemba::Config.game_config_path(id)
       FileUtils.rm_rf(File.dirname(p)) if p
     end
   end
@@ -675,7 +675,7 @@ class TestMGBAConfig < Minitest::Test
     c.scale = 1
     c.save!
 
-    game_path = Teek::MGBA::Config.game_config_path("TESTROM-00000001")
+    game_path = Gemba::Config.game_config_path("TESTROM-00000001")
     assert File.exist?(game_path)
 
     c.disable_per_game
@@ -692,7 +692,7 @@ class TestMGBAConfig < Minitest::Test
     c.save!
 
     # Write corrupt game file
-    game_path = Teek::MGBA::Config.game_config_path("TESTROM-00000001")
+    game_path = Gemba::Config.game_config_path("TESTROM-00000001")
     FileUtils.mkdir_p(File.dirname(game_path))
     File.write(game_path, "NOT VALID JSON {{{")
 
@@ -710,7 +710,7 @@ class TestMGBAConfig < Minitest::Test
     c.save!
 
     # Externally modify the game file
-    game_path = Teek::MGBA::Config.game_config_path("TESTROM-00000001")
+    game_path = Gemba::Config.game_config_path("TESTROM-00000001")
     game_data = JSON.parse(File.read(game_path))
     game_data['scale'] = 4
     File.write(game_path, JSON.generate(game_data))
@@ -724,7 +724,7 @@ class TestMGBAConfig < Minitest::Test
   def test_per_game_settings_constant_keys
     expected = %w[scale pixel_filter integer_scale color_correction frame_blending
                   volume muted turbo_speed quick_save_slot save_state_backup]
-    assert_equal expected.sort, Teek::MGBA::Config::PER_GAME_SETTINGS.keys.sort
+    assert_equal expected.sort, Gemba::Config::PER_GAME_SETTINGS.keys.sort
   end
 
   # -- Rewind settings ----------------------------------------------------
@@ -765,7 +765,7 @@ class TestMGBAConfig < Minitest::Test
     c.rewind_seconds = 20
     c.save!
 
-    c2 = Teek::MGBA::Config.new(path: @path)
+    c2 = Gemba::Config.new(path: @path)
     refute c2.rewind_enabled?
     assert_equal 20, c2.rewind_seconds
   end
@@ -774,13 +774,13 @@ class TestMGBAConfig < Minitest::Test
 
   def test_corrupt_json_falls_back_to_defaults
     File.write(@path, "NOT VALID JSON {{{")
-    c = Teek::MGBA::Config.new(path: @path)
+    c = Gemba::Config.new(path: @path)
     assert_equal 3, c.scale
     assert_equal 100, c.volume
   end
 
   def test_missing_file_uses_defaults
-    c = Teek::MGBA::Config.new(path: File.join(@dir, "nope.json"))
+    c = Gemba::Config.new(path: File.join(@dir, "nope.json"))
     assert_equal 3, c.scale
   end
 
@@ -788,7 +788,7 @@ class TestMGBAConfig < Minitest::Test
     # Simulate an old config file that doesn't have 'muted'
     data = { "global" => { "scale" => 2, "volume" => 80 }, "gamepads" => {} }
     File.write(@path, JSON.generate(data))
-    c = Teek::MGBA::Config.new(path: @path)
+    c = Gemba::Config.new(path: @path)
     assert_equal 2, c.scale
     assert_equal 80, c.volume
     refute c.muted?  # filled in from defaults
@@ -815,14 +815,14 @@ class TestMGBAConfig < Minitest::Test
     c.save!
     assert File.exist?(@path)
 
-    deleted = Teek::MGBA::Config.reset!(path: @path)
+    deleted = Gemba::Config.reset!(path: @path)
     assert_equal @path, deleted
     refute File.exist?(@path)
   end
 
   def test_reset_returns_nil_when_no_file
     refute File.exist?(@path)
-    assert_nil Teek::MGBA::Config.reset!(path: @path)
+    assert_nil Gemba::Config.reset!(path: @path)
   end
 
   # -- Recording settings ---------------------------------------------------

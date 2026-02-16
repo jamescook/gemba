@@ -1,15 +1,15 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
-require "teek_mgba"
-require_relative "../lib/teek/mgba/config"
-require_relative "../lib/teek/mgba/input_mappings"
+require "gemba"
+require_relative "../lib/gemba/config"
+require_relative "../lib/gemba/input_mappings"
 require_relative "support/input_mocks"
 
 class TestKeyboardMap < Minitest::Test
   def setup
     @config = MockInputConfig.new
-    @map = Teek::MGBA::KeyboardMap.new(@config)
+    @map = Gemba::KeyboardMap.new(@config)
   end
 
   def test_default_labels
@@ -45,25 +45,25 @@ class TestKeyboardMap < Minitest::Test
   end
 
   def test_mask_with_device
-    kb = Teek::MGBA::VirtualKeyboard.new
+    kb = Gemba::VirtualKeyboard.new
     @map.device = kb
     kb.press('z')
     mask = @map.mask
-    assert_equal Teek::MGBA::KEY_A, mask & Teek::MGBA::KEY_A
+    assert_equal Gemba::KEY_A, mask & Gemba::KEY_A
   end
 
   def test_mask_multiple_keys
-    kb = Teek::MGBA::VirtualKeyboard.new
+    kb = Gemba::VirtualKeyboard.new
     @map.device = kb
     kb.press('z')
     kb.press('x')
     mask = @map.mask
-    assert_equal Teek::MGBA::KEY_A, mask & Teek::MGBA::KEY_A
-    assert_equal Teek::MGBA::KEY_B, mask & Teek::MGBA::KEY_B
+    assert_equal Gemba::KEY_A, mask & Gemba::KEY_A
+    assert_equal Gemba::KEY_B, mask & Gemba::KEY_B
   end
 
   def test_mask_released_key_not_in_mask
-    kb = Teek::MGBA::VirtualKeyboard.new
+    kb = Gemba::VirtualKeyboard.new
     @map.device = kb
     kb.press('z')
     kb.release('z')
@@ -84,7 +84,7 @@ class TestKeyboardMap < Minitest::Test
 
   def test_load_config
     cfg = MockInputConfig.new(keyboard_mappings: { 'a' => 'q', 'b' => 'w' })
-    map = Teek::MGBA::KeyboardMap.new(cfg)
+    map = Gemba::KeyboardMap.new(cfg)
     assert_equal 'q', map.labels[:a]
     assert_equal 'w', map.labels[:b]
   end

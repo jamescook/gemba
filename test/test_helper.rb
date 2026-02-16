@@ -4,9 +4,9 @@ if ENV['COVERAGE']
   require 'simplecov'
   require_relative 'shared/simplecov_config'
 
-  coverage_name = ENV['COVERAGE_NAME'] || 'mgba'
+  coverage_name = ENV['COVERAGE_NAME'] || 'gemba'
   SimpleCov.coverage_dir "#{SimpleCovConfig::PROJECT_ROOT}/coverage/results/#{coverage_name}"
-  SimpleCov.command_name "mgba:#{coverage_name}"
+  SimpleCov.command_name "gemba:#{coverage_name}"
   SimpleCov.print_error_status = false
   SimpleCov.formatter SimpleCov::Formatter::SimpleFormatter
 
