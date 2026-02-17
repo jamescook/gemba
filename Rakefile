@@ -132,6 +132,105 @@ task :deps do
   puts "  libs:    #{install_dir}/lib/"
 end
 
+# SDL2 libraries to build from source, in dependency order.
+# SDL2 core must be built first; satellites find it via CMAKE_PREFIX_PATH.
+SDL2_LIBS = [
+  { name: 'SDL2',       repo: 'libsdl-org/SDL',       tag: 'release-2.32.10' },
+  { name: 'SDL2_ttf',   repo: 'libsdl-org/SDL_ttf',   tag: 'release-2.24.0' },
+  { name: 'SDL2_image', repo: 'libsdl-org/SDL_image',  tag: 'release-2.8.8' },
+  { name: 'SDL2_mixer', repo: 'libsdl-org/SDL_mixer',  tag: 'release-2.8.1' },
+].freeze
+
+desc "Download and build SDL2 + satellite libs from source"
+task 'deps:sdl2' do
+  if RUBY_PLATFORM =~ /mingw|mswin/
+    abort "rake deps:sdl2 is not needed on Windows — install via MSYS2:\n" \
+          "  pacman -S mingw-w64-ucrt-x86_64-SDL2 mingw-w64-ucrt-x86_64-SDL2_ttf " \
+          "mingw-w64-ucrt-x86_64-SDL2_image mingw-w64-ucrt-x86_64-SDL2_mixer"
+  end
+
+  needed = %w[cmake git make pkg-config]
+  needed += RUBY_PLATFORM =~ /mingw|mswin/ ? %w[gcc g++] : %w[cc c++]
+  missing = needed.reject { |cmd| ENV['PATH'].split(File::PATH_SEPARATOR).any? { |d| File.executable?(File.join(d, cmd)) || File.executable?(File.join(d, "#{cmd}.exe")) } }
+  unless missing.empty?
+    find_bin = ->(name) { ENV['PATH'].split(File::PATH_SEPARATOR).any? { |d| File.executable?(File.join(d, name)) } }
+    hint = if RUBY_PLATFORM =~ /darwin/
+             "  xcode-select --install && brew install cmake pkg-config"
+           elsif find_bin['dnf']
+             "  sudo dnf install cmake gcc gcc-c++ make git pkg-config"
+           elsif find_bin['apt']
+             "  sudo apt install cmake build-essential git pkg-config"
+           else
+             "  Install: #{missing.join(', ')}"
+           end
+    abort "Missing required tools: #{missing.join(', ')}\n#{hint}"
+  end
+
+  require 'fileutils'
+  require 'etc'
+
+  default_prefix = RUBY_PLATFORM =~ /darwin/ ? '/opt/homebrew' : '/usr/local'
+  install_dir = ENV.fetch('SDL2_PREFIX', default_prefix)
+
+  vendor_dir = File.expand_path('vendor/sdl2', __dir__)
+  build_base = File.expand_path('vendor/sdl2_build', __dir__)
+  FileUtils.mkdir_p(vendor_dir)
+
+  use_sudo = !File.writable?(install_dir) && !RUBY_PLATFORM.match?(/mingw|mswin/)
+
+  SDL2_LIBS.each do |lib|
+    name     = lib[:name]
+    src_dir  = File.join(vendor_dir, name)
+    bld_dir  = File.join(build_base, name)
+
+    puts "\n=== Building #{name} (#{lib[:tag]}) ==="
+
+    unless File.directory?(src_dir)
+      sh "git clone --depth 1 --branch #{lib[:tag]} https://github.com/#{lib[:repo]}.git #{src_dir}"
+    end
+
+    FileUtils.mkdir_p(bld_dir)
+
+    cmake_flags = %W[
+      -DCMAKE_INSTALL_PREFIX=#{install_dir}
+      -DCMAKE_PREFIX_PATH=#{install_dir}
+      -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+      -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+      -DBUILD_SHARED_LIBS=ON
+    ]
+
+    # Disable tests, examples, and docs for all libs
+    cmake_flags += %w[
+      -DSDL2_DISABLE_INSTALL=OFF
+      -DSDL_TEST=OFF
+      -DSDL_TESTS=OFF
+      -DSDL2TTF_SAMPLES=OFF
+      -DSDL2IMAGE_SAMPLES=OFF
+      -DSDL2MIXER_SAMPLES=OFF
+    ]
+
+    # SDL2_mixer: disable optional tracker-music support (requires libxmp)
+    if name == 'SDL2_mixer'
+      cmake_flags << '-DSDL2MIXER_MOD=OFF'
+      cmake_flags << '-DSDL2MIXER_MIDI_FLUIDSYNTH=OFF'
+      cmake_flags << '-DSDL2MIXER_WAVPACK=OFF'
+    end
+
+    sh "cmake -S #{src_dir} -B #{bld_dir} #{cmake_flags.join(' ')}"
+    sh "cmake --build #{bld_dir} -j #{Etc.nprocessors}"
+
+    install_cmd = "cmake --install #{bld_dir}"
+    install_cmd = "sudo #{install_cmd}" if use_sudo
+    sh install_cmd
+
+    puts "#{name} installed to #{install_dir}"
+  end
+
+  puts "\n=== SDL2 build complete ==="
+  puts "  prefix: #{install_dir}"
+  puts "  verify: pkg-config --libs sdl2"
+end
+
 # -- Documentation -----------------------------------------------------------
 
 namespace :docs do

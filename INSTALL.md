@@ -16,6 +16,15 @@ gemba has three native dependencies that must be present at compile time:
 | SDL2       | Video rendering, audio, gamepad input |
 | libmgba    | GBA emulation core |
 
+### Linux SDL2 availability
+
+gemba requires SDL2. Unfortunately SDL2 packaging varies across Linux distros:
+
+- **Ubuntu / Debian** — SDL2 packages are available and work out of the box. SDL3 is not yet packaged.
+- **Fedora** — Recent versions have replaced SDL2 with SDL3. Fedora ships SDL2 compatibility shims, but these crash the gem at runtime. Build SDL2 from source with `rake deps:sdl2` (see below).
+
+Migrating gemba to SDL3 is not currently feasible for two reasons: the packaging situation is reversed (distros that have SDL3 packages don't have SDL2, and vice versa), and SDL3_mixer is still in RC with no official release yet. There is no single SDL version that works everywhere today.
+
 ### macOS (Homebrew)
 
 ```bash
@@ -39,7 +48,28 @@ sudo apt install \
   libmgba-dev
 ```
 
+If the system SDL2 packages give you trouble, you can build SDL2 from source using the gemba source checkout:
+
+```bash
+sudo apt install cmake build-essential git pkg-config
+git clone https://github.com/jamescook/gemba.git
+cd gemba
+rake deps:sdl2
+```
+
+This builds SDL2, SDL2_ttf, SDL2_image, and SDL2_mixer from source and installs them to `/usr/local`.
+
 ### Fedora / RHEL
+
+> **Fedora 43+:** The SDL2 packages below have been replaced by SDL3. The SDL2 compatibility shims shipped by Fedora do not work with gemba (they crash at runtime). Build SDL2 from source instead:
+>
+> ```bash
+> rake deps:sdl2
+> ```
+>
+> This clones and builds SDL2, SDL2_ttf, SDL2_image, and SDL2_mixer from source and installs them to `/usr/local` (override with `SDL2_PREFIX`). Requires cmake, gcc, make, and pkg-config.
+
+For Fedora 42 and earlier:
 
 ```bash
 sudo dnf install \
