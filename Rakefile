@@ -70,7 +70,7 @@ task :deps do
 
   unless File.directory?(mgba_src)
     FileUtils.mkdir_p(vendor_dir)
-    sh "git clone --depth 1 --branch 0.10.3 https://github.com/mgba-emu/mgba.git #{mgba_src}"
+    sh "git clone --depth 1 --branch 0.10.5 https://github.com/mgba-emu/mgba.git #{mgba_src}"
   end
 
   FileUtils.mkdir_p(build_dir)

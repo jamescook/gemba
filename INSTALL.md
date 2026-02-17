@@ -28,7 +28,7 @@ libmgba isn't in Homebrew, so build it from source:
 rake deps
 ```
 
-This clones mGBA 0.10.3, builds a static library, and installs it to `vendor/install/`.
+This clones mGBA 0.10.5, builds a static library, and installs headers and libs to `/opt/homebrew`.
 
 ### Ubuntu / Debian
 
@@ -59,6 +59,12 @@ pacman -S --needed \
 ## Install
 
 ```bash
+gem install gemba
+```
+
+### From source (development)
+
+```bash
 bundle install
 rake compile
 ```
@@ -66,8 +72,10 @@ rake compile
 ## Run
 
 ```bash
-bin/gemba [ROM_FILE]
+gemba [ROM_FILE]
 ```
+
+If running from a source checkout, use `bin/gemba` instead.
 
 ## Tests
 
