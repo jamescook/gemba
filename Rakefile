@@ -56,6 +56,28 @@ task :deps do
           "  pacman -S mingw-w64-ucrt-x86_64-mgba"
   end
 
+  # cmake needs C and C++ compilers; check everything up front.
+  needed = %w[cmake git make]
+  needed += RUBY_PLATFORM =~ /mingw|mswin/ ? %w[gcc g++] : %w[cc c++]
+  missing = needed.reject { |cmd| ENV['PATH'].split(File::PATH_SEPARATOR).any? { |d| File.executable?(File.join(d, cmd)) || File.executable?(File.join(d, "#{cmd}.exe")) } }
+  unless missing.empty?
+    find_bin = ->(name) { ENV['PATH'].split(File::PATH_SEPARATOR).any? { |d| File.executable?(File.join(d, name)) } }
+    hint = if RUBY_PLATFORM =~ /darwin/
+             "  xcode-select --install && brew install cmake"
+           elsif find_bin['dnf']
+             "  sudo dnf install cmake gcc gcc-c++ make git"
+           elsif find_bin['apt']
+             "  sudo apt install cmake build-essential git"
+           elsif find_bin['pacman']
+             "  sudo pacman -S cmake gcc make git"
+           elsif find_bin['apk']
+             "  apk add cmake gcc g++ make git"
+           else
+             "  Install: #{missing.join(', ')}"
+           end
+    abort "Missing required tools: #{missing.join(', ')}\n#{hint}"
+  end
+
   require 'fileutils'
   require 'etc'
 
@@ -91,13 +113,19 @@ task :deps do
     -DUSE_ELF=OFF
     -DUSE_LZMA=OFF
     -DUSE_EDITLINE=OFF
+    -DCMAKE_POSITION_INDEPENDENT_CODE=ON
     -DCMAKE_INSTALL_PREFIX=#{install_dir}
     -DCMAKE_POLICY_VERSION_MINIMUM=3.5
   ].join(' ')
 
   sh "cmake -S #{mgba_src} -B #{build_dir} #{cmake_flags}"
   sh "cmake --build #{build_dir} -j #{Etc.nprocessors}"
-  sh "cmake --install #{build_dir}"
+  install_cmd = "cmake --install #{build_dir}"
+  # System prefixes like /usr/local need root on Linux; Homebrew doesn't.
+  if !File.writable?(install_dir) && !RUBY_PLATFORM.match?(/mingw|mswin/)
+    install_cmd = "sudo #{install_cmd}"
+  end
+  sh install_cmd
 
   puts "libmgba built and installed to #{install_dir}"
   puts "  headers: #{install_dir}/include/mgba/"

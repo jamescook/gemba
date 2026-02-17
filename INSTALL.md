@@ -34,9 +34,24 @@ This clones mGBA 0.10.5, builds a static library, and installs headers and libs 
 
 ```bash
 sudo apt install \
-  tcl9.0-dev tk9.0-dev \
+  tcl-dev tk-dev \
   libsdl2-dev libsdl2-ttf-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-gfx-dev \
   libmgba-dev
+```
+
+### Fedora / RHEL
+
+```bash
+sudo dnf install \
+  tcl-devel tk-devel \
+  SDL2-devel SDL2_ttf-devel SDL2_image-devel SDL2_mixer-devel SDL2_gfx-devel \
+  cmake gcc gcc-c++ make git
+```
+
+libmgba isn't packaged in Fedora, so build it from source:
+
+```bash
+rake deps
 ```
 
 ### Windows (MSYS2)

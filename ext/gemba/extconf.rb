@@ -174,6 +174,7 @@ unless find_mgba
 
       macOS:   rake deps   (builds from source)
       Debian:  sudo apt install libmgba-dev
+      Fedora:  rake deps   (builds from source)
       Windows: pacman -S mingw-w64-ucrt-x86_64-mgba  (MSYS2)
 
     Or set MGBA_DIR=/path/to/mgba/install
