@@ -44,19 +44,30 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.4'
-          bundler-cache: true
 
       - name: Install docs dependencies
-        run: rake docs:setup
-
-      - name: Build docs
-        run: rake docs:generate
+        run: bundle install
         env:
-          JEKYLL_ENV: production
+          BUNDLE_GEMFILE: docs_site/Gemfile
 
-      - name: Rebuild with baseurl for GitHub Pages
-        run: cd docs_site && bundle exec jekyll build --baseurl "/gemba"
+      - name: Generate YARD JSON
+        run: bundle exec yard doc
         env:
+          BUNDLE_GEMFILE: docs_site/Gemfile
+
+      - name: Build API docs
+        run: bundle exec ruby docs_site/build_api_docs.rb
+        env:
+          BUNDLE_GEMFILE: docs_site/Gemfile
+
+      - name: Copy INTERNALS.md
+        run: ruby scripts/copy_internals.rb
+
+      - name: Build Jekyll site
+        run: bundle exec jekyll build --baseurl "/gemba"
+        working-directory: docs_site
+        env:
+          BUNDLE_GEMFILE: ${{ github.workspace }}/docs_site/Gemfile
           JEKYLL_ENV: production
 
       - name: Setup Pages
