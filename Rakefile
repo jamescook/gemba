@@ -285,7 +285,15 @@ task 'release:smoke' => :build do
   # Fresh install from scratch
   Rake::Task['deps'].invoke
   sh "gem install #{gem_file} --no-document"
-  sh RbConfig.ruby, 'scripts/smoke_test.rb', version, test_rom
+  # Run from a temp dir with a clean env so Ruby loads the installed gem,
+  # not the local lib/ (Bundler's load path would shadow the gem otherwise).
+  require 'tmpdir'
+  smoke_script = File.expand_path('scripts/smoke_test.rb', __dir__)
+  Dir.mktmpdir('gemba-smoke') do |tmpdir|
+    Bundler.with_unbundled_env do
+      sh RbConfig.ruby, smoke_script, version, test_rom, chdir: tmpdir
+    end
+  end
 end
 
 # -- Docker ------------------------------------------------------------------
