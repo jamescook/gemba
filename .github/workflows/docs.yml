@@ -6,6 +6,7 @@ on:
   workflow_dispatch:  # Allow manual trigger
 
 permissions:
+  actions: read
   contents: read
   pages: write
   id-token: write
