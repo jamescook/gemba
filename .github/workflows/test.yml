@@ -76,6 +76,7 @@ jobs:
         set -o pipefail
         docker run --rm --init -t \
           -v ${{ github.workspace }}/coverage:/app/coverage \
+          -e CI=1 \
           -e TCL_VERSION=9.0 \
           -e COVERAGE=1 \
           -e TESTOPTS=-v \
@@ -152,6 +153,7 @@ jobs:
       run: |
         set -o pipefail
         docker run --rm --init -t \
+          -e CI=1 \
           -e TCL_VERSION=8.6 \
           -e TESTOPTS=-v \
           gemba-ci-test-8:latest 2>&1 | tee test-output.log
