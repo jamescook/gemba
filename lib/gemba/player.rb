@@ -1409,10 +1409,20 @@ module Gemba
         if @recorder&.recording?
           rx = (dest ? dest[0] : 0) + 12
           ry = (dest ? dest[1] : 0) + 12
-          r.fill_circle(rx, ry, 5, 220, 30, 30, 200)
+          draw_filled_circle(r, rx, ry, 5, 220, 30, 30, 200)
         end
         @hud.draw(r, dest, show_fps: @show_fps, show_ff: ff_indicator)
         @toast&.draw(r, dest)
+      end
+    end
+
+    # Draw a filled circle using horizontal scanlines via fill_rect.
+    # Replaces SDL2_gfx's filledCircleRGBA so we don't need that dependency.
+    def draw_filled_circle(renderer, cx, cy, radius, r, g, b, a)
+      r2 = radius * radius
+      (-radius..radius).each do |dy|
+        dx = Math.sqrt(r2 - dy * dy).to_i
+        renderer.fill_rect(cx - dx, cy + dy, dx * 2 + 1, 1, r, g, b, a)
       end
     end
 
