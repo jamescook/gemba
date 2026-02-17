@@ -227,6 +227,32 @@ task yard: 'docs:yard'
 
 # -- Docker ------------------------------------------------------------------
 
+# -- Build -------------------------------------------------------------------
+
+desc "Build gem (aborts if working tree is dirty)"
+task :build do
+  unless `git status --porcelain`.strip.empty?
+    abort "Working tree is dirty. Commit or stash changes before building the gem."
+  end
+  sh "gem build gemba.gemspec"
+end
+
+desc "Smoke test: build, install, require, load ROM, run 1 frame"
+task 'release:smoke' => :build do
+  require_relative 'lib/gemba/version'
+  version = Gemba::VERSION
+  gem_file = "gemba-#{version}.gem"
+  test_rom = File.expand_path('test/fixtures/test.gba', __dir__)
+
+  abort "Test ROM not found: #{test_rom}" unless File.exist?(test_rom)
+  abort "Gem not found: #{gem_file}" unless File.exist?(gem_file)
+
+  sh "gem install #{gem_file} --no-document"
+  sh RbConfig.ruby, 'scripts/smoke_test.rb', version, test_rom
+end
+
+# -- Docker ------------------------------------------------------------------
+
 namespace :docker do
   DOCKERFILE = 'Dockerfile.ci-test'
   DOCKER_LABEL = 'project=gemba'
