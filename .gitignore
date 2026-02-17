@@ -17,6 +17,9 @@ pkg/
 # Coverage
 coverage/
 
+# Test screenshots (xvfb debug captures)
+test/screenshots/
+
 # Local dep copies for Docker builds (populated by rake docker:build)
 _build_deps/
 

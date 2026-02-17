@@ -24,7 +24,7 @@
 # Saved to /app/coverage/ so it's accessible on the host via the volume mount.
 def xvfb_screenshot(name = "debug")
   return unless ENV['DISPLAY']
-  dir = "/app/screenshots"
+  dir = "/app/test/screenshots"
   Dir.mkdir(dir) unless File.directory?(dir)
   path = "#{dir}/#{name}.png"
   system("import", "-window", "root", path)
@@ -44,7 +44,7 @@ def poll_until_focused(player, timeout_ms: 2_000, &block)
       block.call
     elsif Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
       xvfb_screenshot("no_focus")
-      $stderr.puts "FAIL: window never got INPUT_FOCUS within #{timeout_ms}ms (screenshot: screenshots/no_focus.png)"
+      $stderr.puts "FAIL: window never got INPUT_FOCUS within #{timeout_ms}ms (screenshot: test/screenshots/no_focus.png)"
       exit 1
     else
       # After 500ms of polling, try xdotool to force focus (only in CI/Docker)

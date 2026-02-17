@@ -374,12 +374,12 @@ namespace :docker do
     warn_if_containers_running(image_name)
 
     puts "Running tests in Docker (Ruby #{ruby_version}, Tcl #{tcl_version})..."
-    screenshots_dir = File.join(Dir.pwd, 'screenshots')
+    screenshots_dir = File.join(Dir.pwd, 'test', 'screenshots')
     FileUtils.mkdir_p(screenshots_dir)
 
     cmd = "docker run --rm --init"
     cmd += " -v #{Dir.pwd}/coverage:/app/coverage"
-    cmd += " -v #{screenshots_dir}:/app/screenshots"
+    cmd += " -v #{screenshots_dir}:/app/test/screenshots"
     cmd += " -e TCL_VERSION=#{tcl_version}"
     cmd += " -e TEST='#{ENV['TEST']}'" if ENV['TEST']
     cmd += " -e TESTOPTS='#{ENV['TESTOPTS']}'" if ENV['TESTOPTS']
