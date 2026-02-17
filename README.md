@@ -64,6 +64,14 @@ Gemba.user_config.locale = 'ja'
 Adding a new language: create `lib/gemba/locales/<code>.yml` following
 the structure in `en.yml`.
 
+## Supported Platforms
+
+| Platform | Notes |
+|----------|-------|
+| macOS (Apple Silicon) | Primary development platform |
+| Linux (x86_64) | Tested in CI via Docker (Ubuntu 24.04) |
+| Windows 10+ | Tested in CI via GitHub Actions (windows-latest) |
+
 ## License
 
 MIT. See [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES) for bundled font licenses.
