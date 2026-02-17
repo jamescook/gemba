@@ -533,6 +533,8 @@ module Gemba
     end
 
     def self.config_dir
+      return ENV['GEMBA_CONFIG_DIR'] if ENV['GEMBA_CONFIG_DIR']
+
       p = Teek.platform
       if p.darwin?
         File.join(Dir.home, 'Library', 'Application Support', APP_NAME)

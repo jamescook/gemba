@@ -23,11 +23,19 @@ class TestMGBAConfig < Minitest::Test
   # -- Platform paths -------------------------------------------------------
 
   def test_default_path_ends_with_settings_json
-    assert Gemba::Config.default_path.end_with?("gemba/settings.json")
+    if ENV['GEMBA_CONFIG_DIR']
+      assert Gemba::Config.default_path.start_with?(ENV['GEMBA_CONFIG_DIR'])
+    else
+      assert Gemba::Config.default_path.end_with?("gemba/settings.json")
+    end
   end
 
   def test_config_dir_contains_app_name
-    assert_includes Gemba::Config.config_dir, "gemba"
+    if ENV['GEMBA_CONFIG_DIR']
+      assert_equal ENV['GEMBA_CONFIG_DIR'], Gemba::Config.config_dir
+    else
+      assert_includes Gemba::Config.config_dir, "gemba"
+    end
   end
 
   # -- Global defaults ------------------------------------------------------
@@ -336,7 +344,11 @@ class TestMGBAConfig < Minitest::Test
   # -- Saves dir -----------------------------------------------------------
 
   def test_defaults_saves_dir
-    assert new_config.saves_dir.end_with?("gemba/saves")
+    if ENV['GEMBA_CONFIG_DIR']
+      assert new_config.saves_dir.end_with?("saves")
+    else
+      assert new_config.saves_dir.end_with?("gemba/saves")
+    end
   end
 
   def test_set_saves_dir
@@ -355,7 +367,11 @@ class TestMGBAConfig < Minitest::Test
   end
 
   def test_default_saves_dir_class_method
-    assert Gemba::Config.default_saves_dir.end_with?("gemba/saves")
+    if ENV['GEMBA_CONFIG_DIR']
+      assert Gemba::Config.default_saves_dir.start_with?(ENV['GEMBA_CONFIG_DIR'])
+    else
+      assert Gemba::Config.default_saves_dir.end_with?("gemba/saves")
+    end
   end
 
   # -- Recent ROMs ---------------------------------------------------------
@@ -423,7 +439,11 @@ class TestMGBAConfig < Minitest::Test
   # -- States dir ----------------------------------------------------------
 
   def test_defaults_states_dir
-    assert new_config.states_dir.end_with?("gemba/states")
+    if ENV['GEMBA_CONFIG_DIR']
+      assert new_config.states_dir.end_with?("states")
+    else
+      assert new_config.states_dir.end_with?("gemba/states")
+    end
   end
 
   def test_set_states_dir
@@ -442,7 +462,11 @@ class TestMGBAConfig < Minitest::Test
   end
 
   def test_default_states_dir_class_method
-    assert Gemba::Config.default_states_dir.end_with?("gemba/states")
+    if ENV['GEMBA_CONFIG_DIR']
+      assert Gemba::Config.default_states_dir.start_with?(ENV['GEMBA_CONFIG_DIR'])
+    else
+      assert Gemba::Config.default_states_dir.end_with?("gemba/states")
+    end
   end
 
   # -- Save state debounce -------------------------------------------------

@@ -39,6 +39,13 @@ end
 
 task test: :compile
 
+# Isolate tests from the user's real config/saves/recordings.
+task 'test:isolate_config' do
+  require 'tmpdir'
+  ENV['GEMBA_CONFIG_DIR'] ||= Dir.mktmpdir('gemba-test')
+end
+Rake::Task['test'].enhance(['test:isolate_config'])
+
 # -- Dependencies (macOS / platforms without libmgba-dev) --------------------
 
 desc "Download and build libmgba from source"
