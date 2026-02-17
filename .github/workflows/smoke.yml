@@ -22,7 +22,7 @@ jobs:
           libmgba-dev \
           libsdl2-dev libsdl2-ttf-dev libsdl2-image-dev \
           libsdl2-mixer-dev libsdl2-gfx-dev \
-          tcl9.0-dev tk9.0-dev libtommath-dev \
+          tcl-dev tk-dev \
           xvfb
 
     - name: Generate test ROM
