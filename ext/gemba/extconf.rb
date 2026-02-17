@@ -172,7 +172,7 @@ unless find_mgba
   abort <<~MSG
     libmgba not found. Install it:
 
-      macOS:   rake mgba:deps   (builds from source into vendor/)
+      macOS:   rake deps   (builds from source)
       Debian:  sudo apt install libmgba-dev
       Windows: pacman -S mingw-w64-ucrt-x86_64-mgba  (MSYS2)
 

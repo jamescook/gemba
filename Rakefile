@@ -26,6 +26,7 @@ task :clobber do
   end
   rm_f Dir.glob("#{ext_dir}/{Makefile,*.o,*.so,*.bundle,*.def,mkmf.log}")
   rm_f File.join(lib_dir, so_name)
+  rm_rf File.expand_path('vendor/build', __dir__)
 end
 
 # -- Test --------------------------------------------------------------------
@@ -87,6 +88,7 @@ task :deps do
     -DUSE_ELF=OFF
     -DUSE_LZMA=OFF
     -DUSE_EDITLINE=OFF
+    -DBUILD_DOCS=OFF
     -DCMAKE_INSTALL_PREFIX=#{install_dir}
     -DCMAKE_POLICY_VERSION_MINIMUM=3.5
   ].join(' ')
@@ -243,6 +245,25 @@ task :build do
   sh "gem build gemba.gemspec"
 end
 
+desc "Remove libmgba files installed by `rake deps`"
+task 'deps:uninstall' do
+  manifest = File.expand_path('vendor/build/install_manifest.txt', __dir__)
+  unless File.exist?(manifest)
+    abort "No install manifest found at #{manifest} — nothing to uninstall."
+  end
+  files = File.readlines(manifest, chomp: true)
+  files.each do |f|
+    if File.exist?(f)
+      rm f
+      puts "  removed #{f}"
+    end
+  end
+  # Clean up empty directories left behind
+  dirs = files.map { |f| File.dirname(f) }.uniq.sort_by { |d| -d.length }
+  dirs.each { |d| Dir.rmdir(d) if File.directory?(d) && Dir.empty?(d) rescue nil }
+  puts "Uninstalled #{files.size} file(s) from manifest."
+end
+
 desc "Smoke test: build, install, require, load ROM, run 1 frame"
 task 'release:smoke' => :build do
   require_relative 'lib/gemba/version'
@@ -253,7 +274,14 @@ task 'release:smoke' => :build do
   abort "Test ROM not found: #{test_rom}" unless File.exist?(test_rom)
   abort "Gem not found: #{gem_file}" unless File.exist?(gem_file)
 
+  # Clean slate: remove everything and start fresh
   sh "gem uninstall gemba --all --executables --force 2>/dev/null || true"
+  manifest = File.expand_path('vendor/build/install_manifest.txt', __dir__)
+  Rake::Task['deps:uninstall'].invoke if File.exist?(manifest)
+  Rake::Task['clobber'].invoke
+
+  # Fresh install from scratch
+  Rake::Task['deps'].invoke
   sh "gem install #{gem_file} --no-document"
   sh RbConfig.ruby, 'scripts/smoke_test.rb', version, test_rom
 end
