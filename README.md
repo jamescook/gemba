@@ -84,7 +84,7 @@ the structure in `en.yml`.
 |----------|-------|
 | macOS (Apple Silicon) | Primary development platform |
 | Linux (x86_64) | Tested in CI via Docker (Ubuntu 24.04) |
-| Windows 10+ | Tested in CI via GitHub Actions (windows-latest) |
+| Windows 10+ | Tested in CI (GitHub Actions) and manually in VM |
 
 ## License
 
