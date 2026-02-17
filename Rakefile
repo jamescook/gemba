@@ -43,6 +43,11 @@ task test: :compile
 
 desc "Download and build libmgba from source"
 task :deps do
+  if RUBY_PLATFORM =~ /mingw|mswin/
+    abort "rake deps is not needed on Windows — install via MSYS2:\n" \
+          "  pacman -S mingw-w64-ucrt-x86_64-mgba"
+  end
+
   require 'fileutils'
   require 'etc'
 

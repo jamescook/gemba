@@ -5,6 +5,10 @@ A GBA emulator frontend powered by [teek](https://github.com/jamescook/teek) and
 A full-featured GBA player with video/audio rendering, keyboard and gamepad
 input, save states, and a settings UI.
 
+## Installation
+
+See [INSTALL.md](INSTALL.md) for platform-specific dependency setup.
+
 ## Usage
 
 ```
@@ -62,6 +66,17 @@ Gemba.user_config.locale = 'ja'
 
 Adding a new language: create `lib/gemba/locales/<code>.yml` following
 the structure in `en.yml`.
+
+## Future Ideas
+
+- Game picker / ROM browser
+- GB/GBC support
+- ROM patching (IPS/UPS)
+- Local multiplayer (link cable emulation)
+- RetroAchievements integration
+- Solar sensor and tilt/gyro cartridge emulation
+- Audio visualizer / channel debug view
+- Ruby scripting API
 
 ## Supported Platforms
 
