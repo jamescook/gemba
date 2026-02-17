@@ -184,6 +184,31 @@ module Gemba
 
     # @!endgroup
 
+    # @!group Input replay
+
+    # Replay a .gir input recording. Loads the anchor save state, validates
+    # the ROM checksum, then feeds each recorded bitmask to the core.
+    #
+    # @param gir_path [String] path to .gir file
+    # @yield [Integer, Integer] bitmask and zero-based frame index after each frame
+    # @return [Integer] number of frames replayed
+    def replay(gir_path)
+      check_open!
+      replayer = InputReplayer.new(gir_path)
+      replayer.validate!(@core)
+      @core.load_state_from_file(replayer.anchor_state_path)
+
+      replayer.each_bitmask do |mask, idx|
+        @core.set_keys(mask)
+        @core.run_frame
+        yield mask, idx if block_given?
+      end
+
+      replayer.frame_count
+    end
+
+    # @!endgroup
+
     # Shut down the core and free resources.
     def close
       return if closed?

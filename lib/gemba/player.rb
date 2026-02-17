@@ -789,6 +789,7 @@ module Gemba
           when :screenshot    then take_screenshot
           when :rewind        then do_rewind
           when :record        then toggle_recording
+          when :input_record  then toggle_input_recording
           else @keyboard.press(k)
           end
         end
@@ -887,6 +888,9 @@ module Gemba
       @app.command(@emu_menu, :add, :command,
                    label: translate('menu.start_recording'), accelerator: 'F10', state: :disabled,
                    command: proc { toggle_recording })
+      @app.command(@emu_menu, :add, :command,
+                   label: translate('menu.start_input_recording'), accelerator: 'F4', state: :disabled,
+                   command: proc { toggle_input_recording })
 
       @app.command(:bind, '.', '<Command-r>', proc { reset_core })
     end
@@ -1026,6 +1030,40 @@ module Gemba
       @app.command(@emu_menu, :entryconfigure, 8, label: label)
     end
 
+    # -- Input recording -------------------------------------------------------
+
+    def toggle_input_recording
+      return unless @core
+      @input_recorder&.recording? ? stop_input_recording : start_input_recording
+    end
+
+    def start_input_recording
+      dir = @config.recordings_dir
+      FileUtils.mkdir_p(dir) unless File.directory?(dir)
+      timestamp = Time.now.strftime('%Y%m%d_%H%M%S_%L')
+      title = @core.title.strip.gsub(/[^a-zA-Z0-9_.-]/, '_')
+      filename = "#{title}_#{timestamp}.gir"
+      path = File.join(dir, filename)
+      @input_recorder = InputRecorder.new(path, core: @core, rom_path: @rom_path)
+      @input_recorder.start
+      @toast&.show(translate('toast.input_recording_started'))
+      update_input_recording_menu
+    end
+
+    def stop_input_recording
+      return unless @input_recorder&.recording?
+      @input_recorder.stop
+      count = @input_recorder.frame_count
+      @toast&.show(translate('toast.input_recording_stopped', frames: count))
+      @input_recorder = nil
+      update_input_recording_menu
+    end
+
+    def update_input_recording_menu
+      label = @input_recorder&.recording? ? translate('menu.stop_input_recording') : translate('menu.start_input_recording')
+      @app.command(@emu_menu, :entryconfigure, 9, label: label)
+    end
+
     def apply_recording_compression(val)
       @recording_compression = val.to_i.clamp(1, 9)
     end
@@ -1136,6 +1174,7 @@ module Gemba
       end
 
       stop_recording if @recorder&.recording?
+      stop_input_recording if @input_recorder&.recording?
 
       if @core && !@core.destroyed?
         @core.destroy
@@ -1166,8 +1205,8 @@ module Gemba
       @app.set_window_title("mGBA \u2014 #{@core.title}")
       @app.command(@view_menu, :entryconfigure, 1, state: :normal)
       # Enable save state + recording menu entries
-      # Quick Save=3, Quick Load=4, Save States=6, Record=8
-      [3, 4, 6, 8].each { |i| @app.command(@emu_menu, :entryconfigure, i, state: :normal) }
+      # Quick Save=3, Quick Load=4, Save States=6, Record=8, Input Record=9
+      [3, 4, 6, 8, 9].each { |i| @app.command(@emu_menu, :entryconfigure, i, state: :normal) }
       @fps_count = 0
       @fps_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       @next_frame = @fps_time
@@ -1355,7 +1394,9 @@ module Gemba
     REWIND_PUSH_INTERVAL = 60  # ~1 second at GBA framerate
 
     def run_one_frame
-      @core.set_keys(poll_input)
+      mask = poll_input
+      @input_recorder&.capture(mask) if @input_recorder&.recording?
+      @core.set_keys(mask)
       @core.run_frame
       @total_frames += 1
       @running = false if @frame_limit && @total_frames >= @frame_limit
@@ -1406,10 +1447,16 @@ module Gemba
       @viewport.render do |r|
         r.clear(0, 0, 0)
         r.copy(@texture, nil, dest)
-        if @recorder&.recording?
-          rx = (dest ? dest[0] : 0) + 12
-          ry = (dest ? dest[1] : 0) + 12
-          draw_filled_circle(r, rx, ry, 5, 220, 30, 30, 200)
+        if @recorder&.recording? || @input_recorder&.recording?
+          bx = (dest ? dest[0] : 0) + 12
+          by = (dest ? dest[1] : 0) + 12
+          if @recorder&.recording?
+            draw_filled_circle(r, bx, by, 5, 220, 30, 30, 200)  # red = video
+            bx += 14
+          end
+          if @input_recorder&.recording?
+            draw_filled_circle(r, bx, by, 5, 30, 180, 30, 200)  # green = input
+          end
         end
         @hud.draw(r, dest, show_fps: @show_fps, show_ff: ff_indicator)
         @toast&.draw(r, dest)
@@ -1512,6 +1559,7 @@ module Gemba
       @cleaned_up = true
 
       stop_recording if @recorder&.recording?
+      stop_input_recording if @input_recorder&.recording?
       @stream&.pause unless @stream&.destroyed?
       @hud&.destroy
       @toast&.destroy

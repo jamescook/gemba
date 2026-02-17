@@ -1,0 +1,550 @@
+# frozen_string_literal: true
+
+require 'fileutils'
+require_relative 'locale'
+
+module Gemba
+  # Non-interactive GBA replay viewer with SDL2 video/audio.
+  #
+  # Opens a window to play back a .gir input recording with full audio and
+  # video rendering. No game input is accepted — the bitmasks come from the
+  # .gir file. Supports pause, fast-forward, fullscreen, and screenshot
+  # hotkeys. Pauses on the last frame when the replay ends.
+  #
+  # @example
+  #   Gemba::ReplayPlayer.new("session.gir").run
+  class ReplayPlayer
+    include Gemba
+    include Locale::Translatable
+
+    GBA_W  = 240
+    GBA_H  = 160
+    DEFAULT_SCALE = 3
+
+    AUDIO_FREQ     = 44100
+    GBA_FPS        = 59.7272
+    FRAME_PERIOD   = 1.0 / GBA_FPS
+
+    AUDIO_BUF_CAPACITY = (AUDIO_FREQ / GBA_FPS * 6).to_i
+    MAX_DELTA          = 0.005
+    FF_MAX_FRAMES      = 10
+    FADE_IN_FRAMES     = (AUDIO_FREQ * 0.02).to_i
+    EVENT_LOOP_FAST_MS = 1
+    EVENT_LOOP_IDLE_MS = 50
+
+    attr_reader :app, :viewport
+    attr_writer :running
+
+    # @return [Boolean] true once the core is loaded and ready
+    def ready? = !!@core
+
+    # @return [Boolean] true when paused
+    def paused? = @paused
+
+    # @return [Boolean] true when replay has finished all frames
+    def replay_ended? = @replay_ended
+
+    # @return [Integer] current frame index during replay
+    def frame_index = @frame_index || 0
+
+    # Pause the replay (no-op if already paused).
+    def pause
+      toggle_pause unless @paused
+    end
+
+    # Resume the replay (no-op if not paused).
+    def resume
+      toggle_pause if @paused
+    end
+
+    def initialize(gir_path, sound: true, fullscreen: false)
+      @gir_path = gir_path
+      @sound = sound
+      @fullscreen = fullscreen
+      @running = true
+      @paused = false
+      @fast_forward = false
+      @replay_ended = false
+      @cleaned_up = false
+      @sdl2_ready = false
+      @audio_fade_in = 0
+      @fps_count = 0
+      @fps_time = 0.0
+
+      @config = Gemba.user_config
+      @scale  = @config.scale
+      @volume = @config.volume / 100.0
+      @muted  = @config.muted?
+      @turbo_speed  = @config.turbo_speed
+      @turbo_volume = @config.turbo_volume_pct / 100.0
+      @keep_aspect_ratio = @config.keep_aspect_ratio?
+      @show_fps      = @config.show_fps?
+      @pixel_filter  = @config.pixel_filter
+      @integer_scale = @config.integer_scale?
+      @hotkeys = HotkeyMap.new(@config)
+
+      @app = Teek::App.new
+      @app.interp.thread_timer_ms = EVENT_LOOP_IDLE_MS
+      @app.show
+
+      win_w = GBA_W * @scale
+      win_h = GBA_H * @scale
+      @app.set_window_title("[REPLAY]")
+      @app.set_window_geometry("#{win_w}x#{win_h}")
+
+      build_menu
+    end
+
+    def run
+      @app.after(1) { load_replay(@gir_path) }
+      @app.mainloop
+    ensure
+      cleanup
+    end
+
+    private
+
+    # ── Load / switch replay ──────────────────────────────────────────
+
+    def load_replay(gir_path)
+      init_sdl2 unless @sdl2_ready
+
+      @replayer = InputReplayer.new(gir_path)
+
+      rom_path = @replayer.rom_path
+      unless rom_path && File.exist?(rom_path)
+        show_error("ROM not found",
+          "The ROM referenced by this .gir no longer exists:\n#{rom_path || '(none)'}")
+        return
+      end
+
+      @core&.destroy unless @core&.destroyed?
+      @core = Core.new(rom_path, @config.saves_dir)
+      @replayer.validate!(@core)
+      @core.load_state_from_file(@replayer.anchor_state_path)
+
+      @frame_index = 0
+      @total_frames = @replayer.frame_count
+      @replay_ended = false
+      @paused = false
+      @fast_forward = false
+      @hud.set_ff_label(nil)
+
+      @app.set_window_title("[REPLAY] #{@core.title}")
+      @stream.clear unless @stream.destroyed?
+      @stream.resume unless @stream.destroyed?
+
+      now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      @next_frame = now
+      @fps_count = 0
+      @fps_time = now
+
+      set_event_loop_speed(:fast)
+      animate unless @animate_started
+      @animate_started = true
+    rescue InputReplayer::ChecksumMismatch => e
+      show_error("Checksum Mismatch", e.message)
+    rescue => e
+      show_error("Replay Error", "#{e.class}: #{e.message}")
+    end
+
+    def switch_replay(gir_path)
+      @gir_path = gir_path
+      load_replay(gir_path)
+    end
+
+    # ── SDL2 init (stripped-down from Player) ─────────────────────────
+
+    def init_sdl2
+      return if @sdl2_ready
+
+      @app.command('tk', 'busy', '.')
+
+      win_w = GBA_W * @scale
+      win_h = GBA_H * @scale
+
+      @viewport = Teek::SDL2::Viewport.new(@app, width: win_w, height: win_h, vsync: false)
+      @viewport.pack(fill: :both, expand: true)
+
+      @texture = @viewport.renderer.create_texture(GBA_W, GBA_H, :streaming)
+      @texture.scale_mode = @pixel_filter.to_sym
+
+      font_path = File.join(ASSETS_DIR, 'JetBrainsMonoNL-Regular.ttf')
+      @overlay_font = File.exist?(font_path) ? @viewport.renderer.load_font(font_path, 14) : nil
+
+      toast_font_path = File.join(ASSETS_DIR, 'ark-pixel-12px-monospaced-ja.ttf')
+      toast_font = File.exist?(toast_font_path) ? @viewport.renderer.load_font(toast_font_path, 12) : @overlay_font
+
+      @toast = ToastOverlay.new(
+        renderer: @viewport.renderer,
+        font: toast_font || @overlay_font,
+        duration: @config.toast_duration
+      )
+
+      inverse_blend = Teek::SDL2.compose_blend_mode(
+        :one_minus_dst_color, :one_minus_src_alpha, :add,
+        :zero, :one, :add
+      )
+      @hud = OverlayRenderer.new(font: @overlay_font, blend_mode: inverse_blend)
+
+      if @sound && Teek::SDL2::AudioStream.available?
+        @stream = Teek::SDL2::AudioStream.new(
+          frequency: AUDIO_FREQ,
+          format:    :s16,
+          channels:  2
+        )
+      else
+        @stream = Teek::SDL2::NullAudioStream.new
+      end
+
+      setup_input
+
+      @app.command(:wm, 'attributes', '.', '-fullscreen', 1) if @fullscreen
+      @sdl2_ready = true
+
+      @app.command('tk', 'busy', 'forget', '.')
+      @app.tcl_eval("focus -force #{@viewport.frame.path}")
+      @app.update
+    rescue => e
+      $stderr.puts "FATAL: init_sdl2 failed: #{e.class}: #{e.message}"
+      $stderr.puts e.backtrace.first(10).map { |l| "  #{l}" }.join("\n")
+      @app.command('tk', 'busy', 'forget', '.') rescue nil
+      @running = false
+    end
+
+    # ── Input (hotkey-only, no game buttons) ──────────────────────────
+
+    def setup_input
+      @viewport.bind('KeyPress', :keysym, '%s') do |k, state_str|
+        if k == 'Escape'
+          @fullscreen ? toggle_fullscreen : (@running = false)
+        else
+          mods = HotkeyMap.modifiers_from_state(state_str.to_i)
+          case @hotkeys.action_for(k, modifiers: mods)
+          when :quit         then @running = false
+          when :pause        then toggle_pause
+          when :fast_forward then toggle_fast_forward
+          when :fullscreen   then toggle_fullscreen
+          when :screenshot   then take_screenshot
+          when :show_fps     then toggle_show_fps
+          end
+        end
+      end
+
+      @app.command(:bind, @viewport.frame.path, '<Alt-Return>', proc { toggle_fullscreen })
+    end
+
+    # ── Menu (minimal) ────────────────────────────────────────────────
+
+    def build_menu
+      menubar = '.menubar'
+      @app.command(:menu, menubar)
+      @app.command('.', :configure, menu: menubar)
+
+      @app.command(:menu, "#{menubar}.file", tearoff: 0)
+      @app.command(menubar, :add, :cascade, label: translate('menu.file'), menu: "#{menubar}.file")
+
+      @app.command("#{menubar}.file", :add, :command,
+                   label: translate('replay.open_replay'),
+                   accelerator: 'Cmd+O',
+                   command: proc { open_replay_dialog })
+      @app.command("#{menubar}.file", :add, :separator)
+      @app.command("#{menubar}.file", :add, :command,
+                   label: translate('menu.quit'),
+                   accelerator: 'Cmd+Q',
+                   command: proc { @running = false })
+
+      @app.command(:bind, '.', '<Command-o>', proc { open_replay_dialog })
+    end
+
+    def open_replay_dialog
+      filetypes = '{{GIR Recordings} {.gir}} {{All Files} {*}}'
+      title = translate('replay.open_replay').delete("\u2026")
+      path = @app.tcl_eval("tk_getOpenFile -title {#{title}} -filetypes {#{filetypes}}")
+      return if path.empty?
+
+      switch_replay(path)
+    end
+
+    # ── Frame loop ────────────────────────────────────────────────────
+
+    def animate
+      if @running
+        tick
+        delay = (@core && !@paused) ? 1 : 100
+        @app.after(delay) { animate }
+      else
+        cleanup
+        @app.command(:destroy, '.')
+      end
+    end
+
+    def tick
+      unless @core
+        @viewport.render { |r| r.clear(0, 0, 0) } if @sdl2_ready
+        return
+      end
+      return if @paused
+
+      now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      @next_frame ||= now
+
+      if @fast_forward
+        tick_fast_forward(now)
+      else
+        tick_normal(now)
+      end
+    end
+
+    def tick_normal(now)
+      frames = 0
+      while @next_frame <= now && frames < 4
+        break if @replay_ended
+
+        run_one_frame
+        queue_audio
+
+        fill = (@stream.queued_samples.to_f / AUDIO_BUF_CAPACITY).clamp(0.0, 1.0)
+        ratio = (1.0 - MAX_DELTA) + 2.0 * fill * MAX_DELTA
+        @next_frame += FRAME_PERIOD * ratio
+        frames += 1
+      end
+
+      @next_frame = now if now - @next_frame > 0.1
+      return if frames == 0
+
+      render_frame
+      update_fps(frames, now)
+    end
+
+    def tick_fast_forward(now)
+      if @turbo_speed == 0
+        FF_MAX_FRAMES.times do |i|
+          break if @replay_ended
+          run_one_frame
+          if i == 0
+            queue_audio(volume_override: @turbo_volume)
+          else
+            @core.audio_buffer # discard
+          end
+        end
+        @next_frame = now
+        render_frame(ff_indicator: true)
+        update_fps(FF_MAX_FRAMES, now)
+        return
+      end
+
+      frames = 0
+      while @next_frame <= now && frames < @turbo_speed * 4
+        @turbo_speed.times do
+          break if @replay_ended
+          run_one_frame
+          if frames == 0
+            queue_audio(volume_override: @turbo_volume)
+          else
+            @core.audio_buffer # discard
+          end
+          frames += 1
+        end
+        @next_frame += FRAME_PERIOD
+      end
+      @next_frame = now if now - @next_frame > 0.1
+      return if frames == 0
+
+      render_frame(ff_indicator: true)
+      update_fps(frames, now)
+    end
+
+    def run_one_frame
+      if @frame_index < @total_frames
+        mask = @replayer.bitmask_at(@frame_index)
+        @core.set_keys(mask)
+        @core.run_frame
+        @frame_index += 1
+      else
+        on_replay_end unless @replay_ended
+      end
+    end
+
+    def on_replay_end
+      @replay_ended = true
+      toggle_pause unless @paused
+      @toast&.show(translate('replay.ended', frames: @total_frames), permanent: true)
+      render_frame
+    end
+
+    # ── Audio ─────────────────────────────────────────────────────────
+
+    def queue_audio(volume_override: nil)
+      pcm = @core.audio_buffer
+      return if pcm.empty?
+
+      if @muted
+        @audio_fade_in = 0
+      else
+        vol = volume_override || @volume
+        pcm = apply_volume_to_pcm(pcm, vol) if vol < 1.0
+        if @audio_fade_in > 0
+          pcm, @audio_fade_in = Player.apply_fade_ramp(pcm, @audio_fade_in, FADE_IN_FRAMES)
+        end
+        @stream.queue(pcm)
+      end
+    end
+
+    def apply_volume_to_pcm(pcm, gain)
+      samples = pcm.unpack('s*')
+      samples.map! { |s| (s * gain).round.clamp(-32768, 32767) }
+      samples.pack('s*')
+    end
+
+    # ── Rendering ─────────────────────────────────────────────────────
+
+    def render_frame(ff_indicator: false)
+      pixels = @core.video_buffer_argb
+      @texture.update(pixels)
+      dest = compute_dest_rect
+      @viewport.render do |r|
+        r.clear(0, 0, 0)
+        r.copy(@texture, nil, dest)
+        @hud.draw(r, dest, show_fps: @show_fps, show_ff: ff_indicator)
+        @toast&.draw(r, dest)
+      end
+    end
+
+    def compute_dest_rect
+      return nil unless @keep_aspect_ratio
+
+      out_w, out_h = @viewport.renderer.output_size
+      scale_x = out_w.to_f / GBA_W
+      scale_y = out_h.to_f / GBA_H
+      scale = [scale_x, scale_y].min
+      scale = scale.floor if @integer_scale && scale >= 1.0
+
+      dest_w = (GBA_W * scale).to_i
+      dest_h = (GBA_H * scale).to_i
+      dest_x = (out_w - dest_w) / 2
+      dest_y = (out_h - dest_h) / 2
+
+      [dest_x, dest_y, dest_w, dest_h]
+    end
+
+    def update_fps(frames, now)
+      @fps_count += frames
+      elapsed = now - @fps_time
+      if elapsed >= 1.0
+        fps = (@fps_count / elapsed).round(1)
+        @hud.set_fps(translate('player.fps', fps: fps)) if @show_fps
+        @fps_count = 0
+        @fps_time = now
+      end
+    end
+
+    # ── Hotkey actions ────────────────────────────────────────────────
+
+    def toggle_pause
+      return unless @core
+      @paused = !@paused
+      if @paused
+        @stream.clear
+        @stream.pause
+        unless @replay_ended
+          @toast&.show(translate('toast.paused'), permanent: true)
+        end
+        render_frame
+        set_event_loop_speed(:idle)
+      else
+        set_event_loop_speed(:fast)
+        @toast&.destroy unless @replay_ended
+        @stream.clear
+        @audio_fade_in = FADE_IN_FRAMES
+        @stream.resume
+        @next_frame = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      end
+    end
+
+    def toggle_fast_forward
+      return unless @core
+      return if @replay_ended
+
+      @fast_forward = !@fast_forward
+      if @fast_forward
+        @hud.set_ff_label(ff_label_text)
+      else
+        @hud.set_ff_label(nil)
+        @next_frame = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        @stream.clear
+      end
+    end
+
+    def ff_label_text
+      @turbo_speed == 0 ? translate('player.ff_max') : translate('player.ff', speed: @turbo_speed)
+    end
+
+    def toggle_fullscreen
+      @fullscreen = !@fullscreen
+      @app.command(:wm, 'attributes', '.', '-fullscreen', @fullscreen ? 1 : 0)
+    end
+
+    def toggle_show_fps
+      @show_fps = !@show_fps
+      @hud.set_fps(nil) unless @show_fps
+    end
+
+    def take_screenshot
+      return unless @core && !@core.destroyed?
+
+      dir = Config.default_screenshots_dir
+      FileUtils.mkdir_p(dir)
+
+      title = @core.title.strip.gsub(/[^a-zA-Z0-9_\-]/, '_')
+      stamp = Time.now.strftime('%Y%m%d_%H%M%S')
+      name = "replay_#{title}_#{stamp}.png"
+      path = File.join(dir, name)
+
+      pixels = @core.video_buffer_argb
+      photo_name = "__gemba_rp_ss_#{object_id}"
+      out_w = GBA_W * @scale
+      out_h = GBA_H * @scale
+      @app.command(:image, :create, :photo, photo_name,
+                   width: out_w, height: out_h)
+      @app.interp.photo_put_zoomed_block(photo_name, pixels, GBA_W, GBA_H,
+                                         zoom_x: @scale, zoom_y: @scale, format: :argb)
+      @app.command(photo_name, :write, path, format: :png)
+      @app.command(:image, :delete, photo_name)
+      @toast&.show(translate('toast.screenshot_saved', name: name))
+    rescue StandardError => e
+      warn "gemba: screenshot failed: #{e.message} (#{e.class})"
+      @app.command(:image, :delete, photo_name) rescue nil
+      @toast&.show(translate('toast.screenshot_failed'))
+    end
+
+    # ── Helpers ───────────────────────────────────────────────────────
+
+    def set_event_loop_speed(mode)
+      ms = mode == :fast ? EVENT_LOOP_FAST_MS : EVENT_LOOP_IDLE_MS
+      @app.interp.thread_timer_ms = ms
+    end
+
+    def show_error(title, message)
+      @app.command('tk_messageBox',
+        parent: '.',
+        title: title,
+        message: message,
+        type: :ok,
+        icon: :error)
+    end
+
+    def cleanup
+      return if @cleaned_up
+      @cleaned_up = true
+
+      @stream&.pause unless @stream&.destroyed?
+      @hud&.destroy
+      @toast&.destroy
+      @overlay_font&.destroy unless @overlay_font&.destroyed?
+      @stream&.destroy unless @stream&.destroyed?
+      @texture&.destroy unless @texture&.destroyed?
+      @core&.destroy unless @core&.destroyed?
+    end
+  end
+end

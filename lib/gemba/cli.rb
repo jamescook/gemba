@@ -5,7 +5,7 @@ require_relative 'version'
 
 module Gemba
   class CLI
-    SUBCOMMANDS = %w[record decode info].freeze
+    SUBCOMMANDS = %w[record decode info replay].freeze
 
     # Entry point: dispatch to subcommand or player.
     # @param argv [Array<String>]
@@ -22,6 +22,9 @@ module Gemba
       when 'info'
         args.shift
         run_info(args)
+      when 'replay'
+        args.shift
+        run_replay(args)
       else
         run_player(args)
       end
@@ -42,6 +45,7 @@ module Gemba
         o.separator "  record    Record video+audio to .grec (headless)"
         o.separator "  decode    Encode .grec to video via ffmpeg"
         o.separator "  info      Show .grec recording stats"
+        o.separator "  replay    Replay a .gir input recording (headless)"
         o.separator ""
         o.separator "Player options:"
 
@@ -369,6 +373,157 @@ module Gemba
       puts "  Audio:      #{info[:audio_rate]} Hz, #{info[:audio_channels]}ch"
     end
     private_class_method :run_info
+
+    # --- replay subcommand ---
+
+    def self.parse_replay(argv)
+      options = {}
+
+      parser = OptionParser.new do |o|
+        o.banner = "Usage: gemba replay [options] GIR_FILE [ROM_FILE]"
+        o.separator ""
+        o.separator "Replay a .gir input recording."
+        o.separator "ROM is read from the .gir header; override with ROM_FILE."
+        o.separator ""
+
+        o.on("-l", "--list", "List available .gir recordings") do
+          options[:list] = true
+        end
+
+        o.on("--headless", "Run without GUI (print summary and exit)") do
+          options[:headless] = true
+        end
+
+        o.on("--progress", "Show progress (headless only)") do
+          options[:progress] = true
+        end
+
+        o.on("-f", "--fullscreen", "Start in fullscreen") do
+          options[:fullscreen] = true
+        end
+
+        o.on("--no-sound", "Disable audio") do
+          options[:sound] = false
+        end
+
+        o.on("-h", "--help", "Show this help") do
+          options[:help] = true
+        end
+      end
+
+      parser.parse!(argv)
+      options[:gir] = argv.shift
+      options[:rom] = argv.shift
+      options[:parser] = parser
+      options
+    end
+
+    def self.run_replay(argv)
+      options = parse_replay(argv)
+
+      if options[:help]
+        puts options[:parser]
+        return
+      end
+
+      if options[:list]
+        list_recordings
+        return
+      end
+
+      unless options[:gir]
+        $stderr.puts "Error: replay requires a .gir file"
+        $stderr.puts "Run 'gemba replay --help' for usage"
+        exit 1
+      end
+
+      gir_path = File.expand_path(options[:gir])
+
+      if options[:headless]
+        run_replay_headless(gir_path, options)
+      else
+        run_replay_gui(gir_path, options)
+      end
+    end
+
+    def self.run_replay_headless(gir_path, options)
+      require "gemba/headless"
+
+      rom_path = options[:rom]
+      unless rom_path
+        replayer = Gemba::InputReplayer.new(gir_path)
+        rom_path = replayer.rom_path
+        unless rom_path
+          $stderr.puts "Error: .gir has no rom_path in header; pass ROM_FILE explicitly"
+          exit 1
+        end
+      end
+      rom_path = File.expand_path(rom_path)
+
+      Gemba::HeadlessPlayer.open(rom_path) do |player|
+        if options[:progress]
+          replayer = Gemba::InputReplayer.new(gir_path)
+          total = replayer.frame_count
+          last_print = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+          player.replay(gir_path) do |_mask, idx|
+            now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+            frame = idx + 1
+            if frame == total || now - last_print >= 0.5
+              pct = frame * 100.0 / total
+              $stderr.print "\rReplaying: #{frame}/#{total} (#{'%.1f' % pct}%)\e[K"
+              last_print = now
+            end
+          end
+          $stderr.print "\r\e[K"
+        else
+          player.replay(gir_path)
+        end
+
+        puts "Replayed #{gir_path} (#{Gemba::InputReplayer.new(gir_path).frame_count} frames)"
+      end
+    end
+
+    def self.run_replay_gui(gir_path, options)
+      require "gemba"
+
+      sound = options.fetch(:sound, true)
+      ReplayPlayer.new(gir_path,
+                       sound: sound,
+                       fullscreen: options[:fullscreen]).run
+    end
+
+    def self.list_recordings
+      require_relative "config"
+      require_relative "input_replayer"
+
+      dir = Config.default_recordings_dir
+      unless File.directory?(dir)
+        puts "No recordings directory found at #{dir}"
+        return
+      end
+
+      gir_files = Dir.glob(File.join(dir, '*.gir')).sort
+      if gir_files.empty?
+        puts "No .gir recordings in #{dir}"
+        return
+      end
+
+      by_rom = {}
+      gir_files.each do |path|
+        replayer = InputReplayer.new(path)
+        key = replayer.game_code || "unknown"
+        (by_rom[key] ||= []) << { path: path, frames: replayer.frame_count }
+      end
+
+      by_rom.each do |game_code, entries|
+        puts "#{game_code}:"
+        entries.each do |entry|
+          puts "  #{entry[:path]}  (#{entry[:frames]} frames)"
+        end
+      end
+    end
+    private_class_method :run_replay
 
     def self.format_size(bytes)
       if bytes >= 1_073_741_824
