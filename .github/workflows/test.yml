@@ -73,6 +73,7 @@ jobs:
     - name: Run tests
       timeout-minutes: 5
       run: |
+        set -o pipefail
         docker run --rm --init -t \
           -v ${{ github.workspace }}/coverage:/app/coverage \
           -e TCL_VERSION=9.0 \
@@ -149,6 +150,7 @@ jobs:
     - name: Run tests
       timeout-minutes: 5
       run: |
+        set -o pipefail
         docker run --rm --init -t \
           -e TCL_VERSION=8.6 \
           -e TESTOPTS=-v \
