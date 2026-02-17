@@ -2,9 +2,8 @@
 
 A GBA emulator frontend powered by [teek](https://github.com/jamescook/teek) and [libmgba](https://github.com/mgba-emu/mgba).
 
-Wraps libmgba's mCore C API and provides a full-featured player with SDL2
-video/audio rendering, keyboard and gamepad input, save states, and a
-Tk-based settings UI.
+A full-featured GBA player with video/audio rendering, keyboard and gamepad
+input, save states, and a settings UI.
 
 ## Usage
 
