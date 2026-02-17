@@ -25,6 +25,9 @@ module Gemba
       @keys = 0
     end
 
+    # @return [Core] the underlying mGBA core
+    attr_reader :core
+
     # Open a HeadlessPlayer, yield it, and close when done.
     # @param rom_path [String]
     # @param opts [Hash] passed to {#initialize}

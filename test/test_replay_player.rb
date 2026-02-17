@@ -22,7 +22,7 @@ class TestReplayPlayer < Minitest::Test
       gir_path = File.join(dir, "pong_test.gir")
       Gemba::HeadlessPlayer.open(PONG_ROM) do |player|
         player.step(10)
-        core = player.send(:instance_variable_get, :@core)
+        core = player.core
         rec = Gemba::InputRecorder.new(gir_path, core: core, rom_path: PONG_ROM)
         rec.start
         60.times do |i|

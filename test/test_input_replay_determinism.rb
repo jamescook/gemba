@@ -22,7 +22,7 @@ class TestInputReplayDeterminism < Minitest::Test
         # Let the game boot for a few frames
         player.step(30)
 
-        core = player.send(:instance_variable_get, :@core)
+        core = player.core
         rec = Gemba::InputRecorder.new(gir_path, core: core)
         rec.start
 
@@ -72,7 +72,7 @@ class TestInputReplayDeterminism < Minitest::Test
       # Record against pong
       Gemba::HeadlessPlayer.open(PONG_ROM) do |player|
         player.step(5)
-        core = player.send(:instance_variable_get, :@core)
+        core = player.core
         rec = Gemba::InputRecorder.new(gir_path, core: core)
         rec.start
         rec.capture(0)
@@ -95,7 +95,7 @@ class TestInputReplayDeterminism < Minitest::Test
 
       Gemba::HeadlessPlayer.open(PONG_ROM) do |player|
         player.step(5)
-        core = player.send(:instance_variable_get, :@core)
+        core = player.core
         rec = Gemba::InputRecorder.new(gir_path, core: core)
         rec.start
         [0x001, 0x041, 0x000].each { |m| rec.capture(m) }

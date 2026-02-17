@@ -95,7 +95,7 @@ class TestInputReplayer < Minitest::Test
 
       Gemba::HeadlessPlayer.open(TEST_ROM) do |player|
         replayer = Gemba::InputReplayer.new(gir_path)
-        replayer.validate!(player.send(:instance_variable_get, :@core))
+        replayer.validate!(player.core)
         # should not raise
       end
     end
@@ -118,7 +118,7 @@ class TestInputReplayer < Minitest::Test
       Gemba::HeadlessPlayer.open(TEST_ROM) do |player|
         replayer = Gemba::InputReplayer.new(gir_path)
         assert_raises(Gemba::InputReplayer::ChecksumMismatch) do
-          replayer.validate!(player.send(:instance_variable_get, :@core))
+          replayer.validate!(player.core)
         end
       end
     end
@@ -155,7 +155,7 @@ class TestInputReplayer < Minitest::Test
   def record(gir_path, bitmasks)
     Gemba::HeadlessPlayer.open(TEST_ROM) do |player|
       player.step(5) # advance a few frames for meaningful state
-      core = player.send(:instance_variable_get, :@core)
+      core = player.core
       rec = Gemba::InputRecorder.new(gir_path, core: core)
       rec.start
       bitmasks.each { |m| rec.capture(m) }

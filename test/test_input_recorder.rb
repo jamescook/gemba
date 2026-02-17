@@ -19,7 +19,7 @@ class TestInputRecorder < Minitest::Test
       path = File.join(dir, "test.gir")
 
       Gemba::HeadlessPlayer.open(TEST_ROM) do |player|
-        rec = Gemba::InputRecorder.new(path, core: player.send(:instance_variable_get, :@core))
+        rec = Gemba::InputRecorder.new(path, core: player.core)
         refute rec.recording?
         rec.start
         assert rec.recording?
@@ -37,7 +37,7 @@ class TestInputRecorder < Minitest::Test
       path = File.join(dir, "test.gir")
 
       Gemba::HeadlessPlayer.open(TEST_ROM) do |player|
-        rec = Gemba::InputRecorder.new(path, core: player.send(:instance_variable_get, :@core))
+        rec = Gemba::InputRecorder.new(path, core: player.core)
         rec.start
         assert_raises(RuntimeError) { rec.start }
         rec.stop
@@ -50,7 +50,7 @@ class TestInputRecorder < Minitest::Test
       path = File.join(dir, "test.gir")
 
       Gemba::HeadlessPlayer.open(TEST_ROM) do |player|
-        rec = Gemba::InputRecorder.new(path, core: player.send(:instance_variable_get, :@core))
+        rec = Gemba::InputRecorder.new(path, core: player.core)
         rec.stop # should not raise
       end
     end
@@ -64,7 +64,7 @@ class TestInputRecorder < Minitest::Test
 
       Gemba::HeadlessPlayer.open(TEST_ROM) do |player|
         player.step(10) # advance so state has content
-        rec = Gemba::InputRecorder.new(path, core: player.send(:instance_variable_get, :@core))
+        rec = Gemba::InputRecorder.new(path, core: player.core)
         rec.start
         rec.capture(0)
         rec.stop
@@ -83,7 +83,7 @@ class TestInputRecorder < Minitest::Test
       path = File.join(dir, "test.gir")
 
       Gemba::HeadlessPlayer.open(TEST_ROM) do |player|
-        core = player.send(:instance_variable_get, :@core)
+        core = player.core
         rec = Gemba::InputRecorder.new(path, core: core)
         rec.start
         rec.capture(0)
@@ -105,7 +105,7 @@ class TestInputRecorder < Minitest::Test
       path = File.join(dir, "test.gir")
 
       Gemba::HeadlessPlayer.open(TEST_ROM) do |player|
-        rec = Gemba::InputRecorder.new(path, core: player.send(:instance_variable_get, :@core))
+        rec = Gemba::InputRecorder.new(path, core: player.core)
         rec.start
         5.times { |i| rec.capture(i) }
         rec.stop
@@ -123,7 +123,7 @@ class TestInputRecorder < Minitest::Test
       path = File.join(dir, "test.gir")
 
       Gemba::HeadlessPlayer.open(TEST_ROM) do |player|
-        rec = Gemba::InputRecorder.new(path, core: player.send(:instance_variable_get, :@core))
+        rec = Gemba::InputRecorder.new(path, core: player.core)
         rec.start
         rec.capture(0x000)                          # nothing
         rec.capture(Gemba::KEY_A)                   # 0x001
@@ -147,7 +147,7 @@ class TestInputRecorder < Minitest::Test
       path = File.join(dir, "test.gir")
 
       Gemba::HeadlessPlayer.open(TEST_ROM) do |player|
-        rec = Gemba::InputRecorder.new(path, core: player.send(:instance_variable_get, :@core))
+        rec = Gemba::InputRecorder.new(path, core: player.core)
         rec.start
         rec.capture(0xFFFF) # upper bits should be masked off
         rec.stop
@@ -165,7 +165,7 @@ class TestInputRecorder < Minitest::Test
       path = File.join(dir, "test.gir")
 
       Gemba::HeadlessPlayer.open(TEST_ROM) do |player|
-        rec = Gemba::InputRecorder.new(path, core: player.send(:instance_variable_get, :@core))
+        rec = Gemba::InputRecorder.new(path, core: player.core)
         rec.start
 
         # Write exactly FLUSH_INTERVAL frames to trigger a flush
