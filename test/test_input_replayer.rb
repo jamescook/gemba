@@ -8,9 +8,6 @@ require "tmpdir"
 class TestInputReplayer < Minitest::Test
   TEST_ROM = File.expand_path("fixtures/test.gba", __dir__)
 
-  def setup
-    skip "Run: ruby gemba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
-  end
 
   # -- Round-trip: record then replay ------------------------------------------
 

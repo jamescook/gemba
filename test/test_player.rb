@@ -118,8 +118,6 @@ class TestMGBAPlayer < Minitest::Test
   # Verifies state file + screenshot are created, backup rotation works,
   # and the core remains functional after load.
   def test_quick_save_and_load_creates_files_and_restores_state
-    skip "Run: ruby gemba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
-
     code = <<~RUBY
       require "gemba"
       require "tmpdir"
@@ -241,8 +239,6 @@ class TestMGBAPlayer < Minitest::Test
 
   # E2E: verify debounce blocks rapid-fire saves.
   def test_quick_save_debounce_blocks_rapid_fire
-    skip "Run: ruby gemba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
-
     code = <<~RUBY
       require "gemba"
       require "tmpdir"
@@ -313,8 +309,6 @@ class TestMGBAPlayer < Minitest::Test
   # E2E: open Settings via menu, navigate to Save States tab,
   # change quick save slot from 1 → 10, click Save, verify persisted.
   def test_settings_change_quick_slot_and_save
-    skip "Run: ruby gemba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
-
     code = <<~RUBY
       require "gemba"
       require "tmpdir"
@@ -436,8 +430,6 @@ class TestMGBAPlayer < Minitest::Test
   # closes Settings, opens picker via F6, tries Settings menu (blocked),
   # closes picker. Checks window visibility via `wm state`.
   def test_modal_child_blocks_concurrent_windows
-    skip "Run: ruby gemba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
-
     code = <<~RUBY
       require "gemba"
       require "support/player_helpers"
@@ -539,8 +531,6 @@ class TestMGBAPlayer < Minitest::Test
   # -- File drop (DND) --------------------------------------------------------
 
   def test_drop_rom_file_loads_game
-    skip "Run: ruby gemba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
-
     code = <<~RUBY
       require "gemba"
       require "support/player_helpers"
@@ -581,8 +571,6 @@ class TestMGBAPlayer < Minitest::Test
   end
 
   def test_drop_unsupported_file_shows_error
-    skip "Run: ruby gemba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
-
     code = <<~RUBY
       require "gemba"
       require "support/player_helpers"
@@ -624,8 +612,6 @@ class TestMGBAPlayer < Minitest::Test
   end
 
   def test_drop_multiple_files_shows_error
-    skip "Run: ruby gemba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
-
     code = <<~RUBY
       require "gemba"
       require "support/player_helpers"
@@ -669,8 +655,6 @@ class TestMGBAPlayer < Minitest::Test
   # E2E: press F10 to start recording, run a few frames with the red dot
   # indicator rendering, press F10 to stop, verify .grec file was created.
   def test_recording_toggle_creates_trec_file
-    skip "Run: ruby gemba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
-
     code = <<~RUBY
       require "gemba"
       require "tmpdir"
@@ -749,10 +733,7 @@ class TestMGBAPlayer < Minitest::Test
   # E2E: verify thread_timer_ms switches between idle (50ms) and fast (1ms)
   # when pausing and unpausing the emulator.
   def test_pause_switches_event_loop_speed
-    skip "Run: ruby gemba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
-    # Flaky under xvfb: SDL2 INPUT_FOCUS is unreliable, causing focus_poll_tick
-    # to auto-pause and interfere with manual pause/unpause assertions.
-    skip "Flaky under xvfb (SDL2 INPUT_FOCUS unreliable)" if ENV['CI']
+    skip "Flaky under xvfb: SDL2 INPUT_FOCUS is unreliable"
 
     code = <<~RUBY
       require "gemba"
@@ -825,10 +806,7 @@ class TestMGBAPlayer < Minitest::Test
   # E2E: verify focus loss pauses emulation and focus regain resumes it.
   # Uses thread_timer_ms as a proxy for paused state (50=idle/paused, 1=fast/running).
   def test_pause_on_focus_loss
-    skip "Run: ruby gemba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
-    # Flaky under xvfb: SDL2 INPUT_FOCUS is unreliable, so the window may
-    # never report having focus — making focus-loss detection untestable.
-    skip "Flaky under xvfb (SDL2 INPUT_FOCUS unreliable)" if ENV['CI']
+    skip "Flaky under xvfb: SDL2 INPUT_FOCUS is unreliable"
 
     code = <<~RUBY
       require "gemba"
@@ -905,8 +883,6 @@ class TestMGBAPlayer < Minitest::Test
   # causing focus_poll_tick to immediately pause the emulator. Loading a ROM
   # should always start in a running (unpaused) state regardless of focus.
   def test_rom_does_not_start_paused
-    skip "Run: ruby gemba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
-
     code = <<~RUBY
       require "gemba"
       require "support/player_helpers"
