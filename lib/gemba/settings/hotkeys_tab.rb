@@ -23,7 +23,8 @@ module Gemba
         save_states: "#{FRAME}.row_save_states.btn",
         screenshot:  "#{FRAME}.row_screenshot.btn",
         rewind:      "#{FRAME}.row_rewind.btn",
-        record:      "#{FRAME}.row_record.btn",
+        record:       "#{FRAME}.row_record.btn",
+        input_record: "#{FRAME}.row_input_record.btn",
       }.freeze
 
       # Action → locale key mapping
@@ -35,6 +36,7 @@ module Gemba
         screenshot: 'settings.hk_screenshot',
         rewind: 'settings.hk_rewind',
         record: 'settings.hk_record',
+        input_record: 'settings.hk_input_record',
       }.freeze
 
       LISTEN_TIMEOUT_MS  = 10_000

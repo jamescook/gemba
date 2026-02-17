@@ -9,4 +9,5 @@
 require_relative "runtime"
 require_relative "recorder"
 require_relative "recorder_decoder"
+require_relative "input_replayer"
 require_relative "headless_player"

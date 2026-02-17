@@ -16,6 +16,8 @@ menu:
   save_states: "ステートセーブ…"
   start_recording: "録画開始"
   stop_recording: "録画停止"
+  start_input_recording: "入力記録開始"
+  stop_input_recording: "入力記録停止"
 
 toast:
   save_blocked: "セーブ制限中（間隔が短すぎます）"
@@ -34,6 +36,8 @@ toast:
   waiting_for: "{label}を待機中…"
   recording_started: "録画を開始しました"
   recording_stopped: "{frames}フレームを録画しました"
+  input_recording_started: "入力記録を開始しました"
+  input_recording_stopped: "入力を記録しました（{frames}フレーム）"
 
 dialog:
   game_running_title: "ゲーム実行中"
@@ -92,6 +96,7 @@ settings:
   hk_screenshot: "スクリーンショット"
   hk_rewind: "巻き戻し"
   hk_record: "録画"
+  hk_input_record: "入力記録"
   hk_reset_defaults: "デフォルトに戻す"
   pixel_filter: "ピクセルフィルタ:"
   filter_nearest: "ニアレストネイバー"
@@ -147,6 +152,10 @@ rom_info:
   resolution: "解像度:"
   close: "閉じる"
   na: "N/A"
+
+replay:
+  open_replay: "リプレイを開く…"
+  ended: "リプレイ完了（{frames}フレーム）"
 
 player:
   open_rom_hint: "ファイル > ROMを開く…"

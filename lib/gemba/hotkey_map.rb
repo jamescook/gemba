@@ -11,7 +11,7 @@ module Gemba
   class HotkeyMap
     ACTIONS = %i[quit pause fast_forward fullscreen show_fps
                  quick_save quick_load save_states screenshot rewind
-                 record].freeze
+                 record input_record].freeze
 
     DEFAULTS = {
       quit: 'q', pause: 'p', fast_forward: 'Tab',
@@ -20,6 +20,7 @@ module Gemba
       save_states: 'F6', screenshot: 'F9',
       rewind: ['Shift', 'Tab'],
       record: 'F10',
+      input_record: 'F4',
     }.freeze
 
     # Tk keysyms that are modifier keys → normalized name
