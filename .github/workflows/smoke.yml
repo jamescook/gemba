@@ -1,0 +1,38 @@
+name: Release Smoke
+
+on:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    name: smoke test
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: '4.0'
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          libmgba-dev \
+          libsdl2-dev libsdl2-ttf-dev libsdl2-image-dev \
+          libsdl2-mixer-dev libsdl2-gfx-dev \
+          tcl9.0-dev tk9.0-dev libtommath-dev \
+          xvfb
+
+    - name: Generate test ROM
+      run: ruby scripts/generate_test_rom.rb
+
+    - name: Build gem
+      run: gem build gemba.gemspec
+
+    - name: Install gem
+      run: gem install gemba-*.gem --no-document
+
+    - name: Run smoke test
+      run: xvfb-run -a ruby scripts/smoke_test.rb $(ruby -e "require_relative 'lib/gemba/version'; puts Gemba::VERSION") test/fixtures/test.gba
