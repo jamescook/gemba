@@ -3,6 +3,7 @@
 require 'json'
 require 'fileutils'
 require 'set'
+require 'time'
 require 'teek/platform'
 
 module Gemba
