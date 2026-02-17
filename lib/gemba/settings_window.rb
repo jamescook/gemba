@@ -4,6 +4,8 @@ require_relative "child_window"
 require_relative "hotkey_map"
 require_relative "locale"
 require_relative "tip_service"
+require_relative "settings/paths"
+require_relative "settings/audio_tab"
 
 module Gemba
   # Settings window for the mGBA Player.
@@ -19,8 +21,8 @@ module Gemba
     include ChildWindow
     include Locale::Translatable
 
-    TOP = ".mgba_settings"
-    NB  = "#{TOP}.nb"
+    TOP = Settings::Paths::TOP
+    NB  = Settings::Paths::NB
 
     # Widget paths for test interaction
     SCALE_COMBO = "#{NB}.video.scale_row.scale_combo"
@@ -33,8 +35,8 @@ module Gemba
     COLOR_CORRECTION_CHECK = "#{NB}.video.colorcorr_row.colorcorr"
     FRAME_BLENDING_CHECK = "#{NB}.video.frameblend_row.frameblend"
     REWIND_CHECK = "#{NB}.video.rewind_row.rewind"
-    VOLUME_SCALE = "#{NB}.audio.vol_row.vol_scale"
-    MUTE_CHECK = "#{NB}.audio.mute_row.mute"
+    VOLUME_SCALE = Settings::AudioTab::VOLUME_SCALE
+    MUTE_CHECK   = Settings::AudioTab::MUTE_CHECK
 
     # Gamepad tab widget paths
     GAMEPAD_TAB   = "#{NB}.gamepad"
@@ -117,8 +119,8 @@ module Gemba
     VAR_PER_GAME = '::mgba_per_game'
     VAR_SCALE    = '::mgba_scale'
     VAR_TURBO    = '::mgba_turbo'
-    VAR_VOLUME   = '::mgba_volume'
-    VAR_MUTE     = '::mgba_mute'
+    VAR_VOLUME   = Settings::AudioTab::VAR_VOLUME
+    VAR_MUTE     = Settings::AudioTab::VAR_MUTE
     VAR_GAMEPAD  = '::mgba_gamepad'
     VAR_DEADZONE = '::mgba_deadzone'
     VAR_ASPECT_RATIO = '::mgba_aspect_ratio'
@@ -294,7 +296,8 @@ module Gemba
       @app.command(:pack, NB, fill: :both, expand: 1, padx: 5, pady: [5, 0])
 
       setup_video_tab
-      setup_audio_tab
+      @audio_tab = Settings::AudioTab.new(@app, callbacks: @callbacks, tips: @tips, mark_dirty: method(:mark_dirty))
+      @audio_tab.build
       setup_gamepad_tab
       setup_hotkeys_tab
       setup_recording_tab
@@ -548,54 +551,8 @@ module Gemba
       @tips.register(rewind_tip, translate('settings.tip_rewind'))
     end
 
-    def setup_audio_tab
-      frame = "#{NB}.audio"
-      @app.command('ttk::frame', frame)
-      @app.command(NB, 'add', frame, text: translate('settings.audio'))
 
-      # Volume slider
-      vol_row = "#{frame}.vol_row"
-      @app.command('ttk::frame', vol_row)
-      @app.command(:pack, vol_row, fill: :x, padx: 10, pady: [15, 5])
 
-      @app.command('ttk::label', "#{vol_row}.lbl", text: translate('settings.volume'))
-      @app.command(:pack, "#{vol_row}.lbl", side: :left)
-
-      @vol_val_label = "#{vol_row}.vol_label"
-      @app.command('ttk::label', @vol_val_label, text: '100%', width: 5)
-      @app.command(:pack, @vol_val_label, side: :right)
-
-      @app.set_variable(VAR_VOLUME, '100')
-      @app.command('ttk::scale', VOLUME_SCALE,
-        orient: :horizontal,
-        from: 0,
-        to: 100,
-        length: 150,
-        variable: VAR_VOLUME,
-        command: proc { |v, *|
-          pct = v.to_f.round
-          @app.command(@vol_val_label, 'configure', text: "#{pct}%")
-          @callbacks[:on_volume_change]&.call(pct / 100.0)
-          mark_dirty
-        })
-      @app.command(:pack, VOLUME_SCALE, side: :right, padx: [5, 5])
-
-      # Mute checkbox
-      mute_row = "#{frame}.mute_row"
-      @app.command('ttk::frame', mute_row)
-      @app.command(:pack, mute_row, fill: :x, padx: 10, pady: 5)
-
-      @app.set_variable(VAR_MUTE, '0')
-      @app.command('ttk::checkbutton', MUTE_CHECK,
-        text: translate('settings.mute'),
-        variable: VAR_MUTE,
-        command: proc { |*|
-          muted = @app.get_variable(VAR_MUTE) == '1'
-          @callbacks[:on_mute_change]&.call(muted)
-          mark_dirty
-        })
-      @app.command(:pack, MUTE_CHECK, side: :left)
-    end
     def setup_gamepad_tab
       frame = GAMEPAD_TAB
       @app.command('ttk::frame', frame)
