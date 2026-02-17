@@ -4,6 +4,13 @@
 # Supports TCL_VERSION=9.0 (default) and TCL_VERSION=8.6 for testing
 # against both Tcl/Tk versions.
 #
+# Three build stages to maximize layer caching:
+#   1. deps-builder  — compiles local deps (teek, teek-sdl2); only rebuilds
+#                      when _build_deps/ changes
+#   2. app-builder   — bundle install + compile gemba C extension; rebuilds
+#                      when Gemfile/ext/lib change (but not deps)
+#   3. runtime       — slim test image; copies from both builders + context
+#
 # Usage:
 #   docker build -f Dockerfile.ci-test -t gemba-ci-9 .
 #   docker run --rm gemba-ci-9
@@ -17,9 +24,9 @@ ARG RUBY_VERSION=3.4
 FROM ruby:${RUBY_VERSION}-slim AS ruby-source
 
 #############################################
-# BUILDER STAGE - compile extension only
+# BASE BUILDER - shared build toolchain
 #############################################
-FROM ubuntu:25.04 AS builder
+FROM ubuntu:25.04 AS base-builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -66,15 +73,41 @@ RUN if [ "${TCL_VERSION}" != "8.6" ]; then \
         ln -sf tk9.0.pc /usr/lib/${MULTIARCH}/pkgconfig/tk.pc; \
     fi
 
-WORKDIR /app
+#############################################
+# DEPS BUILDER - compile local deps only
+# Only rebuilds when _build_deps/ changes
+#############################################
+FROM base-builder AS deps-builder
 
-# Optional: local teek/teek-sdl2 for unreleased gem changes.
-# Populated by `rake docker:build` when sibling repos are detected.
 ARG TEEK_PATH=""
 ARG TEEK_SDL2_PATH=""
 COPY _build_deps/ /deps/
+
+# Compile C extensions in local deps (path: gems don't auto-compile)
+RUN for extconf in /deps/*/ext/*/extconf.rb; do \
+        [ -f "$extconf" ] || continue; \
+        ext_dir=$(dirname "$extconf"); \
+        gem_dir=$(dirname "$(dirname "$ext_dir")"); \
+        echo "Compiling local dep extension: $ext_dir"; \
+        (cd "$ext_dir" && ruby extconf.rb && make -j$(nproc)) && \
+        find "$ext_dir" -name "*.so" -exec cp {} "$gem_dir/lib/" \; ; \
+    done
+
+#############################################
+# APP BUILDER - bundle install + compile ext
+# Rebuilds when Gemfile/ext/lib change
+#############################################
+FROM base-builder AS app-builder
+
+WORKDIR /app
+
+ARG TEEK_PATH=""
+ARG TEEK_SDL2_PATH=""
 ENV TEEK_PATH=${TEEK_PATH}
 ENV TEEK_SDL2_PATH=${TEEK_SDL2_PATH}
+
+# Local deps needed for bundle install (Gemfile path: references)
+COPY --from=deps-builder /deps /deps
 
 # Copy only what's needed for bundle install first (for layer caching)
 COPY Gemfile gemba.gemspec ./
@@ -89,16 +122,6 @@ RUN --mount=type=cache,target=/bundle-cache \
     fi && \
     bundle install && \
     cp -a $BUNDLE_PATH/* /bundle-cache/
-
-# Compile C extensions in local deps (path: gems don't auto-compile)
-RUN for extconf in /deps/*/ext/*/extconf.rb; do \
-        [ -f "$extconf" ] || continue; \
-        ext_dir=$(dirname "$extconf"); \
-        gem_dir=$(dirname "$(dirname "$ext_dir")"); \
-        echo "Compiling local dep extension: $ext_dir"; \
-        (cd "$ext_dir" && ruby extconf.rb && make -j$(nproc)) && \
-        find "$ext_dir" -name "*.so" -exec cp {} "$gem_dir/lib/" \; ; \
-    done
 
 # Now copy source code (after bundle install so changes don't invalidate gem cache)
 COPY Rakefile ./
@@ -175,27 +198,27 @@ RUN if [ "${TCL_VERSION}" != "8.6" ]; then \
         rm -rf /var/lib/apt/lists/*; \
     fi
 
-# Copy Ruby and gems from builder
-COPY --from=builder /usr/local /usr/local
+# Copy Ruby and gems from app-builder
+COPY --from=app-builder /usr/local /usr/local
 ENV PATH="/usr/local/bin:${PATH}"
 ENV BUNDLE_PATH=/usr/local/bundle
 
 WORKDIR /app
 
-# Local deps (compiled in builder) — empty when using published gems
-COPY --from=builder /deps /deps
+# Local deps from deps-builder (only rebuilds when _build_deps/ changes)
+COPY --from=deps-builder /deps /deps
 ARG TEEK_PATH=""
 ARG TEEK_SDL2_PATH=""
 ENV TEEK_PATH=${TEEK_PATH}
 ENV TEEK_SDL2_PATH=${TEEK_SDL2_PATH}
 
-# Copy compiled extension and build state from builder
-COPY --from=builder /app/lib /app/lib
-COPY --from=builder /app/ext /app/ext
-COPY --from=builder /app/Rakefile /app/Rakefile
-COPY --from=builder /app/Gemfile /app/Gemfile
-COPY --from=builder /app/Gemfile.lock /app/Gemfile.lock
-COPY --from=builder /app/gemba.gemspec /app/
+# Copy compiled extension and build state from app-builder
+COPY --from=app-builder /app/lib /app/lib
+COPY --from=app-builder /app/ext /app/ext
+COPY --from=app-builder /app/Rakefile /app/Rakefile
+COPY --from=app-builder /app/Gemfile /app/Gemfile
+COPY --from=app-builder /app/Gemfile.lock /app/Gemfile.lock
+COPY --from=app-builder /app/gemba.gemspec /app/
 
 # Copy tests and assets directly from context (not cached with compilation)
 COPY test/ test/
