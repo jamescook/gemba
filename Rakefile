@@ -74,7 +74,10 @@ task :deps do
   end
 
   FileUtils.mkdir_p(build_dir)
+  # -DMARKDOWN= disables mgba's README-to-HTML build; it finds kramdown
+  # on PATH from Ruby gems, but Bundler blocks it. We only need the static lib.
   cmake_flags = %W[
+    -DMARKDOWN=
     -DBUILD_SHARED=OFF
     -DBUILD_STATIC=ON
     -DBUILD_QT=OFF
@@ -88,7 +91,6 @@ task :deps do
     -DUSE_ELF=OFF
     -DUSE_LZMA=OFF
     -DUSE_EDITLINE=OFF
-    -DBUILD_DOCS=OFF
     -DCMAKE_INSTALL_PREFIX=#{install_dir}
     -DCMAKE_POLICY_VERSION_MINIMUM=3.5
   ].join(' ')
