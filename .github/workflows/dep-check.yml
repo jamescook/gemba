@@ -1,0 +1,27 @@
+name: Dependency Check
+
+on:
+  schedule:
+    - cron: '0 12 1 * *'  # 1st of each month at noon UTC
+  workflow_dispatch:
+
+jobs:
+  check-mgba:
+    name: Check mGBA version
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Check for new mGBA release
+      run: |
+        EXPECTED=$(cat .github/mgba-version | tr -d '[:space:]')
+        LATEST=$(gh api repos/mgba-emu/mgba/releases/latest --jq .tag_name)
+        echo "Expected: $EXPECTED"
+        echo "Latest:   $LATEST"
+        if [ "$LATEST" != "$EXPECTED" ]; then
+          echo "::error::mGBA has a new release: $LATEST (we pin $EXPECTED). Review and update rake deps."
+          exit 1
+        fi
+        echo "mGBA version is current."
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
