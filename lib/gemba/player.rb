@@ -678,7 +678,7 @@ module Gemba
     FOCUS_POLL_MS = 200
 
     def start_focus_poll
-      @had_focus = true
+      @had_focus = @viewport.renderer.input_focus?
       @app.after(FOCUS_POLL_MS) { focus_poll_tick }
     end
 

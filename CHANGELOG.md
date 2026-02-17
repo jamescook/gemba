@@ -14,6 +14,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Add `rake deps:sdl2` task to build SDL2 and satellite libs from source (for distros like Fedora 43+ that no longer package SDL2)
 - Document Linux SDL2/SDL3 packaging situation in INSTALL.md
 
+### Fixed
+
+- ROM no longer starts paused on Linux/Windows when window doesn't have focus at startup
+
 ## [0.1.0] — 2026-02-16
 
 ### Added

@@ -900,4 +900,44 @@ class TestMGBAPlayer < Minitest::Test
     assert success, "Pause on focus loss test failed\n#{output.join("\n")}"
     assert_includes stdout, "PASS", "Expected PASS in output\n#{output.join("\n")}"
   end
+
+  # Regression: on Linux/Windows the window may not have focus at startup,
+  # causing focus_poll_tick to immediately pause the emulator. Loading a ROM
+  # should always start in a running (unpaused) state regardless of focus.
+  def test_rom_does_not_start_paused
+    skip "Run: ruby gemba/scripts/generate_test_rom.rb" unless File.exist?(TEST_ROM)
+
+    code = <<~RUBY
+      require "gemba"
+      require "support/player_helpers"
+
+      player = Gemba::Player.new("#{TEST_ROM}")
+      app = player.app
+
+      poll_until_ready(player) do
+        # Give focus poll a chance to fire (polls every 200ms)
+        app.after(400) do
+          ms = app.interp.thread_timer_ms
+          paused = player.instance_variable_get(:@paused)
+          if paused
+            $stderr.puts "FAIL: ROM started paused (thread_timer_ms=\#{ms})"
+            exit 1
+          end
+          $stdout.puts "PASS"
+          player.running = false
+        end
+      end
+
+      player.run
+    RUBY
+
+    success, stdout, stderr, _status = tk_subprocess(code)
+
+    output = []
+    output << "STDOUT:\n#{stdout}" unless stdout.empty?
+    output << "STDERR:\n#{stderr}" unless stderr.empty?
+
+    assert success, "ROM started paused\n#{output.join("\n")}"
+    assert_includes stdout, "PASS", "Expected PASS in output\n#{output.join("\n")}"
+  end
 end
