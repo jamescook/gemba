@@ -58,10 +58,14 @@ task :deps do
   require 'fileutils'
   require 'etc'
 
+  # Install to a system-visible prefix so `gem install gemba` finds libmgba
+  # without needing MGBA_DIR. Mirrors what `brew install` would do.
+  default_prefix = RUBY_PLATFORM =~ /darwin/ ? '/opt/homebrew' : '/usr/local'
+  install_dir = ENV.fetch('MGBA_PREFIX', default_prefix)
+
   vendor_dir  = File.expand_path('vendor')
   mgba_src    = File.join(vendor_dir, 'mgba')
   build_dir   = File.join(vendor_dir, 'build')
-  install_dir = File.join(vendor_dir, 'install')
 
   unless File.directory?(mgba_src)
     FileUtils.mkdir_p(vendor_dir)
@@ -92,6 +96,8 @@ task :deps do
   sh "cmake --install #{build_dir}"
 
   puts "libmgba built and installed to #{install_dir}"
+  puts "  headers: #{install_dir}/include/mgba/"
+  puts "  libs:    #{install_dir}/lib/"
 end
 
 # -- Documentation -----------------------------------------------------------
