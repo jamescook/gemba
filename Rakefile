@@ -247,6 +247,7 @@ task 'release:smoke' => :build do
   abort "Test ROM not found: #{test_rom}" unless File.exist?(test_rom)
   abort "Gem not found: #{gem_file}" unless File.exist?(gem_file)
 
+  sh "gem uninstall gemba --all --executables --force 2>/dev/null || true"
   sh "gem install #{gem_file} --no-document"
   sh RbConfig.ruby, 'scripts/smoke_test.rb', version, test_rom
 end
