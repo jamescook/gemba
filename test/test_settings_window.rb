@@ -11,7 +11,7 @@ class TestMGBASettingsWindow < Minitest::Test
   def test_settings_starts_hidden
     assert_tk_app("settings starts hidden") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       app.update
 
       assert_equal 'withdrawn', app.command(:wm, 'state', Gemba::SettingsWindow::TOP)
@@ -23,7 +23,7 @@ class TestMGBASettingsWindow < Minitest::Test
       require "gemba/settings_window"
       app.show
       app.update
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
 
       sw.show
       app.command(:focus, '-force', Gemba::SettingsWindow::TOP)
@@ -41,7 +41,7 @@ class TestMGBASettingsWindow < Minitest::Test
   def test_gamepad_tab_exists
     assert_tk_app("gamepad tab exists in notebook") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -53,7 +53,7 @@ class TestMGBASettingsWindow < Minitest::Test
   def test_deadzone_defaults_to_25
     assert_tk_app("dead zone defaults to 25") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -65,9 +65,9 @@ class TestMGBASettingsWindow < Minitest::Test
     assert_tk_app("dead zone change fires on_deadzone_change") do
       require "gemba/settings_window"
       received = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_deadzone_change: proc { |t| received = t }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:deadzone_changed) { |t| received = t }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -88,7 +88,7 @@ class TestMGBASettingsWindow < Minitest::Test
   def test_clicking_gba_button_enters_listen_mode
     assert_tk_app("clicking GBA button enters listen mode") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -107,9 +107,9 @@ class TestMGBASettingsWindow < Minitest::Test
       require "gemba/settings_window"
       received_gba = nil
       received_key = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_keyboard_map_change: proc { |g, b| received_gba = g; received_key = b }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:keyboard_map_changed) { |g, b| received_gba = g; received_key = b }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -132,7 +132,7 @@ class TestMGBASettingsWindow < Minitest::Test
   def test_gamepad_selector_defaults_to_keyboard_only
     assert_tk_app("gamepad selector defaults to Keyboard Only") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -145,7 +145,7 @@ class TestMGBASettingsWindow < Minitest::Test
   def test_undo_starts_disabled
     assert_tk_app("undo button starts disabled") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -157,7 +157,7 @@ class TestMGBASettingsWindow < Minitest::Test
   def test_undo_enabled_after_remap
     assert_tk_app("undo enabled after capturing a mapping") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -175,9 +175,9 @@ class TestMGBASettingsWindow < Minitest::Test
     assert_tk_app("undo fires on_undo_gamepad and disables itself") do
       require "gemba/settings_window"
       undo_called = false
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_undo_gamepad: proc { undo_called = true }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:undo_gamepad) { undo_called = true }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -200,7 +200,7 @@ class TestMGBASettingsWindow < Minitest::Test
   def test_reset_disables_undo
     assert_tk_app("reset to defaults disables undo button") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -228,7 +228,7 @@ class TestMGBASettingsWindow < Minitest::Test
   def test_starts_in_keyboard_mode
     assert_tk_app("starts in keyboard mode") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -239,7 +239,7 @@ class TestMGBASettingsWindow < Minitest::Test
   def test_keyboard_mode_labels_show_keysyms
     assert_tk_app("keyboard mode shows keysym labels") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -253,7 +253,7 @@ class TestMGBASettingsWindow < Minitest::Test
   def test_switching_to_gamepad_mode_changes_labels
     assert_tk_app("switching to gamepad shows gamepad labels") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -273,7 +273,7 @@ class TestMGBASettingsWindow < Minitest::Test
   def test_deadzone_disabled_in_keyboard_mode
     assert_tk_app("dead zone slider disabled in keyboard mode") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -285,7 +285,7 @@ class TestMGBASettingsWindow < Minitest::Test
   def test_deadzone_enabled_in_gamepad_mode
     assert_tk_app("dead zone slider enabled in gamepad mode") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -304,9 +304,9 @@ class TestMGBASettingsWindow < Minitest::Test
       require "gemba/settings_window"
       received_gba = nil
       received_key = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_keyboard_map_change: proc { |g, k| received_gba = g; received_key = k }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:keyboard_map_changed) { |g, k| received_gba = g; received_key = k }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -323,7 +323,7 @@ class TestMGBASettingsWindow < Minitest::Test
   def test_switching_mode_cancels_listen
     assert_tk_app("switching input mode cancels active listen") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -358,9 +358,9 @@ class TestMGBASettingsWindow < Minitest::Test
 
       received_gba = nil
       received_gp = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_gamepad_map_change: proc { |g, b| received_gba = g; received_gp = b }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:gamepad_map_changed) { |g, b| received_gba = g; received_gp = b }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -411,8 +411,9 @@ class TestMGBASettingsWindow < Minitest::Test
       require "gemba/hotkey_map"
       received = false
       conflict_msg = nil
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:keyboard_map_changed) { |*| received = true }
       sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_keyboard_map_change: proc { |*| received = true },
         on_validate_kb_mapping: ->(keysym) {
           # Simulate: 'F5' is the Quick Save hotkey
           keysym == 'F5' ? '"F5" is assigned to hotkey: Quick save' : nil
@@ -442,8 +443,9 @@ class TestMGBASettingsWindow < Minitest::Test
       require "gemba/settings_window"
       require "gemba/hotkey_map"
       received_gba = nil
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:keyboard_map_changed) { |g, _| received_gba = g }
       sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_keyboard_map_change: proc { |g, _| received_gba = g },
         on_validate_kb_mapping: ->(_) { nil },
       })
       sw.show
@@ -471,8 +473,9 @@ class TestMGBASettingsWindow < Minitest::Test
       gp = gp_cls.open(idx)
 
       received_gba = nil
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:gamepad_map_changed) { |g, _| received_gba = g }
       sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_gamepad_map_change: proc { |g, _| received_gba = g },
         on_validate_kb_mapping: ->(_) { "should not be called" },
       })
       sw.show
@@ -503,7 +506,7 @@ class TestMGBASettingsWindow < Minitest::Test
   def test_per_game_checkbox_defaults_disabled
     assert_tk_app("per-game checkbox defaults disabled") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -515,7 +518,7 @@ class TestMGBASettingsWindow < Minitest::Test
   def test_set_per_game_available_enables_checkbox
     assert_tk_app("set_per_game_available enables checkbox") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -531,9 +534,9 @@ class TestMGBASettingsWindow < Minitest::Test
     assert_tk_app("per-game toggle fires on_per_game_toggle") do
       require "gemba/settings_window"
       received = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_per_game_toggle: proc { |v| received = v }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:per_game_toggled) { |v| received = v }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -549,7 +552,7 @@ class TestMGBASettingsWindow < Minitest::Test
   def test_set_per_game_active_syncs_variable
     assert_tk_app("set_per_game_active syncs variable") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -564,7 +567,7 @@ class TestMGBASettingsWindow < Minitest::Test
   def test_per_game_disabled_on_gamepad_tab
     assert_tk_app("per-game disabled on gamepad tab") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -584,7 +587,7 @@ class TestMGBASettingsWindow < Minitest::Test
   def test_per_game_re_enabled_on_video_tab
     assert_tk_app("per-game re-enabled on video tab") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 

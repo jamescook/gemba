@@ -9,7 +9,7 @@ class TestSettingsRecordingTab < Minitest::Test
   def test_recording_tab_exists
     assert_tk_app("recording tab exists in notebook") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -21,7 +21,7 @@ class TestSettingsRecordingTab < Minitest::Test
   def test_compression_combobox_defaults_to_1
     assert_tk_app("compression combobox defaults to 1") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -33,9 +33,9 @@ class TestSettingsRecordingTab < Minitest::Test
     assert_tk_app("selecting compression fires on_compression_change") do
       require "gemba/settings_window"
       received = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_compression_change: proc { |v| received = v }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:compression_changed) { |v| received = v }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 

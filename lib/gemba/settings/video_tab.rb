@@ -6,6 +6,7 @@ module Gemba
   module Settings
     class VideoTab
       include Locale::Translatable
+      include BusEmitter
 
       FRAME                  = "#{Paths::NB}.video"
       SCALE_COMBO            = "#{FRAME}.scale_row.scale_combo"
@@ -31,9 +32,8 @@ module Gemba
       VAR_REWIND_ENABLED   = '::mgba_rewind_enabled'
       VAR_PAUSE_FOCUS      = '::gemba_pause_focus_loss'
 
-      def initialize(app, callbacks:, tips:, mark_dirty:)
+      def initialize(app, tips:, mark_dirty:)
         @app = app
-        @callbacks = callbacks
         @tips = tips
         @mark_dirty = mark_dirty
       end
@@ -78,7 +78,7 @@ module Gemba
             val = @app.get_variable(VAR_SCALE)
             scale = val.to_i
             if scale > 0
-              @callbacks[:on_scale_change]&.call(scale)
+              emit(:scale_changed, scale)
               @mark_dirty.call
             end
           })
@@ -105,7 +105,7 @@ module Gemba
           proc { |*|
             val = @app.get_variable(VAR_TURBO)
             speed = val == translate('settings.uncapped') ? 0 : val.to_i
-            @callbacks[:on_turbo_speed_change]&.call(speed)
+            emit(:turbo_speed_changed, speed)
             @mark_dirty.call
           })
       end
@@ -121,7 +121,7 @@ module Gemba
           variable: VAR_ASPECT_RATIO,
           command: proc { |*|
             keep = @app.get_variable(VAR_ASPECT_RATIO) == '1'
-            @callbacks[:on_aspect_ratio_change]&.call(keep)
+            emit(:aspect_ratio_changed, keep)
             @mark_dirty.call
           })
         @app.command(:pack, ASPECT_CHECK, side: :left)
@@ -138,7 +138,7 @@ module Gemba
           variable: VAR_SHOW_FPS,
           command: proc { |*|
             show = @app.get_variable(VAR_SHOW_FPS) == '1'
-            @callbacks[:on_show_fps_change]&.call(show)
+            emit(:show_fps_changed, show)
             @mark_dirty.call
           })
         @app.command(:pack, SHOW_FPS_CHECK, side: :left)
@@ -155,7 +155,7 @@ module Gemba
           variable: VAR_PAUSE_FOCUS,
           command: proc { |*|
             val = @app.get_variable(VAR_PAUSE_FOCUS) == '1'
-            @callbacks[:on_pause_on_focus_loss_change]&.call(val)
+            emit(:pause_on_focus_loss_changed, val)
             @mark_dirty.call
           })
         @app.command(:pack, "#{row}.check", side: :left)
@@ -183,7 +183,7 @@ module Gemba
             val = @app.get_variable(VAR_TOAST_DURATION)
             secs = val.to_f
             if secs > 0
-              @callbacks[:on_toast_duration_change]&.call(secs)
+              emit(:toast_duration_changed, secs)
               @mark_dirty.call
             end
           })
@@ -210,7 +210,7 @@ module Gemba
           proc { |*|
             val = @app.get_variable(VAR_FILTER)
             filter = val == translate('settings.filter_nearest') ? 'nearest' : 'linear'
-            @callbacks[:on_filter_change]&.call(filter)
+            emit(:filter_changed, filter)
             @mark_dirty.call
           })
       end
@@ -226,7 +226,7 @@ module Gemba
           variable: VAR_INTEGER_SCALE,
           command: proc { |*|
             enabled = @app.get_variable(VAR_INTEGER_SCALE) == '1'
-            @callbacks[:on_integer_scale_change]&.call(enabled)
+            emit(:integer_scale_changed, enabled)
             @mark_dirty.call
           })
         @app.command(:pack, INTEGER_SCALE_CHECK, side: :left)
@@ -247,7 +247,7 @@ module Gemba
           variable: VAR_COLOR_CORRECTION,
           command: proc { |*|
             enabled = @app.get_variable(VAR_COLOR_CORRECTION) == '1'
-            @callbacks[:on_color_correction_change]&.call(enabled)
+            emit(:color_correction_changed, enabled)
             @mark_dirty.call
           })
         @app.command(:pack, COLOR_CORRECTION_CHECK, side: :left)
@@ -268,7 +268,7 @@ module Gemba
           variable: VAR_FRAME_BLENDING,
           command: proc { |*|
             enabled = @app.get_variable(VAR_FRAME_BLENDING) == '1'
-            @callbacks[:on_frame_blending_change]&.call(enabled)
+            emit(:frame_blending_changed, enabled)
             @mark_dirty.call
           })
         @app.command(:pack, FRAME_BLENDING_CHECK, side: :left)
@@ -289,7 +289,7 @@ module Gemba
           variable: VAR_REWIND_ENABLED,
           command: proc { |*|
             enabled = @app.get_variable(VAR_REWIND_ENABLED) == '1'
-            @callbacks[:on_rewind_toggle]&.call(enabled)
+            emit(:rewind_toggled, enabled)
             @mark_dirty.call
           })
         @app.command(:pack, REWIND_CHECK, side: :left)

@@ -10,7 +10,7 @@ class TestMGBASettingsHotkeys < Minitest::Test
     assert_tk_app("hotkeys tab exists in notebook") do
       require "gemba/settings_window"
       require "gemba/hotkey_map"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -23,7 +23,7 @@ class TestMGBASettingsHotkeys < Minitest::Test
     assert_tk_app("hotkey buttons show default keysyms") do
       require "gemba/settings_window"
       require "gemba/hotkey_map"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -42,7 +42,7 @@ class TestMGBASettingsHotkeys < Minitest::Test
     assert_tk_app("clicking hotkey button enters listen mode") do
       require "gemba/settings_window"
       require "gemba/hotkey_map"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -61,9 +61,9 @@ class TestMGBASettingsHotkeys < Minitest::Test
       require "gemba/hotkey_map"
       received_action = nil
       received_key = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_hotkey_change: proc { |a, k| received_action = a; received_key = k }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:hotkey_changed) { |a, k| received_action = a; received_key = k }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -87,7 +87,7 @@ class TestMGBASettingsHotkeys < Minitest::Test
     assert_tk_app("capturing hotkey enables undo button") do
       require "gemba/settings_window"
       require "gemba/hotkey_map"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -111,9 +111,9 @@ class TestMGBASettingsHotkeys < Minitest::Test
       require "gemba/settings_window"
       require "gemba/hotkey_map"
       undo_called = false
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_undo_hotkeys: proc { undo_called = true }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:undo_hotkeys) { undo_called = true }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -138,8 +138,9 @@ class TestMGBASettingsHotkeys < Minitest::Test
       require "gemba/settings_window"
       require "gemba/hotkey_map"
       reset_called = false
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:hotkey_reset) { reset_called = true }
       sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_hotkey_reset: proc { reset_called = true },
         on_confirm_reset_hotkeys: -> { true },
       })
       sw.show
@@ -170,7 +171,7 @@ class TestMGBASettingsHotkeys < Minitest::Test
     assert_tk_app("refresh_hotkeys updates button labels") do
       require "gemba/settings_window"
       require "gemba/hotkey_map"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -189,7 +190,7 @@ class TestMGBASettingsHotkeys < Minitest::Test
     assert_tk_app("canceling listen restores original label") do
       require "gemba/settings_window"
       require "gemba/hotkey_map"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -213,9 +214,9 @@ class TestMGBASettingsHotkeys < Minitest::Test
       require "gemba/settings_window"
       require "gemba/hotkey_map"
       received = false
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_hotkey_change: proc { |*| received = true }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:hotkey_changed) { |*| received = true }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -237,8 +238,9 @@ class TestMGBASettingsHotkeys < Minitest::Test
       require "gemba/hotkey_map"
       received = false
       conflict_msg = nil
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:hotkey_changed) { |*| received = true }
       sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_hotkey_change: proc { |*| received = true },
         on_validate_hotkey: ->(keysym) {
           # Simulate: 'z' is GBA button A
           keysym == 'z' ? '"z" is mapped to GBA button A' : nil
@@ -268,8 +270,9 @@ class TestMGBASettingsHotkeys < Minitest::Test
       require "gemba/settings_window"
       require "gemba/hotkey_map"
       received_action = nil
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:hotkey_changed) { |a, _| received_action = a }
       sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_hotkey_change: proc { |a, _| received_action = a },
         on_validate_hotkey: ->(_) { nil },
       })
       sw.show
@@ -294,9 +297,9 @@ class TestMGBASettingsHotkeys < Minitest::Test
       require "gemba/hotkey_map"
       received_action = nil
       received_hk = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_hotkey_change: proc { |a, hk| received_action = a; received_hk = hk },
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:hotkey_changed) { |a, hk| received_action = a; received_hk = hk }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -322,9 +325,9 @@ class TestMGBASettingsHotkeys < Minitest::Test
       require "gemba/settings_window"
       require "gemba/hotkey_map"
       received_hk = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_hotkey_change: proc { |_, hk| received_hk = hk },
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:hotkey_changed) { |_, hk| received_hk = hk }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -347,8 +350,9 @@ class TestMGBASettingsHotkeys < Minitest::Test
       require "gemba/settings_window"
       require "gemba/hotkey_map"
       received_hk = nil
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:hotkey_changed) { |_, hk| received_hk = hk }
       sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_hotkey_change: proc { |_, hk| received_hk = hk },
         # 'z' conflicts as a plain key, but Ctrl+z should be fine
         on_validate_hotkey: ->(key) {
           key == 'z' ? '"z" is mapped to GBA button A' : nil
@@ -372,7 +376,7 @@ class TestMGBASettingsHotkeys < Minitest::Test
     assert_tk_app("refresh_hotkeys shows combo display name") do
       require "gemba/settings_window"
       require "gemba/hotkey_map"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -390,9 +394,9 @@ class TestMGBASettingsHotkeys < Minitest::Test
       require "gemba/settings_window"
       require "gemba/hotkey_map"
       received_hk = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_hotkey_change: proc { |_, hk| received_hk = hk },
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:hotkey_changed) { |_, hk| received_hk = hk }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -423,7 +427,7 @@ class TestMGBASettingsHotkeys < Minitest::Test
     assert_tk_app("record hotkey button shows F10") do
       require "gemba/settings_window"
       require "gemba/hotkey_map"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 

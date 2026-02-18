@@ -9,7 +9,7 @@ class TestSettingsSaveStatesTab < Minitest::Test
   def test_save_states_tab_exists
     assert_tk_app("save states tab exists in notebook") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -21,7 +21,7 @@ class TestSettingsSaveStatesTab < Minitest::Test
   def test_quick_slot_defaults_to_1
     assert_tk_app("quick slot defaults to 1") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -33,9 +33,9 @@ class TestSettingsSaveStatesTab < Minitest::Test
     assert_tk_app("selecting slot fires on_quick_slot_change") do
       require "gemba/settings_window"
       received = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_quick_slot_change: proc { |v| received = v }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:quick_slot_changed) { |v| received = v }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -50,7 +50,7 @@ class TestSettingsSaveStatesTab < Minitest::Test
   def test_backup_defaults_to_on
     assert_tk_app("backup checkbox defaults to on") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -62,9 +62,9 @@ class TestSettingsSaveStatesTab < Minitest::Test
     assert_tk_app("clicking backup fires on_backup_change") do
       require "gemba/settings_window"
       received = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_backup_change: proc { |v| received = v }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:backup_changed) { |v| received = v }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -79,9 +79,9 @@ class TestSettingsSaveStatesTab < Minitest::Test
     assert_tk_app("clicking backup twice re-enables") do
       require "gemba/settings_window"
       received = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_backup_change: proc { |v| received = v }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:backup_changed) { |v| received = v }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 

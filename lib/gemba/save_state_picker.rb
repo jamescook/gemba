@@ -17,6 +17,7 @@ module Gemba
   class SaveStatePicker
     include ChildWindow
     include Locale::Translatable
+    include BusEmitter
 
     TOP = ".mgba_state_picker"
 
@@ -203,9 +204,9 @@ module Gemba
     def on_slot_click(slot)
       ss_path = File.join(@state_dir, "state#{slot}.ss")
       if File.exist?(ss_path)
-        @callbacks[:on_load]&.call(slot)
+        emit(:state_load_requested, slot)
       else
-        @callbacks[:on_save]&.call(slot)
+        emit(:state_save_requested, slot)
       end
       hide
     end

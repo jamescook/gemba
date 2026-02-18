@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "child_window"
+require_relative "event_bus"
 require_relative "hotkey_map"
 require_relative "locale"
 require_relative "tip_service"
@@ -21,6 +22,7 @@ module Gemba
   class SettingsWindow
     include ChildWindow
     include Locale::Translatable
+    include BusEmitter
 
     TOP = Settings::Paths::TOP
     NB  = Settings::Paths::NB
@@ -192,7 +194,7 @@ module Gemba
     private
 
     def do_save
-      @callbacks[:on_save]&.call
+      emit(:settings_save)
       @app.command(SAVE_BTN, 'configure', state: :disabled)
     end
 
@@ -233,7 +235,7 @@ module Gemba
         state: :disabled,
         command: proc { |*|
           enabled = @app.get_variable(VAR_PER_GAME) == '1'
-          @callbacks[:on_per_game_toggle]&.call(enabled)
+          emit(:per_game_toggled, enabled)
           mark_dirty
         })
       @app.command(:pack, PER_GAME_CHECK, side: :left, padx: 5)
@@ -246,21 +248,23 @@ module Gemba
       @app.command('ttk::notebook', NB)
       @app.command(:pack, NB, fill: :both, expand: 1, padx: 5, pady: [5, 0])
 
-      @video_tab = Settings::VideoTab.new(@app, callbacks: @callbacks, tips: @tips, mark_dirty: method(:mark_dirty))
+      @video_tab = Settings::VideoTab.new(@app, tips: @tips, mark_dirty: method(:mark_dirty))
       @video_tab.build
-      @audio_tab = Settings::AudioTab.new(@app, callbacks: @callbacks, tips: @tips, mark_dirty: method(:mark_dirty))
+      @audio_tab = Settings::AudioTab.new(@app, tips: @tips, mark_dirty: method(:mark_dirty))
       @audio_tab.build
-      @gamepad_tab = Settings::GamepadTab.new(@app, callbacks: @callbacks, tips: @tips,
-        mark_dirty: method(:mark_dirty), do_save: method(:do_save),
+      @gamepad_tab = Settings::GamepadTab.new(@app,
+        callbacks: @callbacks.slice(:on_validate_kb_mapping, :on_confirm_reset_gamepad),
+        tips: @tips, mark_dirty: method(:mark_dirty), do_save: method(:do_save),
         show_key_conflict: method(:show_key_conflict))
       @gamepad_tab.build
-      @hotkeys_tab = Settings::HotkeysTab.new(@app, callbacks: @callbacks,
+      @hotkeys_tab = Settings::HotkeysTab.new(@app,
+        callbacks: @callbacks.slice(:on_validate_hotkey, :on_confirm_reset_hotkeys),
         mark_dirty: method(:mark_dirty), do_save: method(:do_save),
         show_key_conflict: method(:show_key_conflict))
       @hotkeys_tab.build
-      @recording_tab = Settings::RecordingTab.new(@app, callbacks: @callbacks, tips: @tips, mark_dirty: method(:mark_dirty))
+      @recording_tab = Settings::RecordingTab.new(@app, tips: @tips, mark_dirty: method(:mark_dirty))
       @recording_tab.build
-      @save_states_tab = Settings::SaveStatesTab.new(@app, callbacks: @callbacks, tips: @tips, mark_dirty: method(:mark_dirty))
+      @save_states_tab = Settings::SaveStatesTab.new(@app, tips: @tips, mark_dirty: method(:mark_dirty))
       @save_states_tab.build
 
       # Show/hide per-game bar based on active tab

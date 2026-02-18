@@ -6,6 +6,7 @@ module Gemba
   module Settings
     class HotkeysTab
       include Locale::Translatable
+      include BusEmitter
 
       FRAME     = "#{Paths::NB}.hotkeys"
       UNDO_BTN  = "#{FRAME}.btn_bar.undo_btn"
@@ -129,7 +130,7 @@ module Gemba
         style_btn(widget, hk_display(action), hk_customized?(action))
         @hk_listening_for = nil
 
-        @callbacks[:on_hotkey_change]&.call(action, hotkey)
+        emit(:hotkey_changed, action, hotkey)
         @app.command(UNDO_BTN, 'configure', state: :normal)
         @mark_dirty.call
       end
@@ -221,7 +222,7 @@ module Gemba
       end
 
       def do_undo_hotkeys
-        @callbacks[:on_undo_hotkeys]&.call
+        emit(:undo_hotkeys)
         @app.command(UNDO_BTN, 'configure', state: :disabled)
       end
 
@@ -250,7 +251,7 @@ module Gemba
           style_btn(widget, hk_display(action), false)
         end
         @app.command(UNDO_BTN, 'configure', state: :disabled)
-        @callbacks[:on_hotkey_reset]&.call
+        emit(:hotkey_reset)
       end
     end
   end
