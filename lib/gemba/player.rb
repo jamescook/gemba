@@ -162,6 +162,7 @@ module Gemba
         relx: 0.5, rely: 0.85, anchor: :center)
 
       setup_drop_target
+      setup_global_hotkeys
     end
 
     # @return [Teek::App]
@@ -774,6 +775,24 @@ module Gemba
       gp_text = @gamepad ? @gamepad.name : translate('settings.no_gamepad')
       @app.command(@status_label, :configure,
         text: "#{translate('player.open_rom_hint')}\n#{gp_text}")
+    end
+
+    # Hotkeys that work without a ROM loaded (before SDL2/viewport exist).
+    # Once SDL2 is ready, the viewport's KeyPress binding handles everything.
+    GLOBAL_HOTKEY_ACTIONS = %i[quit].freeze
+
+    def setup_global_hotkeys
+      @app.bind('.', 'KeyPress', :keysym, '%s') do |k, state_str|
+        next if @sdl2_ready || @modal_child
+
+        if k == 'Escape'
+          self.running = false
+        else
+          mods = HotkeyMap.modifiers_from_state(state_str.to_i)
+          action = @hotkeys.action_for(k, modifiers: mods)
+          self.running = false if action == :quit
+        end
+      end
     end
 
     def setup_input

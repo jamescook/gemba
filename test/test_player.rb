@@ -33,6 +33,60 @@ class TestMGBAPlayer < Minitest::Test
     assert success, "Player should exit cleanly with ROM loaded (no hang)\n#{output.join("\n")}"
   end
 
+  # Quit hotkey works without a ROM loaded (no viewport/SDL2).
+  def test_quit_hotkey_without_rom
+    code = <<~RUBY
+      require "gemba"
+
+      player = Gemba::Player.new
+      app = player.app
+
+      app.after(100) do
+        app.tcl_eval("focus -force .")
+        app.command(:event, 'generate', '.', '<KeyPress>', keysym: 'q')
+      end
+
+      player.run
+      puts "PASS"
+    RUBY
+
+    success, stdout, stderr, _status = tk_subprocess(code)
+
+    output = []
+    output << "STDOUT:\n#{stdout}" unless stdout.empty?
+    output << "STDERR:\n#{stderr}" unless stderr.empty?
+
+    assert success, "Quit hotkey should work without ROM loaded\n#{output.join("\n")}"
+    assert_includes stdout, "PASS"
+  end
+
+  # Escape key quits without a ROM loaded.
+  def test_escape_quits_without_rom
+    code = <<~RUBY
+      require "gemba"
+
+      player = Gemba::Player.new
+      app = player.app
+
+      app.after(100) do
+        app.tcl_eval("focus -force .")
+        app.command(:event, 'generate', '.', '<KeyPress>', keysym: 'Escape')
+      end
+
+      player.run
+      puts "PASS"
+    RUBY
+
+    success, stdout, stderr, _status = tk_subprocess(code)
+
+    output = []
+    output << "STDOUT:\n#{stdout}" unless stdout.empty?
+    output << "STDERR:\n#{stderr}" unless stderr.empty?
+
+    assert success, "Escape should quit without ROM loaded\n#{output.join("\n")}"
+    assert_includes stdout, "PASS"
+  end
+
   # Simulate a user pressing F11 twice (fullscreen on → off) then q to quit.
   # Exercises the wm attributes fullscreen path end-to-end. If the toggle
   # causes a hang or crash the subprocess will time out.
