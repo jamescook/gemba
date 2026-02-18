@@ -12,24 +12,47 @@ See [INSTALL.md](INSTALL.md) for platform-specific dependency setup.
 ## Usage
 
 ```
-gemba [options] [ROM_FILE]
+gemba [command] [options]
 ```
 
-If no ROM file is given, the player opens empty — use the menu to load a ROM.
+### Commands
 
-### Options
+| Command | Description |
+|---------|-------------|
+| `play` | Play a ROM (default if omitted) |
+| `record` | Record video+audio to .grec (headless) |
+| `decode` | Encode .grec to video via ffmpeg |
+| `replay` | Replay a .gir input recording |
+| `config` | Show or reset configuration |
+| `version` | Show version |
 
-| Flag | Description |
-|------|-------------|
-| `-s, --scale N` | Window scale (1-4) |
-| `-v, --volume N` | Volume (0-100) |
-| `-m, --mute` | Start muted |
-| `--no-sound` | Disable audio entirely |
-| `-f, --fullscreen` | Start in fullscreen |
-| `--show-fps` | Show FPS counter |
-| `--turbo-speed N` | Fast-forward speed (0=uncapped, 2-4) |
-| `--locale LANG` | Language (`en`, `ja`, `auto`) |
-| `--reset-config` | Delete settings file and exit (keeps saves) |
+Run `gemba <command> --help` for command-specific options.
+
+### Examples
+
+```sh
+# Play a ROM (these are equivalent)
+gemba game.gba
+gemba play game.gba
+
+# Play with options
+gemba play --scale 2 --fullscreen game.gba
+
+# Record 10 seconds of gameplay (headless)
+gemba record --frames 600 game.gba
+
+# Show recording stats
+gemba decode --stats recording.grec
+
+# Encode to video
+gemba decode -o clip.mp4 recording.grec
+
+# Replay an input recording
+gemba replay session.gir
+
+# Reset config
+gemba config --reset
+```
 
 ## Features
 

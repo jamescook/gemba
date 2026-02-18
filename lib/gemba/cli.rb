@@ -5,49 +5,52 @@ require_relative 'version'
 
 module Gemba
   class CLI
-    SUBCOMMANDS = %w[record decode info replay].freeze
+    SUBCOMMANDS = %w[play record decode replay config version].freeze
 
-    # Entry point: dispatch to subcommand or player.
+    # Entry point: dispatch to subcommand or default to play.
     # @param argv [Array<String>]
-    def self.run(argv = ARGV)
+    # @param dry_run [Boolean] parse and validate only, return execution plan
+    def self.run(argv = ARGV, dry_run: false)
       args = argv.dup
 
-      case args.first
-      when 'record'
-        args.shift
-        run_record(args)
-      when 'decode'
-        args.shift
-        run_decode(args)
-      when 'info'
-        args.shift
-        run_info(args)
-      when 'replay'
-        args.shift
-        run_replay(args)
-      else
-        run_player(args)
+      if args.first == '--help' || args.first == '-h'
+        puts main_help unless dry_run
+        return { command: :help }
       end
+
+      cmd = SUBCOMMANDS.include?(args.first) ? args.shift : 'play'
+      send(:"run_#{cmd}", args, dry_run: dry_run)
     end
 
-    # Parse player (default) command options.
-    # @param argv [Array<String>]
-    # @return [Hash]
-    def self.parse(argv)
+    # Main help text listing all subcommands.
+    def self.main_help
+      <<~HELP
+        Usage: gemba [command] [options]
+
+        GBA emulator powered by teek + libmgba
+
+        Commands:
+          play      Play a ROM (default)
+          record    Record video+audio to .grec (headless)
+          decode    Encode .grec to video via ffmpeg (--stats for info)
+          replay    Replay a .gir input recording
+          config    Show or reset configuration
+          version   Show version
+
+        Run 'gemba <command> --help' for command-specific options.
+      HELP
+    end
+
+    # --- play (default command) ---
+
+    def self.parse_play(argv)
       options = {}
 
       parser = OptionParser.new do |o|
-        o.banner = "Usage: gemba [options] [ROM_FILE]"
+        o.banner = "Usage: gemba [play] [options] [ROM_FILE]"
         o.separator ""
-        o.separator "GBA emulator powered by teek + libmgba"
+        o.separator "Launch the GBA emulator. ROM_FILE is optional."
         o.separator ""
-        o.separator "Commands:"
-        o.separator "  record    Record video+audio to .grec (headless)"
-        o.separator "  decode    Encode .grec to video via ffmpeg"
-        o.separator "  info      Show .grec recording stats"
-        o.separator "  replay    Replay a .gir input recording (headless)"
-        o.separator ""
-        o.separator "Player options:"
 
         o.on("-s", "--scale N", Integer, "Window scale (1-4)") do |v|
           options[:scale] = v.clamp(1, 4)
@@ -81,26 +84,6 @@ module Gemba
           options[:locale] = v
         end
 
-        o.on("--headless", "Run without GUI (requires --frames and ROM)") do
-          options[:headless] = true
-        end
-
-        o.on("--frames N", Integer, "Run N frames then exit (requires ROM)") do |v|
-          options[:frames] = v
-        end
-
-        o.on("--reset-config", "Delete settings file and exit (keeps saves)") do
-          options[:reset_config] = true
-        end
-
-        o.on("-y", "--yes", "Skip confirmation prompts") do
-          options[:yes] = true
-        end
-
-        o.on("--version", "Show version") do
-          options[:version] = true
-        end
-
         o.on("-h", "--help", "Show this help") do
           options[:help] = true
         end
@@ -124,61 +107,30 @@ module Gemba
       config.locale = options[:locale] if options[:locale]
     end
 
-    # --- Player (default command) ---
-
-    def self.run_player(argv)
-      options = parse(argv)
+    def self.run_play(argv, dry_run: false)
+      options = parse_play(argv)
 
       if options[:help]
-        puts options[:parser]
-        return
+        puts options[:parser] unless dry_run
+        return { command: :play, help: true }
       end
 
-      if options[:version]
-        puts "gemba #{Gemba::VERSION}"
-        return
-      end
+      result = {
+        command: :play,
+        rom: options[:rom],
+        sound: options.fetch(:sound, true),
+        fullscreen: options[:fullscreen],
+        options: options.except(:parser)
+      }
+      return result if dry_run
 
       require "gemba"
-
-      if options[:reset_config]
-        path = Config.default_path
-        unless File.exist?(path)
-          puts "No config file found at #{path}"
-          return
-        end
-        unless options[:yes]
-          print "Delete #{path}? [y/N] "
-          return unless $stdin.gets&.strip&.downcase == 'y'
-        end
-        Config.reset!(path: path)
-        puts "Deleted #{path}"
-        return
-      end
-
-      if options[:headless]
-        unless options[:frames] && options[:rom]
-          $stderr.puts "Error: --headless requires --frames N and a ROM file"
-          exit 1
-        end
-        require "gemba/headless"
-        HeadlessPlayer.open(options[:rom]) { |p| p.step(options[:frames]) }
-        return
-      end
-
-      if options[:frames] && !options[:rom]
-        $stderr.puts "Error: --frames requires a ROM file"
-        exit 1
-      end
 
       apply(Gemba.user_config, options)
       Gemba.load_locale if options[:locale]
 
-      sound = options.fetch(:sound, true)
-      Player.new(options[:rom], sound: sound, fullscreen: options[:fullscreen],
-                 frames: options[:frames]).run
+      Player.new(result[:rom], sound: result[:sound], fullscreen: result[:fullscreen]).run
     end
-    private_class_method :run_player
 
     # --- record subcommand ---
 
@@ -188,7 +140,7 @@ module Gemba
       parser = OptionParser.new do |o|
         o.banner = "Usage: gemba record [options] ROM_FILE"
         o.separator ""
-        o.separator "Record video+audio to a .grec file (headless, no GUI)"
+        o.separator "Record video+audio to a .grec file (headless, no GUI)."
         o.separator ""
 
         o.on("--frames N", Integer, "Number of frames to record (required)") do |v|
@@ -199,7 +151,7 @@ module Gemba
           options[:output] = v
         end
 
-        o.on("-c", "--compression N", Integer, "Zlib level 1-9 (default: 1, 6+ has diminishing returns)") do |v|
+        o.on("-c", "--compression N", Integer, "Zlib level 1-9 (default: 1)") do |v|
           options[:compression] = v.clamp(1, 9)
         end
 
@@ -218,12 +170,12 @@ module Gemba
       options
     end
 
-    def self.run_record(argv)
+    def self.run_record(argv, dry_run: false)
       options = parse_record(argv)
 
       if options[:help]
-        puts options[:parser]
-        return
+        puts options[:parser] unless dry_run
+        return { command: :record, help: true }
       end
 
       unless options[:frames] && options[:rom]
@@ -231,6 +183,17 @@ module Gemba
         $stderr.puts "Run 'gemba record --help' for usage"
         exit 1
       end
+
+      result = {
+        command: :record,
+        rom: options[:rom],
+        frames: options[:frames],
+        output: options[:output],
+        compression: options[:compression],
+        progress: options[:progress],
+        options: options.except(:parser)
+      }
+      return result if dry_run
 
       require "gemba/headless"
 
@@ -269,7 +232,6 @@ module Gemba
         puts "  .grec size: #{format_size(File.size(rec_path))}"
       end
     end
-    private_class_method :run_record
 
     # --- decode subcommand ---
 
@@ -277,10 +239,10 @@ module Gemba
       options = {}
 
       parser = OptionParser.new do |o|
-        o.banner = "Usage: gemba decode [options] TREC_FILE [-- FFMPEG_ARGS...]"
+        o.banner = "Usage: gemba decode [options] GREC_FILE [-- FFMPEG_ARGS...]"
         o.separator ""
         o.separator "Encode a .grec recording to a playable video via ffmpeg."
-        o.separator "Args after -- replace the default codec flags (-c:v, -c:a, etc)."
+        o.separator "Args after -- replace the default codec flags."
         o.separator ""
 
         o.on("-o", "--output PATH", "Output path (default: INPUT.mp4)") do |v|
@@ -299,6 +261,10 @@ module Gemba
           options[:scale] = v.clamp(1, 10)
         end
 
+        o.on("--stats", "Show recording stats (no ffmpeg needed)") do
+          options[:stats] = true
+        end
+
         o.on("--no-progress", "Disable progress indicator") do
           options[:progress] = false
         end
@@ -309,30 +275,57 @@ module Gemba
       end
 
       parser.parse!(argv)
-      options[:trec] = argv.shift
+      options[:grec] = argv.shift
       options[:ffmpeg_args] = argv unless argv.empty?
       options[:parser] = parser
       options
     end
 
-    def self.run_decode(argv)
+    def self.run_decode(argv, dry_run: false)
       options = parse_decode(argv)
 
       if options[:help]
-        puts options[:parser]
-        return
+        puts options[:parser] unless dry_run
+        return { command: :decode, help: true }
       end
 
-      unless options[:trec]
+      unless options[:grec]
         $stderr.puts "Error: decode requires a .grec file"
         $stderr.puts "Run 'gemba decode --help' for usage"
         exit 1
       end
 
+      result = {
+        command: options[:stats] ? :decode_stats : :decode,
+        grec: options[:grec],
+        stats: options[:stats],
+        output: options[:output],
+        video_codec: options[:video_codec],
+        audio_codec: options[:audio_codec],
+        scale: options[:scale],
+        ffmpeg_args: options[:ffmpeg_args],
+        options: options.except(:parser)
+      }
+      return result if dry_run
+
       require "gemba/headless"
 
-      trec_path = options[:trec]
-      output_path = options[:output] || trec_path.sub(/\.grec\z/, '') + '.mp4'
+      grec_path = options[:grec]
+
+      if options[:stats]
+        info = RecorderDecoder.stats(grec_path)
+        puts "Recording: #{grec_path}"
+        puts "  Frames:     #{info[:frame_count]}"
+        puts "  Resolution: #{info[:width]}x#{info[:height]}"
+        puts "  FPS:        #{'%.2f' % info[:fps]}"
+        puts "  Duration:   #{'%.1f' % info[:duration]}s"
+        puts "  Avg change: #{'%.1f' % info[:avg_change_pct]}%/frame"
+        puts "  Uncompressed: #{format_size(info[:raw_video_size])} (encode input)"
+        puts "  Audio:      #{info[:audio_rate]} Hz, #{info[:audio_channels]}ch"
+        return
+      end
+
+      output_path = options[:output] || grec_path.sub(/\.grec\z/, '') + '.mp4'
       codec_opts = {}
       codec_opts[:video_codec] = options[:video_codec] if options[:video_codec]
       codec_opts[:audio_codec] = options[:audio_codec] if options[:audio_codec]
@@ -340,39 +333,12 @@ module Gemba
       codec_opts[:ffmpeg_args] = options[:ffmpeg_args] if options[:ffmpeg_args]
       codec_opts[:progress] = options.fetch(:progress, true)
 
-      info = RecorderDecoder.decode(trec_path, output_path, **codec_opts)
+      info = RecorderDecoder.decode(grec_path, output_path, **codec_opts)
       puts "Encoded #{info[:frame_count]} frames " \
            "(#{info[:width]}x#{info[:height]} @ #{'%.2f' % info[:fps]} fps, " \
            "avg #{'%.1f' % info[:avg_change_pct]}% change/frame)"
       puts "Output: #{info[:output_path]}"
     end
-    private_class_method :run_decode
-
-    # --- info subcommand ---
-
-    def self.run_info(argv)
-      if argv.include?('--help') || argv.include?('-h') || argv.empty?
-        puts "Usage: gemba info TREC_FILE"
-        puts ""
-        puts "Show recording stats (no ffmpeg needed)"
-        return
-      end
-
-      require "gemba/headless"
-
-      trec_path = argv.first
-      info = RecorderDecoder.stats(trec_path)
-
-      puts "Recording: #{trec_path}"
-      puts "  Frames:     #{info[:frame_count]}"
-      puts "  Resolution: #{info[:width]}x#{info[:height]}"
-      puts "  FPS:        #{'%.2f' % info[:fps]}"
-      puts "  Duration:   #{'%.1f' % info[:duration]}s"
-      puts "  Avg change: #{'%.1f' % info[:avg_change_pct]}%/frame"
-      puts "  Uncompressed: #{format_size(info[:raw_video_size])} (encode input)"
-      puts "  Audio:      #{info[:audio_rate]} Hz, #{info[:audio_channels]}ch"
-    end
-    private_class_method :run_info
 
     # --- replay subcommand ---
 
@@ -418,17 +384,17 @@ module Gemba
       options
     end
 
-    def self.run_replay(argv)
+    def self.run_replay(argv, dry_run: false)
       options = parse_replay(argv)
 
       if options[:help]
-        puts options[:parser]
-        return
+        puts options[:parser] unless dry_run
+        return { command: :replay, help: true }
       end
 
       if options[:list]
-        list_recordings
-        return
+        list_recordings unless dry_run
+        return { command: :replay_list }
       end
 
       unless options[:gir]
@@ -439,12 +405,112 @@ module Gemba
 
       gir_path = File.expand_path(options[:gir])
 
+      result = {
+        command: options[:headless] ? :replay_headless : :replay,
+        gir: gir_path,
+        rom: options[:rom],
+        sound: options.fetch(:sound, true),
+        fullscreen: options[:fullscreen],
+        headless: options[:headless],
+        progress: options[:progress],
+        options: options.except(:parser)
+      }
+      return result if dry_run
+
       if options[:headless]
         run_replay_headless(gir_path, options)
       else
         run_replay_gui(gir_path, options)
       end
     end
+
+    # --- config subcommand ---
+
+    def self.parse_config(argv)
+      options = {}
+
+      parser = OptionParser.new do |o|
+        o.banner = "Usage: gemba config [options]"
+        o.separator ""
+        o.separator "Show or reset configuration."
+        o.separator ""
+
+        o.on("--reset", "Delete settings file (keeps saves)") do
+          options[:reset] = true
+        end
+
+        o.on("-y", "--yes", "Skip confirmation prompts") do
+          options[:yes] = true
+        end
+
+        o.on("-h", "--help", "Show this help") do
+          options[:help] = true
+        end
+      end
+
+      parser.parse!(argv)
+      options[:parser] = parser
+      options
+    end
+
+    def self.run_config(argv, dry_run: false)
+      options = parse_config(argv)
+
+      if options[:help]
+        puts options[:parser] unless dry_run
+        return { command: :config, help: true }
+      end
+
+      result = {
+        command: options[:reset] ? :config_reset : :config_show,
+        reset: options[:reset],
+        yes: options[:yes],
+        options: options.except(:parser)
+      }
+      return result if dry_run
+
+      require "gemba"
+
+      if options[:reset]
+        path = Config.default_path
+        unless File.exist?(path)
+          puts "No config file found at #{path}"
+          return
+        end
+        unless options[:yes]
+          print "Delete #{path}? [y/N] "
+          return unless $stdin.gets&.strip&.downcase == 'y'
+        end
+        Config.reset!(path: path)
+        puts "Deleted #{path}"
+        return
+      end
+
+      # Default: show config info
+      path = Config.default_path
+      puts "Config: #{path}"
+      puts "  Exists: #{File.exist?(path)}"
+      if File.exist?(path)
+        config = Gemba.user_config
+        puts "  Scale: #{config.scale}"
+        puts "  Volume: #{config.volume}"
+        puts "  Muted: #{config.muted}"
+        puts "  Locale: #{config.locale}"
+        puts "  Show FPS: #{config.show_fps}"
+        puts "  Turbo speed: #{config.turbo_speed}"
+      end
+    end
+
+    # --- version subcommand ---
+
+    def self.run_version(_argv, dry_run: false)
+      result = { command: :version, version: Gemba::VERSION }
+      return result if dry_run
+
+      puts "gemba #{Gemba::VERSION}"
+    end
+
+    # --- helpers ---
 
     def self.run_replay_headless(gir_path, options)
       require "gemba/headless"
@@ -483,6 +549,7 @@ module Gemba
         puts "Replayed #{gir_path} (#{Gemba::InputReplayer.new(gir_path).frame_count} frames)"
       end
     end
+    private_class_method :run_replay_headless
 
     def self.run_replay_gui(gir_path, options)
       require "gemba"
@@ -492,6 +559,7 @@ module Gemba
                        sound: sound,
                        fullscreen: options[:fullscreen]).run
     end
+    private_class_method :run_replay_gui
 
     def self.list_recordings
       require_relative "config"
@@ -523,7 +591,7 @@ module Gemba
         end
       end
     end
-    private_class_method :run_replay
+    private_class_method :list_recordings
 
     def self.format_size(bytes)
       if bytes >= 1_073_741_824
