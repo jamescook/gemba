@@ -435,4 +435,17 @@ class TestMGBASettingsHotkeys < Minitest::Test
       assert_equal 'F10', text
     end
   end
+
+  def test_open_rom_hotkey_button_shows_default
+    assert_tk_app("open rom hotkey button shows Ctrl+O") do
+      require "gemba/settings_window"
+      require "gemba/hotkey_map"
+      sw = Gemba::SettingsWindow.new(app)
+      sw.show
+      app.update
+
+      text = app.command(Gemba::SettingsWindow::HK_ACTIONS[:open_rom], 'cget', '-text')
+      assert_equal 'Ctrl+O', text
+    end
+  end
 end

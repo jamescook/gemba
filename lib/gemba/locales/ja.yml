@@ -15,8 +15,8 @@ menu:
   quick_save: "クイックセーブ"
   quick_load: "クイックロード"
   save_states: "ステートセーブ…"
-  start_recording: "録画開始"
-  stop_recording: "録画停止"
+  start_recording: "キャプチャ開始"
+  stop_recording: "キャプチャ停止"
   start_input_recording: "入力記録開始"
   stop_input_recording: "入力記録停止"
 
@@ -35,8 +35,8 @@ toast:
   no_rewind: "巻き戻しデータがありません"
   paused: "一時停止"
   waiting_for: "{label}を待機中…"
-  recording_started: "録画を開始しました"
-  recording_stopped: "{frames}フレームを録画しました"
+  recording_started: "キャプチャを開始しました"
+  recording_stopped: "{frames}フレームをキャプチャしました"
   input_recording_started: "入力記録を開始しました"
   input_recording_stopped: "入力を記録しました（{frames}フレーム）"
 
@@ -96,8 +96,9 @@ settings:
   hk_save_states: "ステートセーブ"
   hk_screenshot: "スクリーンショット"
   hk_rewind: "巻き戻し"
-  hk_record: "録画"
+  hk_record: "キャプチャ"
   hk_input_record: "入力記録"
+  hk_open_rom: "ROM を開く"
   hk_reset_defaults: "デフォルトに戻す"
   pixel_filter: "ピクセルフィルタ:"
   filter_nearest: "ニアレストネイバー"
@@ -122,7 +123,7 @@ settings:
   tip_recording_compression: ".grecファイルのzlib圧縮レベル。\n1 = 最速（デフォルト）、6以上は効果が小さくなります。"
   recordings_folder: "録画フォルダ:"
   open_recordings_folder: "録画フォルダを開く…"
-  open_replay_player: "録画プレーヤーを開く…"
+  open_replay_player: "入力リプレイを開く…"
   gp_a: "A"
   gp_b: "B"
   gp_l: "L"
@@ -156,9 +157,10 @@ rom_info:
   na: "N/A"
 
 replay:
-  open_replay: "リプレイを開く…"
-  replay_player: "録画プレーヤー"
+  open_recording: "入力記録を開く…"
+  replay_player: "入力リプレイ"
   ended: "リプレイ完了（{frames}フレーム）"
+  empty_hint: "入力記録を開く (Cmd+O)"
 
 player:
   open_rom_hint: "ファイル > ROMを開く…"

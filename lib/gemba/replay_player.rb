@@ -354,7 +354,7 @@ module Gemba
       @app.command(menubar, :add, :cascade, label: translate('menu.file'), menu: "#{menubar}.file")
 
       @app.command("#{menubar}.file", :add, :command,
-                   label: translate('replay.open_replay'),
+                   label: translate('replay.open_recording'),
                    accelerator: 'Cmd+O',
                    command: proc { open_replay_dialog })
       @app.command("#{menubar}.file", :add, :separator)
@@ -367,8 +367,8 @@ module Gemba
     end
 
     def open_replay_dialog
-      filetypes = '{{GIR Recordings} {.gir}} {{All Files} {*}}'
-      title = translate('replay.open_replay').delete("\u2026")
+      filetypes = '{{Input Recordings} {.gir}} {{All Files} {*}}'
+      title = translate('replay.open_recording').delete("\u2026")
       initial_dir = @config.recordings_dir
       cmd = "tk_getOpenFile -title {#{title}} -filetypes {#{filetypes}}"
       cmd << " -initialdir {#{initial_dir}}" if initial_dir && File.directory?(initial_dir)
@@ -397,7 +397,7 @@ module Gemba
 
     def tick
       unless @core
-        @viewport.render { |r| r.clear(0, 0, 0) } if @sdl2_ready
+        render_empty_hint if @sdl2_ready
         return
       end
       return if @paused
@@ -524,6 +524,19 @@ module Gemba
         r.copy(@texture, nil, dest)
         @hud.draw(r, dest, show_fps: @show_fps, show_ff: ff_indicator)
         @toast&.draw(r, dest)
+      end
+    end
+
+    def render_empty_hint
+      @empty_hint_tex ||= @overlay_font&.render_text(translate('replay.empty_hint'), 180, 180, 180)
+      @viewport.render do |r|
+        r.clear(0, 0, 0)
+        if @empty_hint_tex
+          out_w, out_h = @viewport.renderer.output_size
+          x = (out_w - @empty_hint_tex.width) / 2
+          y = (out_h - @empty_hint_tex.height) / 2
+          r.copy(@empty_hint_tex, nil, [x, y, @empty_hint_tex.width, @empty_hint_tex.height])
+        end
       end
     end
 

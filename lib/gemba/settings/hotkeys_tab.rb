@@ -26,6 +26,7 @@ module Gemba
         rewind:      "#{FRAME}.row_rewind.btn",
         record:       "#{FRAME}.row_record.btn",
         input_record: "#{FRAME}.row_input_record.btn",
+        open_rom:     "#{FRAME}.row_open_rom.btn",
       }.freeze
 
       # Action → locale key mapping
@@ -38,6 +39,7 @@ module Gemba
         rewind: 'settings.hk_rewind',
         record: 'settings.hk_record',
         input_record: 'settings.hk_input_record',
+        open_rom: 'settings.hk_open_rom',
       }.freeze
 
       LISTEN_TIMEOUT_MS  = 10_000

@@ -393,4 +393,25 @@ class TestHotkeyMap < Minitest::Test
     map, = make_map
     assert_equal :record, map.action_for('F10')
   end
+
+  # -- Open ROM action -------------------------------------------------------
+
+  def test_open_rom_in_actions
+    assert_includes Gemba::HotkeyMap::ACTIONS, :open_rom
+  end
+
+  def test_open_rom_default_is_ctrl_o
+    map, = make_map
+    assert_equal ['Control', 'o'], map.key_for(:open_rom)
+  end
+
+  def test_open_rom_dispatches_on_ctrl_o
+    map, = make_map
+    assert_equal :open_rom, map.action_for('o', modifiers: Set.new(['Control']))
+  end
+
+  def test_open_rom_plain_o_does_not_dispatch
+    map, = make_map
+    assert_nil map.action_for('o')
+  end
 end

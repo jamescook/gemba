@@ -15,10 +15,10 @@ menu:
   quick_save: "Quick Save"
   quick_load: "Quick Load"
   save_states: "Save States…"
-  start_recording: "Start Recording"
-  stop_recording: "Stop Recording"
-  start_input_recording: "Start Input Recording"
-  stop_input_recording: "Stop Input Recording"
+  start_recording: "Start Capture"
+  stop_recording: "Stop Capture"
+  start_input_recording: "Start Recording Inputs"
+  stop_input_recording: "Stop Recording Inputs"
 
 toast:
   save_blocked: "Save blocked (too fast)"
@@ -35,10 +35,10 @@ toast:
   no_rewind: "No rewind data"
   paused: "Paused"
   waiting_for: "Waiting for {label}…"
-  recording_started: "Recording started"
-  recording_stopped: "Recorded {frames} frames"
-  input_recording_started: "Input recording started"
-  input_recording_stopped: "Input recorded ({frames} frames)"
+  recording_started: "Capture started"
+  recording_stopped: "Captured {frames} frames"
+  input_recording_started: "Recording inputs"
+  input_recording_stopped: "Inputs recorded ({frames} frames)"
 
 dialog:
   game_running_title: "Game Running"
@@ -96,8 +96,9 @@ settings:
   hk_save_states: "Save States"
   hk_screenshot: "Screenshot"
   hk_rewind: "Rewind"
-  hk_record: "Record"
-  hk_input_record: "Input Record"
+  hk_record: "Capture"
+  hk_input_record: "Record Inputs"
+  hk_open_rom: "Open ROM"
   hk_reset_defaults: "Reset to Defaults"
   pixel_filter: "Pixel Filter:"
   filter_nearest: "Nearest Neighbor"
@@ -122,7 +123,7 @@ settings:
   tip_recording_compression: "Zlib level for .grec files.\n1 = fastest (default), 6+ has diminishing returns."
   recordings_folder: "Recordings folder:"
   open_recordings_folder: "Open Recordings Folder…"
-  open_replay_player: "Open Recording Player…"
+  open_replay_player: "Open Input Replay…"
   gp_a: "A"
   gp_b: "B"
   gp_l: "L"
@@ -156,9 +157,10 @@ rom_info:
   na: "N/A"
 
 replay:
-  open_replay: "Open Replay…"
-  replay_player: "Recording Player"
+  open_recording: "Open Input Recording…"
+  replay_player: "Input Replay"
   ended: "Replay complete ({frames} frames)"
+  empty_hint: "Open Input Recording (Cmd+O)"
 
 player:
   open_rom_hint: "File > Open ROM…"

@@ -828,7 +828,7 @@ module Gemba
 
     # Hotkeys that work without a ROM loaded (before SDL2/viewport exist).
     # Once SDL2 is ready, the viewport's KeyPress binding handles everything.
-    GLOBAL_HOTKEY_ACTIONS = %i[quit].freeze
+    GLOBAL_HOTKEY_ACTIONS = %i[quit open_rom].freeze
 
     def setup_global_hotkeys
       @app.bind('.', 'KeyPress', :keysym, '%s') do |k, state_str|
@@ -838,8 +838,10 @@ module Gemba
           self.running = false
         else
           mods = HotkeyMap.modifiers_from_state(state_str.to_i)
-          action = @hotkeys.action_for(k, modifiers: mods)
-          self.running = false if action == :quit
+          case @hotkeys.action_for(k, modifiers: mods)
+          when :quit     then self.running = false
+          when :open_rom then handle_open_rom
+          end
         end
       end
     end
@@ -863,6 +865,7 @@ module Gemba
           when :rewind        then do_rewind
           when :record        then toggle_recording
           when :input_record  then toggle_input_recording
+          when :open_rom      then handle_open_rom
           else @keyboard.press(k)
           end
         end
@@ -906,7 +909,7 @@ module Gemba
                    label: translate('menu.quit'), accelerator: 'Cmd+Q',
                    command: proc { @running = false })
 
-      @app.command(:bind, '.', '<Command-o>', proc { open_rom_dialog })
+      @app.command(:bind, '.', '<Command-o>', proc { handle_open_rom })
       @app.command(:bind, '.', '<Command-comma>', proc { show_settings })
 
       # Settings menu — one entry per settings tab
@@ -1206,10 +1209,19 @@ module Gemba
       load_rom(path)
     end
 
+    def handle_open_rom
+      if @modal_stack.current == :replay_player
+        open_recordings_dir
+      else
+        open_rom_dialog
+      end
+    end
+
     def open_rom_dialog
       filetypes = '{{GBA ROMs} {.gba}} {{GB ROMs} {.gb .gbc}} {{ZIP Archives} {.zip}} {{All Files} {*}}'
       title = translate('menu.open_rom').delete('…')
-      path = @app.tcl_eval("tk_getOpenFile -title {#{title}} -filetypes {#{filetypes}}")
+      initial = @rom_path ? File.dirname(@rom_path) : Dir.home
+      path = @app.tcl_eval("tk_getOpenFile -title {#{title}} -filetypes {#{filetypes}} -initialdir {#{initial}}")
       return if path.empty?
       return unless confirm_rom_change(path)
 
