@@ -2,6 +2,7 @@
 
 require 'fileutils'
 require 'zlib'
+require_relative 'platform'
 
 module Gemba
   # Headless mGBA player for scripting and automated testing.
@@ -169,7 +170,9 @@ module Gemba
     def start_recording(path, compression: Zlib::BEST_SPEED)
       check_open!
       raise "Already recording" if recording?
+      platform = Platform.for(@core)
       @recorder = Recorder.new(path, width: @core.width, height: @core.height,
+                               fps_fraction: platform.fps_fraction,
                                compression: compression)
       @recorder.start
     end

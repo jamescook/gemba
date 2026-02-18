@@ -327,6 +327,39 @@ mgba_core_initialize(int argc, VALUE *argv, VALUE self)
     /* 8. Reset */
     core->reset(core);
 
+    /* 8b. Re-query dimensions now that the ROM is loaded and the board
+     * pointer is populated.  For GB/GBC, the pre-load query returns the
+     * SGB frame size (256x224) because core->board is NULL at that point.
+     * After reset the real model is known, so desiredVideoDimensions
+     * returns the correct 160x144 for non-SGB games.  When the
+     * dimensions shrink we must reallocate and call setVideoBuffer so
+     * the stride matches the actual width. */
+    {
+        unsigned w2, h2;
+        core->desiredVideoDimensions(core, &w2, &h2);
+        if (w2 != w || h2 != h) {
+            color_t *new_vbuf = calloc((size_t)w2 * h2, sizeof(color_t));
+            uint32_t *new_prev = calloc((size_t)w2 * h2, sizeof(uint32_t));
+            if (!new_vbuf || !new_prev) {
+                free(new_vbuf);
+                free(new_prev);
+                free(mc->video_buffer);
+                mc->video_buffer = NULL;
+                free(mc->prev_frame);
+                mc->prev_frame = NULL;
+                core->deinit(core);
+                rb_raise(rb_eNoMemError, "failed to reallocate video buffer");
+            }
+            free(mc->video_buffer);
+            free(mc->prev_frame);
+            mc->video_buffer = new_vbuf;
+            mc->prev_frame = new_prev;
+            core->setVideoBuffer(core, mc->video_buffer, w2);
+        }
+        mc->width  = (int)w2;
+        mc->height = (int)h2;
+    }
+
     /* 9. Autoload save file (.sav alongside ROM, or in save_dir).
      * Creates the .sav if it doesn't exist yet. */
     mCoreAutoloadSave(core);

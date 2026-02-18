@@ -384,6 +384,68 @@ class TestMGBACore < Minitest::Test
     assert_raises(ArgumentError) { @core.rewind_init(-1) }
   end
 
+  # -- GB / GBC ROM loading ----------------------------------------------------
+
+  GB_ROM  = File.expand_path("fixtures/test.gb", __dir__)
+  GBC_ROM = File.expand_path("fixtures/test.gbc", __dir__)
+
+  def test_gb_rom_dimensions
+    core = Gemba::Core.new(GB_ROM)
+    assert_equal 160, core.width
+    assert_equal 144, core.height
+    assert_equal "GB", core.platform
+    core.destroy
+  end
+
+  def test_gb_rom_video_buffer_size
+    core = Gemba::Core.new(GB_ROM)
+    core.run_frame
+    buf = core.video_buffer_argb
+    assert_equal 160 * 144 * 4, buf.bytesize
+    core.destroy
+  end
+
+  def test_gb_rom_title
+    core = Gemba::Core.new(GB_ROM)
+    assert_equal "GEMBAGB", core.title
+    core.destroy
+  end
+
+  def test_gb_rom_runs_frames
+    core = Gemba::Core.new(GB_ROM)
+    10.times { core.run_frame }
+    assert_equal 160 * 144 * 4, core.video_buffer.bytesize
+    core.destroy
+  end
+
+  def test_gbc_rom_dimensions
+    core = Gemba::Core.new(GBC_ROM)
+    assert_equal 160, core.width
+    assert_equal 144, core.height
+    core.destroy
+  end
+
+  def test_gbc_rom_video_buffer_size
+    core = Gemba::Core.new(GBC_ROM)
+    core.run_frame
+    buf = core.video_buffer_argb
+    assert_equal 160 * 144 * 4, buf.bytesize
+    core.destroy
+  end
+
+  def test_gbc_rom_title
+    core = Gemba::Core.new(GBC_ROM)
+    assert_equal "GEMBAGBC", core.title
+    core.destroy
+  end
+
+  def test_gbc_rom_runs_frames
+    core = Gemba::Core.new(GBC_ROM)
+    10.times { core.run_frame }
+    assert_equal 160 * 144 * 4, core.video_buffer.bytesize
+    core.destroy
+  end
+
   # -- Error handling ----------------------------------------------------------
 
   def test_nonexistent_file

@@ -2,6 +2,7 @@
 
 require_relative "child_window"
 require_relative "locale"
+require_relative "platform"
 
 module Gemba
   # Displays ROM metadata in a read-only window.
@@ -333,7 +334,7 @@ module Gemba
       publisher = maker.empty? ? na : "#{self.class.publisher_name(maker)} (#{maker})"
       set_field('publisher', publisher)
 
-      set_field('platform', core.platform)
+      set_field('platform', Platform.for(core).name)
       set_field('rom_size', format_size(core.rom_size))
       set_field('checksum', "0x%08X" % core.checksum)
       set_field('rom_path', rom_path || na)

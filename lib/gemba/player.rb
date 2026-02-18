@@ -4,6 +4,7 @@ require 'fileutils'
 require_relative 'event_bus'
 require_relative 'locale'
 require_relative 'modal_stack'
+require_relative 'platform'
 
 module Gemba
   # Full-featured GBA player with SDL2 video/audio rendering,
@@ -20,18 +21,11 @@ module Gemba
     include Gemba
     include Locale::Translatable
 
-    GBA_W  = 240
-    GBA_H  = 160
     DEFAULT_SCALE = 3
 
-    # GBA audio: mGBA outputs at 44100 Hz (stereo int16)
+    # mGBA outputs at 44100 Hz (stereo int16)
     AUDIO_FREQ     = 44100
-    GBA_FPS        = 59.7272
-    FRAME_PERIOD   = 1.0 / GBA_FPS
-
-    # Dynamic rate control constants (see tick_normal for the math)
-    AUDIO_BUF_CAPACITY = (AUDIO_FREQ / GBA_FPS * 6).to_i  # ~6 frames (~100ms)
-    MAX_DELTA          = 0.005                              # ±0.5% max adjustment
+    MAX_DELTA      = 0.005  # ±0.5% max adjustment (dynamic rate control)
     FF_MAX_FRAMES      = 10  # cap for uncapped turbo to avoid locking event loop
     SAVE_STATE_DEBOUNCE_DEFAULT = 3.0 # seconds; overridden by config
     SAVE_STATE_SLOTS    = 10
@@ -89,10 +83,11 @@ module Gemba
       @recorder = nil
       @recording_compression = @config.recording_compression
       @pause_on_focus_loss = @config.pause_on_focus_loss?
+      @platform = Platform.default
       check_writable_dirs
 
-      win_w = GBA_W * @scale
-      win_h = GBA_H * @scale
+      win_w = @platform.width * @scale
+      win_h = @platform.height * @scale
       @app.set_window_title("mGBA Player")
       @app.set_window_geometry("#{win_w}x#{win_h}")
 
@@ -284,8 +279,8 @@ module Gemba
 
       @app.command('tk', 'busy', '.')
 
-      win_w = GBA_W * @scale
-      win_h = GBA_H * @scale
+      win_w = @platform.width * @scale
+      win_h = @platform.height * @scale
 
       @viewport = Teek::SDL2::Viewport.new(@app, width: win_w, height: win_h, vsync: false)
       @viewport.pack(fill: :both, expand: true)
@@ -295,8 +290,8 @@ module Gemba
         in: @viewport.frame.path,
         relx: 0.5, rely: 0.85, anchor: :center)
 
-      # Streaming texture at native GBA resolution
-      @texture = @viewport.renderer.create_texture(GBA_W, GBA_H, :streaming)
+      # Streaming texture at native resolution
+      @texture = @viewport.renderer.create_texture(@platform.width, @platform.height, :streaming)
       @texture.scale_mode = @pixel_filter.to_sym
 
       # Font for on-screen indicators (FPS, fast-forward label)
@@ -324,7 +319,7 @@ module Gemba
 
       @hud = OverlayRenderer.new(font: @overlay_font, blend_mode: inverse_blend)
 
-      # Audio stream — stereo int16 at GBA sample rate.
+      # Audio stream — stereo int16.
       # Falls back to a silent no-op stream when sound is disabled or
       # no audio device is available (e.g. CI servers, headless).
       if @sound && Teek::SDL2::AudioStream.available?
@@ -421,11 +416,11 @@ module Gemba
 
       pixels = @core.video_buffer_argb
       photo_name = "__gemba_ss_#{object_id}"
-      out_w = GBA_W * @scale
-      out_h = GBA_H * @scale
+      out_w = @platform.width * @scale
+      out_h = @platform.height * @scale
       @app.command(:image, :create, :photo, photo_name,
                    width: out_w, height: out_h)
-      @app.interp.photo_put_zoomed_block(photo_name, pixels, GBA_W, GBA_H,
+      @app.interp.photo_put_zoomed_block(photo_name, pixels, @platform.width, @platform.height,
                                          zoom_x: @scale, zoom_y: @scale, format: :argb)
       @app.command(photo_name, :write, path, format: :png)
       @app.command(:image, :delete, photo_name)
@@ -518,10 +513,19 @@ module Gemba
       @config.save!
     end
 
+    def frame_period = 1.0 / @platform.fps
+    def audio_buf_capacity = (AUDIO_FREQ / @platform.fps * 6).to_i
+
+    def recreate_texture
+      @texture&.destroy
+      @texture = @viewport.renderer.create_texture(@platform.width, @platform.height, :streaming)
+      @texture.scale_mode = @pixel_filter.to_sym
+    end
+
     def apply_scale(new_scale)
       @scale = new_scale.clamp(1, 4)
-      w = GBA_W * @scale
-      h = GBA_H * @scale
+      w = @platform.width * @scale
+      h = @platform.height * @scale
       @app.set_window_geometry("#{w}x#{h}")
     end
 
@@ -1070,7 +1074,8 @@ module Gemba
       title = @core.title.strip.gsub(/[^a-zA-Z0-9_.-]/, '_')
       filename = "#{title}_#{timestamp}.grec"
       path = File.join(dir, filename)
-      @recorder = Recorder.new(path, width: GBA_W, height: GBA_H,
+      @recorder = Recorder.new(path, width: @platform.width, height: @platform.height,
+                               fps_fraction: @platform.fps_fraction,
                                compression: @recording_compression)
       @recorder.start
       Gemba.log(:info) { "Recording started: #{path}" }
@@ -1262,7 +1267,13 @@ module Gemba
       FileUtils.mkdir_p(saves) unless File.directory?(saves)
       @core = Core.new(rom_path, saves)
       @rom_path = path
-      Gemba.log(:info) { "ROM loaded: #{@core.title} (#{@core.game_code})" }
+      new_platform = Platform.for(@core)
+      if new_platform != @platform
+        @platform = new_platform
+        recreate_texture
+        apply_scale(@scale)
+      end
+      Gemba.log(:info) { "ROM loaded: #{@core.title} (#{@core.game_code}) [#{@platform.short_name}]" }
 
       # Activate per-game config overlay (before reading settings)
       rom_id = Config.rom_id(@core.game_code, @core.checksum)
@@ -1270,7 +1281,7 @@ module Gemba
       refresh_from_config
       @settings_window.set_per_game_available(true)
       @settings_window.set_per_game_active(@config.per_game_settings?)
-      @save_mgr = SaveStateManager.new(core: @core, config: @config, app: @app)
+      @save_mgr = SaveStateManager.new(core: @core, config: @config, app: @app, platform: @platform)
       @save_mgr.state_dir = @save_mgr.state_dir_for_rom(@core)
       @save_mgr.quick_save_slot = @quick_save_slot
       @save_mgr.backup = @save_state_backup
@@ -1397,9 +1408,9 @@ module Gemba
         #
         # The buffer naturally settles around 50% full. The ±0.5% limit
         # keeps pitch/speed shifts imperceptible.
-        fill = (@stream.queued_samples.to_f / AUDIO_BUF_CAPACITY).clamp(0.0, 1.0)
+        fill = (@stream.queued_samples.to_f / audio_buf_capacity).clamp(0.0, 1.0)
         ratio = (1.0 - MAX_DELTA) + 2.0 * fill * MAX_DELTA
-        @next_frame += FRAME_PERIOD * ratio
+        @next_frame += frame_period * ratio
         frames += 1
       end
 
@@ -1431,7 +1442,7 @@ module Gemba
         return
       end
 
-      # Paced turbo (2x, 3x, 4x): run @turbo_speed frames per FRAME_PERIOD.
+      # Paced turbo (2x, 3x, 4x): run @turbo_speed frames per frame_period.
       # Same timing gate as tick_normal so 2x ≈ 120 fps, not 2000 fps.
       frames = 0
       while @next_frame <= now && frames < @turbo_speed * 4
@@ -1445,7 +1456,7 @@ module Gemba
           end
           frames += 1
         end
-        @next_frame += FRAME_PERIOD
+        @next_frame += frame_period
       end
       @next_frame = now if now - @next_frame > 0.1
       return if frames == 0
@@ -1469,7 +1480,7 @@ module Gemba
       @kb_map.mask | @gp_map.mask
     end
 
-    REWIND_PUSH_INTERVAL = 60  # ~1 second at GBA framerate
+    REWIND_PUSH_INTERVAL = 60  # ~1 second at ~60 fps
 
     def run_one_frame
       mask = poll_input
@@ -1551,7 +1562,7 @@ module Gemba
       end
     end
 
-    # Calculate a centered destination rectangle that preserves the GBA's 3:2
+    # Calculate a centered destination rectangle that preserves the native
     # aspect ratio within the current renderer output. Returns nil when
     # stretching is preferred (keep_aspect_ratio off).
     #
@@ -1570,13 +1581,13 @@ module Gemba
       return nil unless @keep_aspect_ratio
 
       out_w, out_h = @viewport.renderer.output_size
-      scale_x = out_w.to_f / GBA_W
-      scale_y = out_h.to_f / GBA_H
+      scale_x = out_w.to_f / @platform.width
+      scale_y = out_h.to_f / @platform.height
       scale = [scale_x, scale_y].min
       scale = scale.floor if @integer_scale && scale >= 1.0
 
-      dest_w = (GBA_W * scale).to_i
-      dest_h = (GBA_H * scale).to_i
+      dest_w = (@platform.width * scale).to_i
+      dest_h = (@platform.height * scale).to_i
       dest_x = (out_w - dest_w) / 2
       dest_y = (out_h - dest_h) / 2
 
