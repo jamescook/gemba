@@ -299,7 +299,10 @@ module Gemba
         )
         @stream.resume
       else
-        warn "mGBA Player: no audio device found, continuing without sound" if @sound
+        if @sound
+          Gemba.log(:warn) { "No audio device found, continuing without sound" }
+          warn "mGBA Player: no audio device found, continuing without sound"
+        end
         @stream = Teek::SDL2::NullAudioStream.new
       end
 
@@ -326,6 +329,7 @@ module Gemba
     rescue => e
       # Surface init failures visibly — Tk's event loop can swallow
       # exceptions from `after` callbacks, causing silent hangs.
+      Gemba.log(:error) { "init_sdl2 failed: #{e.class}: #{e.message}\n#{e.backtrace.first(10).join("\n")}" }
       $stderr.puts "FATAL: init_sdl2 failed: #{e.class}: #{e.message}"
       $stderr.puts e.backtrace.first(10).map { |l| "  #{l}" }.join("\n")
       @app.command('tk', 'busy', 'forget', '.') rescue nil
@@ -759,6 +763,7 @@ module Gemba
       @settings_window&.update_gamepad_list(names)
       update_status_label
       if @gamepad && @gamepad != prev_gp
+        Gemba.log(:info) { "Gamepad detected: #{@gamepad.name}" }
         @gp_map.device = @gamepad
         @gp_map.load_config
       end
@@ -860,6 +865,10 @@ module Gemba
       @app.command(view_menu, :add, :command,
                    label: translate('menu.rom_info'), state: :disabled,
                    command: proc { show_rom_info })
+      @app.command(view_menu, :add, :separator)
+      @app.command(view_menu, :add, :command,
+                   label: translate('menu.open_logs_dir'),
+                   command: proc { open_logs_dir })
       @view_menu = view_menu
 
       # Emulation menu
@@ -967,16 +976,7 @@ module Gemba
     end
 
     def open_config_dir
-      dir = Config.config_dir
-      FileUtils.mkdir_p(dir)
-      p = Teek.platform
-      if p.darwin?
-        system('open', dir)
-      elsif p.windows?
-        system('explorer.exe', dir)
-      else
-        system('xdg-open', dir)
-      end
+      Gemba.open_directory(Config.config_dir)
     end
 
     def toggle_show_fps
@@ -1002,6 +1002,7 @@ module Gemba
       @recorder = Recorder.new(path, width: GBA_W, height: GBA_H,
                                compression: @recording_compression)
       @recorder.start
+      Gemba.log(:info) { "Recording started: #{path}" }
       @toast&.show(translate('toast.recording_started'))
       update_recording_menu
     end
@@ -1010,6 +1011,7 @@ module Gemba
       return unless @recorder&.recording?
       @recorder.stop
       count = @recorder.frame_count
+      Gemba.log(:info) { "Recording stopped: #{count} frames" }
       @toast&.show(translate('toast.recording_stopped', frames: count))
       @recorder = nil
       update_recording_menu
@@ -1074,16 +1076,11 @@ module Gemba
     end
 
     def open_recordings_dir
-      dir = @config.recordings_dir
-      FileUtils.mkdir_p(dir) unless File.directory?(dir)
-      p = Teek.platform
-      if p.darwin?
-        system('open', dir)
-      elsif p.windows?
-        system('explorer.exe', dir)
-      else
-        system('xdg-open', dir)
-      end
+      Gemba.open_directory(@config.recordings_dir)
+    end
+
+    def open_logs_dir
+      Gemba.open_directory(Config.default_logs_dir)
     end
 
     # -- End recording -------------------------------------------------------
@@ -1185,6 +1182,7 @@ module Gemba
       FileUtils.mkdir_p(saves) unless File.directory?(saves)
       @core = Core.new(rom_path, saves)
       @rom_path = path
+      Gemba.log(:info) { "ROM loaded: #{@core.title} (#{@core.game_code})" }
 
       # Activate per-game config overlay (before reading settings)
       rom_id = Config.rom_id(@core.game_code, @core.checksum)

@@ -130,6 +130,7 @@ module Gemba
       @fast_forward = false
       @hud.set_ff_label(nil)
 
+      Gemba.log(:info) { "Replay started: #{gir_path} (#{@total_frames} frames)" }
       @app.set_window_title("[REPLAY] #{@core.title}")
       @stream.clear unless @stream.destroyed?
       @stream.resume unless @stream.destroyed?
@@ -206,6 +207,7 @@ module Gemba
       @app.tcl_eval("focus -force #{@viewport.frame.path}")
       @app.update
     rescue => e
+      Gemba.log(:error) { "init_sdl2 failed: #{e.class}: #{e.message}\n#{e.backtrace.first(10).join("\n")}" }
       $stderr.puts "FATAL: init_sdl2 failed: #{e.class}: #{e.message}"
       $stderr.puts e.backtrace.first(10).map { |l| "  #{l}" }.join("\n")
       @app.command('tk', 'busy', 'forget', '.') rescue nil

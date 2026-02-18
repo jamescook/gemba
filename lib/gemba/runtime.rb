@@ -11,6 +11,8 @@ require_relative "config"
 require_relative "locale"
 require_relative "core"
 require_relative "rom_loader"
+require_relative "logging"
+require_relative "platform_open"
 
 module Gemba
   ASSETS_DIR = File.expand_path('../../assets', __dir__).freeze

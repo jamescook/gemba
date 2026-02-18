@@ -7,6 +7,7 @@ menu:
   view: "表示"
   fullscreen: "フルスクリーン"
   rom_info: "ROM情報…"
+  open_logs_dir: "ログフォルダを開く"
   emulation: "エミュレーション"
   pause: "一時停止"
   resume: "再開"

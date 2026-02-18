@@ -7,6 +7,7 @@ menu:
   view: "View"
   fullscreen: "Fullscreen"
   rom_info: "ROM Info…"
+  open_logs_dir: "Open Logs Directory"
   emulation: "Emulation"
   pause: "Pause"
   resume: "Resume"

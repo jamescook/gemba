@@ -49,6 +49,7 @@ module Gemba
       'tip_dismiss_ms'     => 4000,
       'recording_compression' => 1,
       'pause_on_focus_loss'  => true,
+      'log_level'            => 'info',
     }.freeze
 
     # Settings that can be overridden per ROM. Maps config key → locale key.
@@ -401,6 +402,15 @@ module Gemba
       global['pause_on_focus_loss'] = !!val
     end
 
+    # @return [String] log level (debug, info, warn, error)
+    def log_level
+      global['log_level']
+    end
+
+    def log_level=(val)
+      global['log_level'] = val.to_s
+    end
+
     # @return [String] directory for .grec recording files
     def recordings_dir
       global['recordings_dir'] || self.class.default_recordings_dir
@@ -566,6 +576,11 @@ module Gemba
     # @return [String] default directory for .grec recordings
     def self.default_recordings_dir
       File.join(config_dir, 'recordings')
+    end
+
+    # @return [String] default directory for session log files
+    def self.default_logs_dir
+      File.join(config_dir, 'logs')
     end
 
     private
