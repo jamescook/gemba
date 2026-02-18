@@ -250,6 +250,16 @@ class TestCLI < Minitest::Test
     assert_equal "recording.grec", opts[:grec]
   end
 
+  def test_parse_decode_list
+    opts = Gemba::CLI.parse_decode(["--list"])
+    assert opts[:list]
+  end
+
+  def test_parse_decode_list_short
+    opts = Gemba::CLI.parse_decode(["-l"])
+    assert opts[:list]
+  end
+
   # -- replay subcommand parsing --
 
   def test_parse_replay_gir
@@ -374,6 +384,11 @@ class TestCLI < Minitest::Test
     assert result[:help]
   end
 
+  def test_dry_run_decode_no_args_lists
+    result = Gemba::CLI.run(["decode"], dry_run: true)
+    assert_equal :decode_list, result[:command]
+  end
+
   def test_dry_run_decode
     result = Gemba::CLI.run(["decode", "recording.grec"], dry_run: true)
     assert_equal :decode, result[:command]
@@ -393,6 +408,11 @@ class TestCLI < Minitest::Test
     assert_equal :decode, result[:command]
     assert_equal "libx265", result[:video_codec]
     assert_equal "opus", result[:audio_codec]
+  end
+
+  def test_dry_run_decode_list
+    result = Gemba::CLI.run(["decode", "--list"], dry_run: true)
+    assert_equal :decode_list, result[:command]
   end
 
   def test_dry_run_decode_help

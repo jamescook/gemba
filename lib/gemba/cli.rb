@@ -261,6 +261,10 @@ module Gemba
           options[:scale] = v.clamp(1, 10)
         end
 
+        o.on("-l", "--list", "List available .grec recordings") do
+          options[:list] = true
+        end
+
         o.on("--stats", "Show recording stats (no ffmpeg needed)") do
           options[:stats] = true
         end
@@ -289,10 +293,14 @@ module Gemba
         return { command: :decode, help: true }
       end
 
+      if options[:list]
+        list_grec_recordings unless dry_run
+        return { command: :decode_list }
+      end
+
       unless options[:grec]
-        $stderr.puts "Error: decode requires a .grec file"
-        $stderr.puts "Run 'gemba decode --help' for usage"
-        exit 1
+        list_grec_recordings unless dry_run
+        return { command: :decode_list }
       end
 
       result = {
@@ -592,6 +600,44 @@ module Gemba
       end
     end
     private_class_method :list_recordings
+
+    def self.list_grec_recordings
+      require_relative "config"
+      require_relative "recorder"
+      require_relative "recorder_decoder"
+
+      dir = Config.default_recordings_dir
+      unless File.directory?(dir)
+        puts "No recordings directory found at #{dir}"
+        return
+      end
+
+      grec_files = Dir.glob(File.join(dir, '*.grec')).sort
+      if grec_files.empty?
+        puts "No .grec recordings in #{dir}"
+        return
+      end
+
+      entries = grec_files.map do |path|
+        info = RecorderDecoder.stats(path)
+        {
+          path: path,
+          frames: "#{info[:frame_count]} frames",
+          duration: "#{'%.1f' % info[:duration]}s",
+          size: format_size(File.size(path))
+        }
+      end
+
+      path_w = entries.map { |e| e[:path].length }.max
+      frames_w = entries.map { |e| e[:frames].length }.max
+      dur_w = entries.map { |e| e[:duration].length }.max
+      size_w = entries.map { |e| e[:size].length }.max
+
+      entries.each do |e|
+        puts "#{e[:path].ljust(path_w)}  #{e[:frames].rjust(frames_w)}  #{e[:duration].rjust(dur_w)}  #{e[:size].rjust(size_w)}"
+      end
+    end
+    private_class_method :list_grec_recordings
 
     def self.format_size(bytes)
       if bytes >= 1_073_741_824
