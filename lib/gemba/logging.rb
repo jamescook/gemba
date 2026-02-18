@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'logger'
+require_relative 'config'
 
 module Gemba
   # Session logger that writes to the user config logs/ directory.

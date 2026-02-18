@@ -1,7 +1,9 @@
 # frozen_string_literal: true
 
 require 'fileutils'
+require_relative 'event_bus'
 require_relative 'locale'
+require_relative 'modal_stack'
 
 module Gemba
   # Full-featured GBA player with SDL2 video/audio rendering,
@@ -44,12 +46,16 @@ module Gemba
       settings: 'menu.settings',
       picker: 'menu.save_states',
       rom_info: 'menu.rom_info',
+      replay_player: 'replay.replay_player',
     }.freeze
 
     def initialize(rom_path = nil, sound: true, fullscreen: false, frames: nil)
       @app = Teek::App.new
       @app.interp.thread_timer_ms = EVENT_LOOP_IDLE_MS
       @app.show
+
+      Gemba.bus = EventBus.new
+      setup_bus_subscriptions
 
       @sound = sound
       @config = Gemba.user_config
@@ -92,48 +98,25 @@ module Gemba
 
       build_menu
 
+      @modal_stack = ModalStack.new(
+        on_enter: method(:modal_entered),
+        on_exit:  method(:modal_exited),
+        on_focus_change: method(:modal_focus_changed),
+      )
+
+      dismiss = proc { @modal_stack.pop }
+
       @rom_info_window = RomInfoWindow.new(@app, callbacks: {
-        on_close: method(:on_child_window_close),
+        on_dismiss: dismiss, on_close: dismiss,
       })
       @state_picker = SaveStatePicker.new(@app, callbacks: {
-        on_save: method(:save_state),
-        on_load: method(:load_state),
-        on_close: method(:on_child_window_close),
+        on_dismiss: dismiss, on_close: dismiss,
       })
 
       @settings_window = SettingsWindow.new(@app, tip_dismiss_ms: @config.tip_dismiss_ms, callbacks: {
-        on_scale_change:        method(:apply_scale),
-        on_volume_change:       method(:apply_volume),
-        on_mute_change:         method(:apply_mute),
-        on_gamepad_map_change:  ->(btn, gp) { active_input.set(btn, gp) },
-        on_keyboard_map_change: ->(btn, key) { active_input.set(btn, key) },
-        on_deadzone_change:     ->(val) { active_input.set_dead_zone(val) },
-        on_gamepad_reset:       -> { active_input.reset! },
-        on_keyboard_reset:      -> { active_input.reset! },
-        on_undo_gamepad:        method(:undo_mappings),
         on_validate_hotkey:     method(:validate_hotkey),
         on_validate_kb_mapping: method(:validate_kb_mapping),
-        on_hotkey_change:       ->(action, key) { @hotkeys.set(action, key) },
-        on_hotkey_reset:        -> { @hotkeys.reset! },
-        on_undo_hotkeys:        method(:undo_hotkeys),
-        on_turbo_speed_change:  method(:apply_turbo_speed),
-        on_aspect_ratio_change: method(:apply_aspect_ratio),
-        on_show_fps_change:     method(:apply_show_fps),
-        on_filter_change:       method(:apply_pixel_filter),
-        on_integer_scale_change: method(:apply_integer_scale),
-        on_color_correction_change: method(:apply_color_correction),
-        on_frame_blending_change:   method(:apply_frame_blending),
-        on_rewind_toggle:          method(:apply_rewind_toggle),
-        on_per_game_toggle:        method(:toggle_per_game),
-        on_toast_duration_change: method(:apply_toast_duration),
-        on_quick_slot_change:   method(:apply_quick_slot),
-        on_backup_change:       method(:apply_backup),
-        on_compression_change:  method(:apply_recording_compression),
-        on_pause_on_focus_loss_change: method(:apply_pause_on_focus_loss),
-        on_open_config_dir:     method(:open_config_dir),
-        on_open_recordings_dir: method(:open_recordings_dir),
-        on_close:               method(:on_child_window_close),
-        on_save:                method(:save_config),
+        on_dismiss: dismiss, on_close: dismiss,
       })
 
       # Push loaded config into the settings UI
@@ -148,7 +131,7 @@ module Gemba
       @core = nil
       @rom_path = nil
       @initial_rom = rom_path
-      @modal_child = nil  # tracks which child window is open
+      # Modal child windows tracked by @modal_stack (created above)
       @sdl2_ready = false
       @animate_started = false
 
@@ -238,6 +221,58 @@ module Gemba
     end
 
     private
+
+    def setup_bus_subscriptions
+      bus = Gemba.bus
+
+      # Video settings
+      bus.on(:scale_changed)           { |val| apply_scale(val) }
+      bus.on(:turbo_speed_changed)     { |val| apply_turbo_speed(val) }
+      bus.on(:aspect_ratio_changed)    { |val| apply_aspect_ratio(val) }
+      bus.on(:show_fps_changed)        { |val| apply_show_fps(val) }
+      bus.on(:pause_on_focus_loss_changed) { |val| apply_pause_on_focus_loss(val) }
+      bus.on(:toast_duration_changed)  { |val| apply_toast_duration(val) }
+      bus.on(:filter_changed)          { |val| apply_pixel_filter(val) }
+      bus.on(:integer_scale_changed)   { |val| apply_integer_scale(val) }
+      bus.on(:color_correction_changed) { |val| apply_color_correction(val) }
+      bus.on(:frame_blending_changed)  { |val| apply_frame_blending(val) }
+      bus.on(:rewind_toggled)          { |val| apply_rewind_toggle(val) }
+
+      # Audio settings
+      bus.on(:volume_changed) { |vol| apply_volume(vol) }
+      bus.on(:mute_changed)   { |val| apply_mute(val) }
+
+      # Gamepad/keyboard mappings
+      bus.on(:gamepad_map_changed)  { |btn, gp| active_input.set(btn, gp) }
+      bus.on(:keyboard_map_changed) { |btn, key| active_input.set(btn, key) }
+      bus.on(:deadzone_changed)     { |val| active_input.set_dead_zone(val) }
+      bus.on(:gamepad_reset)        { active_input.reset! }
+      bus.on(:keyboard_reset)       { active_input.reset! }
+      bus.on(:undo_gamepad)         { undo_mappings }
+
+      # Hotkeys
+      bus.on(:hotkey_changed) { |action, key| @hotkeys.set(action, key) }
+      bus.on(:hotkey_reset)   { @hotkeys.reset! }
+      bus.on(:undo_hotkeys)   { undo_hotkeys }
+
+      # Recording settings
+      bus.on(:compression_changed)  { |val| apply_recording_compression(val) }
+      bus.on(:open_recordings_dir)  { open_recordings_dir }
+      bus.on(:open_replay_player)   { show_replay_player }
+
+      # Save state settings
+      bus.on(:quick_slot_changed) { |val| apply_quick_slot(val) }
+      bus.on(:backup_changed)     { |val| apply_backup(val) }
+      bus.on(:open_config_dir)    { open_config_dir }
+
+      # Settings window events
+      bus.on(:settings_save)    { save_config }
+      bus.on(:per_game_toggled) { |val| toggle_per_game(val) }
+
+      # Save state picker events
+      bus.on(:state_save_requested) { |slot| save_state(slot) }
+      bus.on(:state_load_requested) { |slot| load_state(slot) }
+    end
 
     # Deferred SDL2 initialization — runs inside the event loop so the
     # window is already painted and responsive. Without this, the heavy
@@ -339,13 +374,12 @@ module Gemba
 
     def show_rom_info
       return unless @core && !@core.destroyed?
-      return bell if @modal_child
-      @modal_child = :rom_info
-      enter_modal
+      return bell if @modal_stack.active?
       saves = @config.saves_dir
       sav_name = File.basename(@rom_path, File.extname(@rom_path)) + '.sav'
       sav_path = File.join(saves, sav_name)
-      @rom_info_window.show(@core, rom_path: @rom_path, save_path: sav_path)
+      @modal_stack.push(:rom_info, @rom_info_window,
+        show_args: { core: @core, rom_path: @rom_path, save_path: sav_path })
     end
 
     # -- Save states (delegated to SaveStateManager) -------------------------
@@ -403,31 +437,46 @@ module Gemba
     end
 
     def show_settings(tab: nil)
-      return bell if @modal_child
-      @modal_child = :settings
-      enter_modal
-      @settings_window.show(tab: tab)
+      return bell if @modal_stack.active?
+      @modal_stack.push(:settings, @settings_window, show_args: { tab: tab })
+    end
+
+    def show_replay_player
+      # Can push on top of settings — stack auto-withdraws it
+      @replay_player ||= ReplayPlayer.new(
+        app: @app,
+        sound: true,
+        callbacks: {
+          on_dismiss: proc { @modal_stack.pop },
+          on_request_speed: method(:set_event_loop_speed),
+        }
+      )
+      @modal_stack.push(:replay_player, @replay_player)
     end
 
     def show_state_picker
       return unless @save_mgr&.state_dir
-      return bell if @modal_child
-      @modal_child = :picker
-      enter_modal
-      @state_picker.show(state_dir: @save_mgr.state_dir, quick_slot: @quick_save_slot)
+      return bell if @modal_stack.active?
+      @modal_stack.push(:picker, @state_picker,
+        show_args: { state_dir: @save_mgr.state_dir, quick_slot: @quick_save_slot })
     end
 
-    def on_child_window_close
-      @toast&.destroy
-      toggle_pause if @core && !@was_paused_before_modal
-      @modal_child = nil
-    end
+    # ── ModalStack callbacks ───────────────────────────────────────
 
-    def enter_modal
+    def modal_entered(name)
       @was_paused_before_modal = @paused
       toggle_fast_forward if @fast_forward
       toggle_pause if @core && !@paused
-      locale_key = MODAL_LABELS[@modal_child] || @modal_child.to_s
+    end
+
+    def modal_exited
+      @toast&.destroy
+      toggle_pause if @core && !@was_paused_before_modal
+    end
+
+    def modal_focus_changed(name)
+      @toast&.destroy
+      locale_key = MODAL_LABELS[name] || name.to_s
       label = translate(locale_key)
       @toast&.show(translate('toast.waiting_for', label: label), permanent: true)
     end
@@ -783,7 +832,7 @@ module Gemba
 
     def setup_global_hotkeys
       @app.bind('.', 'KeyPress', :keysym, '%s') do |k, state_str|
-        next if @sdl2_ready || @modal_child
+        next if @sdl2_ready || @modal_stack.active?
 
         if k == 'Escape'
           self.running = false

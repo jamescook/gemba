@@ -122,6 +122,7 @@ settings:
   tip_recording_compression: ".grecファイルのzlib圧縮レベル。\n1 = 最速（デフォルト）、6以上は効果が小さくなります。"
   recordings_folder: "録画フォルダ:"
   open_recordings_folder: "録画フォルダを開く…"
+  open_replay_player: "録画プレーヤーを開く…"
   gp_a: "A"
   gp_b: "B"
   gp_l: "L"
@@ -156,6 +157,7 @@ rom_info:
 
 replay:
   open_replay: "リプレイを開く…"
+  replay_player: "録画プレーヤー"
   ended: "リプレイ完了（{frames}フレーム）"
 
 player:

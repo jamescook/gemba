@@ -11,7 +11,7 @@ class TestSettingsAudioTab < Minitest::Test
   def test_volume_defaults_to_100
     assert_tk_app("volume defaults to 100") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -23,9 +23,9 @@ class TestSettingsAudioTab < Minitest::Test
     assert_tk_app("dragging volume to 50 fires on_volume_change") do
       require "gemba/settings_window"
       received = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_volume_change: proc { |v| received = v }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:volume_changed) { |v| received = v }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -41,9 +41,9 @@ class TestSettingsAudioTab < Minitest::Test
     assert_tk_app("volume at zero") do
       require "gemba/settings_window"
       received = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_volume_change: proc { |v| received = v }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:volume_changed) { |v| received = v }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -59,7 +59,7 @@ class TestSettingsAudioTab < Minitest::Test
   def test_mute_defaults_to_off
     assert_tk_app("mute defaults to off") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -71,9 +71,9 @@ class TestSettingsAudioTab < Minitest::Test
     assert_tk_app("clicking mute fires on_mute_change") do
       require "gemba/settings_window"
       received = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_mute_change: proc { |m| received = m }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:mute_changed) { |m| received = m }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -89,9 +89,9 @@ class TestSettingsAudioTab < Minitest::Test
     assert_tk_app("clicking mute twice unmutes") do
       require "gemba/settings_window"
       received = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_mute_change: proc { |m| received = m }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:mute_changed) { |m| received = m }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 

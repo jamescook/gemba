@@ -6,6 +6,7 @@ module Gemba
   module Settings
     class RecordingTab
       include Locale::Translatable
+      include BusEmitter
 
       FRAME              = "#{Paths::NB}.recording"
       COMPRESSION_COMBO  = "#{FRAME}.comp_row.comp_combo"
@@ -13,9 +14,8 @@ module Gemba
 
       VAR_COMPRESSION = '::mgba_rec_compression'
 
-      def initialize(app, callbacks:, tips:, mark_dirty:)
+      def initialize(app, tips:, mark_dirty:)
         @app = app
-        @callbacks = callbacks
         @tips = tips
         @mark_dirty = mark_dirty
       end
@@ -50,7 +50,7 @@ module Gemba
           proc { |*|
             val = @app.get_variable(VAR_COMPRESSION).to_i
             if val >= 1 && val <= 9
-              @callbacks[:on_compression_change]&.call(val)
+              emit(:compression_changed, val)
               @mark_dirty.call
             end
           })
@@ -62,8 +62,18 @@ module Gemba
 
         @app.command('ttk::button', OPEN_DIR_BTN,
           text: translate('settings.open_recordings_folder'),
-          command: proc { @callbacks[:on_open_recordings_dir]&.call })
+          command: proc { emit(:open_recordings_dir) })
         @app.command(:pack, OPEN_DIR_BTN, side: :left)
+
+        # Open Recording Player button
+        replay_row = "#{FRAME}.replay_row"
+        @app.command('ttk::frame', replay_row)
+        @app.command(:pack, replay_row, fill: :x, padx: 10, pady: [5, 5])
+
+        @app.command('ttk::button', "#{replay_row}.open_btn",
+          text: translate('settings.open_replay_player'),
+          command: proc { emit(:open_replay_player) })
+        @app.command(:pack, "#{replay_row}.open_btn", side: :left)
       end
     end
   end

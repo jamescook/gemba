@@ -6,6 +6,7 @@ module Gemba
   module Settings
     class SaveStatesTab
       include Locale::Translatable
+      include BusEmitter
 
       FRAME        = "#{Paths::NB}.savestates"
       SLOT_COMBO   = "#{FRAME}.slot_row.slot_combo"
@@ -15,9 +16,8 @@ module Gemba
       VAR_QUICK_SLOT = '::mgba_quick_slot'
       VAR_BACKUP     = '::mgba_ss_backup'
 
-      def initialize(app, callbacks:, tips:, mark_dirty:)
+      def initialize(app, tips:, mark_dirty:)
         @app = app
-        @callbacks = callbacks
         @tips = tips
         @mark_dirty = mark_dirty
       end
@@ -47,7 +47,7 @@ module Gemba
           proc { |*|
             val = @app.get_variable(VAR_QUICK_SLOT).to_i
             if val >= 1 && val <= 10
-              @callbacks[:on_quick_slot_change]&.call(val)
+              emit(:quick_slot_changed, val)
               @mark_dirty.call
             end
           })
@@ -63,7 +63,7 @@ module Gemba
           variable: VAR_BACKUP,
           command: proc { |*|
             enabled = @app.get_variable(VAR_BACKUP) == '1'
-            @callbacks[:on_backup_change]&.call(enabled)
+            emit(:backup_changed, enabled)
             @mark_dirty.call
           })
         @app.command(:pack, BACKUP_CHECK, side: :left)
@@ -79,7 +79,7 @@ module Gemba
 
         @app.command('ttk::button', OPEN_DIR_BTN,
           text: translate('settings.open_config_folder'),
-          command: proc { @callbacks[:on_open_config_dir]&.call })
+          command: proc { emit(:open_config_dir) })
         @app.command(:pack, OPEN_DIR_BTN, side: :left)
       end
     end

@@ -9,7 +9,7 @@ class TestSettingsVideoTab < Minitest::Test
   def test_video_tab_exists
     assert_tk_app("video tab exists in notebook") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -23,7 +23,7 @@ class TestSettingsVideoTab < Minitest::Test
   def test_scale_defaults_to_3x
     assert_tk_app("scale combobox defaults to 3x") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -35,9 +35,9 @@ class TestSettingsVideoTab < Minitest::Test
     assert_tk_app("selecting 2x scale fires on_scale_change") do
       require "gemba/settings_window"
       received = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_scale_change: proc { |s| received = s }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:scale_changed) { |s| received = s }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -53,9 +53,9 @@ class TestSettingsVideoTab < Minitest::Test
     assert_tk_app("selecting 4x scale fires on_scale_change") do
       require "gemba/settings_window"
       received = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_scale_change: proc { |s| received = s }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:scale_changed) { |s| received = s }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -72,7 +72,7 @@ class TestSettingsVideoTab < Minitest::Test
   def test_turbo_defaults_to_2x
     assert_tk_app("turbo speed defaults to 2x") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -84,9 +84,9 @@ class TestSettingsVideoTab < Minitest::Test
     assert_tk_app("selecting 4x turbo fires on_turbo_speed_change") do
       require "gemba/settings_window"
       received = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_turbo_speed_change: proc { |s| received = s }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:turbo_speed_changed) { |s| received = s }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -103,7 +103,7 @@ class TestSettingsVideoTab < Minitest::Test
   def test_aspect_ratio_defaults_to_on
     assert_tk_app("aspect ratio checkbox defaults to on") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -115,9 +115,9 @@ class TestSettingsVideoTab < Minitest::Test
     assert_tk_app("unchecking aspect ratio fires on_aspect_ratio_change") do
       require "gemba/settings_window"
       received = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_aspect_ratio_change: proc { |keep| received = keep }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:aspect_ratio_changed) { |keep| received = keep }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -132,9 +132,9 @@ class TestSettingsVideoTab < Minitest::Test
     assert_tk_app("re-checking aspect ratio fires callback with true") do
       require "gemba/settings_window"
       received = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_aspect_ratio_change: proc { |keep| received = keep }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:aspect_ratio_changed) { |keep| received = keep }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -152,7 +152,7 @@ class TestSettingsVideoTab < Minitest::Test
   def test_show_fps_defaults_to_on
     assert_tk_app("show fps checkbox defaults to on") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -164,9 +164,9 @@ class TestSettingsVideoTab < Minitest::Test
     assert_tk_app("unchecking show fps fires on_show_fps_change") do
       require "gemba/settings_window"
       received = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_show_fps_change: proc { |show| received = show }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:show_fps_changed) { |show| received = show }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -182,7 +182,7 @@ class TestSettingsVideoTab < Minitest::Test
   def test_pause_focus_defaults_to_on
     assert_tk_app("pause on focus loss defaults to on") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -194,9 +194,9 @@ class TestSettingsVideoTab < Minitest::Test
     assert_tk_app("unchecking pause on focus loss fires callback") do
       require "gemba/settings_window"
       received = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_pause_on_focus_loss_change: proc { |v| received = v }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:pause_on_focus_loss_changed) { |v| received = v }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -214,7 +214,7 @@ class TestSettingsVideoTab < Minitest::Test
   def test_toast_duration_defaults_to_1_5s
     assert_tk_app("toast duration defaults to 1.5s") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -226,9 +226,9 @@ class TestSettingsVideoTab < Minitest::Test
     assert_tk_app("selecting 3s toast fires on_toast_duration_change") do
       require "gemba/settings_window"
       received = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_toast_duration_change: proc { |s| received = s }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:toast_duration_changed) { |s| received = s }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -245,7 +245,7 @@ class TestSettingsVideoTab < Minitest::Test
   def test_pixel_filter_defaults_to_nearest
     assert_tk_app("pixel filter defaults to Nearest Neighbor") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -257,9 +257,9 @@ class TestSettingsVideoTab < Minitest::Test
     assert_tk_app("selecting Bilinear fires on_filter_change") do
       require "gemba/settings_window"
       received = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_filter_change: proc { |f| received = f }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:filter_changed) { |f| received = f }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -276,7 +276,7 @@ class TestSettingsVideoTab < Minitest::Test
   def test_integer_scale_defaults_to_off
     assert_tk_app("integer scale checkbox defaults to off") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -288,9 +288,9 @@ class TestSettingsVideoTab < Minitest::Test
     assert_tk_app("clicking integer scale fires on_integer_scale_change") do
       require "gemba/settings_window"
       received = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_integer_scale_change: proc { |v| received = v }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:integer_scale_changed) { |v| received = v }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -306,7 +306,7 @@ class TestSettingsVideoTab < Minitest::Test
   def test_color_correction_defaults_to_off
     assert_tk_app("color correction checkbox defaults to off") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -318,9 +318,9 @@ class TestSettingsVideoTab < Minitest::Test
     assert_tk_app("clicking color correction fires on_color_correction_change") do
       require "gemba/settings_window"
       received = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_color_correction_change: proc { |v| received = v }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:color_correction_changed) { |v| received = v }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -335,9 +335,9 @@ class TestSettingsVideoTab < Minitest::Test
     assert_tk_app("unchecking color correction fires callback with false") do
       require "gemba/settings_window"
       received = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_color_correction_change: proc { |v| received = v }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:color_correction_changed) { |v| received = v }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -355,7 +355,7 @@ class TestSettingsVideoTab < Minitest::Test
   def test_frame_blending_defaults_to_off
     assert_tk_app("frame blending checkbox defaults to off") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -367,9 +367,9 @@ class TestSettingsVideoTab < Minitest::Test
     assert_tk_app("clicking frame blending fires on_frame_blending_change") do
       require "gemba/settings_window"
       received = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_frame_blending_change: proc { |v| received = v }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:frame_blending_changed) { |v| received = v }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -384,9 +384,9 @@ class TestSettingsVideoTab < Minitest::Test
     assert_tk_app("unchecking frame blending fires callback with false") do
       require "gemba/settings_window"
       received = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_frame_blending_change: proc { |v| received = v }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:frame_blending_changed) { |v| received = v }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -404,7 +404,7 @@ class TestSettingsVideoTab < Minitest::Test
   def test_rewind_defaults_to_on
     assert_tk_app("rewind checkbox defaults to on") do
       require "gemba/settings_window"
-      sw = Gemba::SettingsWindow.new(app, callbacks: {})
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -416,9 +416,9 @@ class TestSettingsVideoTab < Minitest::Test
     assert_tk_app("clicking rewind fires on_rewind_toggle") do
       require "gemba/settings_window"
       received = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_rewind_toggle: proc { |v| received = v }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:rewind_toggled) { |v| received = v }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 
@@ -433,9 +433,9 @@ class TestSettingsVideoTab < Minitest::Test
     assert_tk_app("re-checking rewind fires callback with true") do
       require "gemba/settings_window"
       received = nil
-      sw = Gemba::SettingsWindow.new(app, callbacks: {
-        on_rewind_toggle: proc { |v| received = v }
-      })
+      Gemba.bus = Gemba::EventBus.new
+      Gemba.bus.on(:rewind_toggled) { |v| received = v }
+      sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
 

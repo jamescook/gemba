@@ -6,6 +6,7 @@ module Gemba
   module Settings
     class GamepadTab
       include Locale::Translatable
+      include BusEmitter
 
       FRAME          = "#{Paths::NB}.gamepad"
       GAMEPAD_COMBO  = "#{FRAME}.gp_row.gp_combo"
@@ -151,9 +152,9 @@ module Gemba
         @listening_for = nil
 
         if @keyboard_mode
-          @callbacks[:on_keyboard_map_change]&.call(gba_btn, button)
+          emit(:keyboard_map_changed, gba_btn, button)
         else
-          @callbacks[:on_gamepad_map_change]&.call(gba_btn, button)
+          emit(:gamepad_map_changed, gba_btn, button)
         end
         @app.command(UNDO_BTN, 'configure', state: :normal)
         @mark_dirty.call
@@ -232,7 +233,7 @@ module Gemba
             pct = v.to_f.round
             @app.command(@dz_val_label, 'configure', text: "#{pct}%")
             threshold = (pct / 100.0 * 32767).round
-            @callbacks[:on_deadzone_change]&.call(threshold)
+            emit(:deadzone_changed, threshold)
             @mark_dirty.call
           })
         @app.command(:pack, DEADZONE_SCALE, side: :right, padx: [5, 5])
@@ -302,7 +303,7 @@ module Gemba
         end
 
         @app.command(UNDO_BTN, 'configure', state: :disabled)
-        @callbacks[:on_input_mode_change]&.call(@keyboard_mode, selected)
+        emit(:input_mode_changed, @keyboard_mode, selected)
       end
 
       def set_deadzone_enabled(enabled)
@@ -336,14 +337,14 @@ module Gemba
         @app.command(DEADZONE_SCALE, 'set', 25) unless @keyboard_mode
         @app.command(UNDO_BTN, 'configure', state: :disabled)
         if @keyboard_mode
-          @callbacks[:on_keyboard_reset]&.call
+          emit(:keyboard_reset)
         else
-          @callbacks[:on_gamepad_reset]&.call
+          emit(:gamepad_reset)
         end
       end
 
       def do_undo_gamepad
-        @callbacks[:on_undo_gamepad]&.call
+        emit(:undo_gamepad)
         @app.command(UNDO_BTN, 'configure', state: :disabled)
       end
     end

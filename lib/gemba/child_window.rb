@@ -27,7 +27,10 @@ module Gemba
         parent_menu = @app.command('.', :cget, '-menu') rescue nil
         @app.command(top, :configure, menu: parent_menu) if parent_menu && !parent_menu.empty?
       end
-      @app.command(:wm, 'protocol', top, 'WM_DELETE_WINDOW', proc { hide })
+      @on_dismiss = @callbacks[:on_dismiss] if defined?(@callbacks)
+      @app.command(:wm, 'protocol', top, 'WM_DELETE_WINDOW', proc {
+        @on_dismiss ? @on_dismiss.call : hide
+      })
       yield if block_given?
       @app.command(:wm, 'withdraw', top)
     end
@@ -57,6 +60,26 @@ module Gemba
       @app.command(:grab, :release, top) if modal
       @app.command(:wm, 'withdraw', top)
       @callbacks[:on_close]&.call if defined?(@callbacks)
+    end
+
+    # ── ModalStack protocol ──────────────────────────────────────────
+
+    # Show the window for ModalStack (deiconify, grab, position).
+    # Override in subclasses to accept additional keyword arguments.
+    def show_modal(**_args)
+      top = self.class::TOP
+      position_near_parent
+      @app.command(:wm, 'deiconify', top)
+      @app.command(:raise, top)
+      @app.command(:grab, :set, top)
+      @app.command(:focus, top)
+    end
+
+    # Withdraw the window for ModalStack (release grab, withdraw — NO callback).
+    def withdraw
+      top = self.class::TOP
+      @app.command(:grab, :release, top)
+      @app.command(:wm, 'withdraw', top)
     end
   end
 end

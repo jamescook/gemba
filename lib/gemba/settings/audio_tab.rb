@@ -6,6 +6,7 @@ module Gemba
   module Settings
     class AudioTab
       include Locale::Translatable
+      include BusEmitter
 
       FRAME        = "#{Paths::NB}.audio"
       VOLUME_SCALE = "#{FRAME}.vol_row.vol_scale"
@@ -14,9 +15,8 @@ module Gemba
       VAR_VOLUME = '::mgba_volume'
       VAR_MUTE   = '::mgba_mute'
 
-      def initialize(app, callbacks:, tips:, mark_dirty:)
+      def initialize(app, tips:, mark_dirty:)
         @app = app
-        @callbacks = callbacks
         @mark_dirty = mark_dirty
       end
 
@@ -46,7 +46,7 @@ module Gemba
           command: proc { |v, *|
             pct = v.to_f.round
             @app.command(@vol_val_label, 'configure', text: "#{pct}%")
-            @callbacks[:on_volume_change]&.call(pct / 100.0)
+            emit(:volume_changed, pct / 100.0)
             @mark_dirty.call
           })
         @app.command(:pack, VOLUME_SCALE, side: :right, padx: [5, 5])
@@ -62,7 +62,7 @@ module Gemba
           variable: VAR_MUTE,
           command: proc { |*|
             muted = @app.get_variable(VAR_MUTE) == '1'
-            @callbacks[:on_mute_change]&.call(muted)
+            emit(:mute_changed, muted)
             @mark_dirty.call
           })
         @app.command(:pack, MUTE_CHECK, side: :left)
