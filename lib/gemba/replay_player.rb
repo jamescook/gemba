@@ -57,7 +57,7 @@ module Gemba
       toggle_pause if @paused
     end
 
-    def initialize(gir_path, sound: true, fullscreen: false)
+    def initialize(gir_path = nil, sound: true, fullscreen: false, app: nil, callbacks: {})
       @gir_path = gir_path
       @sound = sound
       @fullscreen = fullscreen
@@ -83,16 +83,29 @@ module Gemba
       @integer_scale = @config.integer_scale?
       @hotkeys = HotkeyMap.new(@config)
 
-      @app = Teek::App.new
-      @app.interp.thread_timer_ms = EVENT_LOOP_IDLE_MS
-      @app.show
+      if app
+        # Child mode: use parent's app, build in a Toplevel
+        @app = app
+        @standalone = false
+        @callbacks = callbacks
+        @top = '.replay_player'
+        build_child_toplevel
+      else
+        # Standalone mode: own App (current behavior)
+        @app = Teek::App.new
+        @app.interp.thread_timer_ms = EVENT_LOOP_IDLE_MS
+        @app.show
+        @standalone = true
+        @callbacks = {}
+        @top = '.'
 
-      win_w = GBA_W * @scale
-      win_h = GBA_H * @scale
-      @app.set_window_title("[REPLAY]")
-      @app.set_window_geometry("#{win_w}x#{win_h}")
+        win_w = GBA_W * @scale
+        win_h = GBA_H * @scale
+        @app.set_window_title("[REPLAY]")
+        @app.set_window_geometry("#{win_w}x#{win_h}")
 
-      build_menu
+        build_menu
+      end
     end
 
     def run
@@ -102,7 +115,78 @@ module Gemba
       cleanup
     end
 
+    # Show the child window (child mode only).
+    def show
+      return if @standalone
+
+      @app.command(:wm, 'deiconify', @top)
+      @app.command(:raise, @top)
+      start_replay_or_idle
+    end
+
+    # Hide the child window (child mode only).
+    def hide
+      return if @standalone
+
+      cleanup_replay
+      @app.command(:wm, 'withdraw', @top)
+      @callbacks[:on_close]&.call
+    end
+
+    # ModalStack protocol
+    def show_modal(**)
+      return if @standalone
+
+      @app.command(:wm, 'deiconify', @top)
+      @app.command(:raise, @top)
+      start_replay_or_idle
+    end
+
+    def withdraw
+      return if @standalone
+
+      cleanup_replay
+      @app.command(:wm, 'withdraw', @top)
+    end
+
     private
+
+    def start_replay_or_idle
+      if @gir_path && !@animate_started
+        load_replay(@gir_path)
+      elsif !@gir_path && !@animate_started
+        init_sdl2 unless @sdl2_ready
+        animate
+        @animate_started = true
+      end
+    end
+
+    # ── Child window setup ──────────────────────────────────────────
+
+    def build_child_toplevel
+      @app.command(:toplevel, @top)
+      @app.command(:wm, 'title', @top, translate('replay.replay_player'))
+      win_w = GBA_W * @scale
+      win_h = GBA_H * @scale
+      @app.command(:wm, 'geometry', @top, "#{win_w}x#{win_h}")
+      @app.command(:wm, 'transient', @top, '.')
+      on_close = @callbacks[:on_dismiss] || proc { hide }
+      @app.command(:wm, 'protocol', @top, 'WM_DELETE_WINDOW', on_close)
+      build_menu
+      @app.command(:wm, 'withdraw', @top)
+    end
+
+    # Stop core and audio without destroying the viewport (child mode).
+    def cleanup_replay
+      @stream&.pause unless @stream&.destroyed?
+      @stream&.clear unless @stream&.destroyed?
+      @core&.destroy unless @core&.destroyed?
+      @core = nil
+      @replay_ended = false
+      @paused = false
+      @animate_started = false
+      @running = true
+    end
 
     # ── Load / switch replay ──────────────────────────────────────────
 
@@ -131,7 +215,11 @@ module Gemba
       @hud.set_ff_label(nil)
 
       Gemba.log(:info) { "Replay started: #{gir_path} (#{@total_frames} frames)" }
-      @app.set_window_title("[REPLAY] #{@core.title}")
+      if @standalone
+        @app.set_window_title("[REPLAY] #{@core.title}")
+      else
+        @app.command(:wm, 'title', @top, "[REPLAY] #{@core.title}")
+      end
       @stream.clear unless @stream.destroyed?
       @stream.resume unless @stream.destroyed?
 
@@ -159,12 +247,19 @@ module Gemba
     def init_sdl2
       return if @sdl2_ready
 
-      @app.command('tk', 'busy', '.')
+      @app.command('tk', 'busy', @top)
 
       win_w = GBA_W * @scale
       win_h = GBA_H * @scale
 
-      @viewport = Teek::SDL2::Viewport.new(@app, width: win_w, height: win_h, vsync: false)
+      @top_frame = child_path('replay_frame') unless @standalone
+      if @top_frame
+        @app.command('ttk::frame', @top_frame)
+        @app.command(:pack, @top_frame, fill: :both, expand: true, in: @top)
+      end
+
+      parent_opts = @top_frame ? { parent: @top_frame } : {}
+      @viewport = Teek::SDL2::Viewport.new(@app, width: win_w, height: win_h, vsync: false, **parent_opts)
       @viewport.pack(fill: :both, expand: true)
 
       @texture = @viewport.renderer.create_texture(GBA_W, GBA_H, :streaming)
@@ -200,17 +295,17 @@ module Gemba
 
       setup_input
 
-      @app.command(:wm, 'attributes', '.', '-fullscreen', 1) if @fullscreen
+      @app.command(:wm, 'attributes', @top, '-fullscreen', 1) if @fullscreen
       @sdl2_ready = true
 
-      @app.command('tk', 'busy', 'forget', '.')
+      @app.command('tk', 'busy', 'forget', @top)
       @app.tcl_eval("focus -force #{@viewport.frame.path}")
       @app.update
     rescue => e
       Gemba.log(:error) { "init_sdl2 failed: #{e.class}: #{e.message}\n#{e.backtrace.first(10).join("\n")}" }
       $stderr.puts "FATAL: init_sdl2 failed: #{e.class}: #{e.message}"
       $stderr.puts e.backtrace.first(10).map { |l| "  #{l}" }.join("\n")
-      @app.command('tk', 'busy', 'forget', '.') rescue nil
+      @app.command('tk', 'busy', 'forget', @top) rescue nil
       @running = false
     end
 
@@ -219,11 +314,17 @@ module Gemba
     def setup_input
       @viewport.bind('KeyPress', :keysym, '%s') do |k, state_str|
         if k == 'Escape'
-          @fullscreen ? toggle_fullscreen : (@running = false)
+          if @fullscreen
+            toggle_fullscreen
+          elsif @standalone
+            @running = false
+          else
+            hide
+          end
         else
           mods = HotkeyMap.modifiers_from_state(state_str.to_i)
           case @hotkeys.action_for(k, modifiers: mods)
-          when :quit         then @running = false
+          when :quit         then @standalone ? (@running = false) : hide
           when :pause        then toggle_pause
           when :fast_forward then toggle_fast_forward
           when :fullscreen   then toggle_fullscreen
@@ -238,10 +339,16 @@ module Gemba
 
     # ── Menu (minimal) ────────────────────────────────────────────────
 
+    # Build a Tk child widget path under @top.
+    # Tk root '.' uses '.child', Toplevels use '.top.child'.
+    def child_path(name)
+      @top == '.' ? ".#{name}" : "#{@top}.#{name}"
+    end
+
     def build_menu
-      menubar = '.menubar'
+      menubar = child_path('menubar')
       @app.command(:menu, menubar)
-      @app.command('.', :configure, menu: menubar)
+      @app.command(@top, :configure, menu: menubar)
 
       @app.command(:menu, "#{menubar}.file", tearoff: 0)
       @app.command(menubar, :add, :cascade, label: translate('menu.file'), menu: "#{menubar}.file")
@@ -256,13 +363,16 @@ module Gemba
                    accelerator: 'Cmd+Q',
                    command: proc { @running = false })
 
-      @app.command(:bind, '.', '<Command-o>', proc { open_replay_dialog })
+      @app.command(:bind, @top, '<Command-o>', proc { open_replay_dialog })
     end
 
     def open_replay_dialog
       filetypes = '{{GIR Recordings} {.gir}} {{All Files} {*}}'
       title = translate('replay.open_replay').delete("\u2026")
-      path = @app.tcl_eval("tk_getOpenFile -title {#{title}} -filetypes {#{filetypes}}")
+      initial_dir = @config.recordings_dir
+      cmd = "tk_getOpenFile -title {#{title}} -filetypes {#{filetypes}}"
+      cmd << " -initialdir {#{initial_dir}}" if initial_dir && File.directory?(initial_dir)
+      path = @app.tcl_eval(cmd)
       return if path.empty?
 
       switch_replay(path)
@@ -276,8 +386,12 @@ module Gemba
         delay = (@core && !@paused) ? 1 : 100
         @app.after(delay) { animate }
       else
-        cleanup
-        @app.command(:destroy, '.')
+        if @standalone
+          cleanup
+          @app.command(:destroy, '.')
+        else
+          hide
+        end
       end
     end
 
@@ -484,7 +598,7 @@ module Gemba
 
     def toggle_fullscreen
       @fullscreen = !@fullscreen
-      @app.command(:wm, 'attributes', '.', '-fullscreen', @fullscreen ? 1 : 0)
+      @app.command(:wm, 'attributes', @top, '-fullscreen', @fullscreen ? 1 : 0)
     end
 
     def toggle_show_fps
@@ -523,13 +637,17 @@ module Gemba
     # ── Helpers ───────────────────────────────────────────────────────
 
     def set_event_loop_speed(mode)
-      ms = mode == :fast ? EVENT_LOOP_FAST_MS : EVENT_LOOP_IDLE_MS
-      @app.interp.thread_timer_ms = ms
+      if @standalone
+        ms = mode == :fast ? EVENT_LOOP_FAST_MS : EVENT_LOOP_IDLE_MS
+        @app.interp.thread_timer_ms = ms
+      else
+        @callbacks[:on_request_speed]&.call(mode)
+      end
     end
 
     def show_error(title, message)
       @app.command('tk_messageBox',
-        parent: '.',
+        parent: @top,
         title: title,
         message: message,
         type: :ok,

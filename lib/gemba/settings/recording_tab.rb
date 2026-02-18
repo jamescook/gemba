@@ -64,6 +64,16 @@ module Gemba
           text: translate('settings.open_recordings_folder'),
           command: proc { @callbacks[:on_open_recordings_dir]&.call })
         @app.command(:pack, OPEN_DIR_BTN, side: :left)
+
+        # Open Recording Player button
+        replay_row = "#{FRAME}.replay_row"
+        @app.command('ttk::frame', replay_row)
+        @app.command(:pack, replay_row, fill: :x, padx: 10, pady: [5, 5])
+
+        @app.command('ttk::button', "#{replay_row}.open_btn",
+          text: translate('settings.open_replay_player'),
+          command: proc { @callbacks[:on_open_replay_player]&.call })
+        @app.command(:pack, "#{replay_row}.open_btn", side: :left)
       end
     end
   end

@@ -144,6 +144,12 @@ module Gemba
       show_window
     end
 
+    # ModalStack protocol
+    def show_modal(tab: nil, **_)
+      @app.command(NB, 'select', tab) if tab
+      super()
+    end
+
     # Tab widget paths keyed by locale key (caller uses translate to get display name)
     TABS = {
       'settings.video'       => "#{NB}.video",

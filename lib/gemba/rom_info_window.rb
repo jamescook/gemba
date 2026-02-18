@@ -259,6 +259,21 @@ module Gemba
       hide_window(modal: false)
     end
 
+    # ModalStack protocol (non-modal — no grab)
+    def show_modal(core: nil, rom_path: nil, save_path: nil, **_)
+      build_ui unless @built
+      populate(core, rom_path, save_path) if core
+      position_near_parent
+      top = self.class::TOP
+      @app.command(:wm, 'deiconify', top)
+      @app.command(:raise, top)
+    end
+
+    def withdraw
+      top = self.class::TOP
+      @app.command(:wm, 'withdraw', top)
+    end
+
     private
 
     def build_ui

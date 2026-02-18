@@ -122,6 +122,7 @@ settings:
   tip_recording_compression: "Zlib level for .grec files.\n1 = fastest (default), 6+ has diminishing returns."
   recordings_folder: "Recordings folder:"
   open_recordings_folder: "Open Recordings Folder…"
+  open_replay_player: "Open Recording Player…"
   gp_a: "A"
   gp_b: "B"
   gp_l: "L"
@@ -156,6 +157,7 @@ rom_info:
 
 replay:
   open_replay: "Open Replay…"
+  replay_player: "Recording Player"
   ended: "Replay complete ({frames} frames)"
 
 player:

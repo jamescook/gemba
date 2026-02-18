@@ -2,6 +2,7 @@
 
 require 'fileutils'
 require_relative 'locale'
+require_relative 'modal_stack'
 
 module Gemba
   # Full-featured GBA player with SDL2 video/audio rendering,
@@ -44,6 +45,7 @@ module Gemba
       settings: 'menu.settings',
       picker: 'menu.save_states',
       rom_info: 'menu.rom_info',
+      replay_player: 'replay.replay_player',
     }.freeze
 
     def initialize(rom_path = nil, sound: true, fullscreen: false, frames: nil)
@@ -92,13 +94,21 @@ module Gemba
 
       build_menu
 
+      @modal_stack = ModalStack.new(
+        on_enter: method(:modal_entered),
+        on_exit:  method(:modal_exited),
+        on_focus_change: method(:modal_focus_changed),
+      )
+
+      dismiss = proc { @modal_stack.pop }
+
       @rom_info_window = RomInfoWindow.new(@app, callbacks: {
-        on_close: method(:on_child_window_close),
+        on_dismiss: dismiss, on_close: dismiss,
       })
       @state_picker = SaveStatePicker.new(@app, callbacks: {
         on_save: method(:save_state),
         on_load: method(:load_state),
-        on_close: method(:on_child_window_close),
+        on_dismiss: dismiss, on_close: dismiss,
       })
 
       @settings_window = SettingsWindow.new(@app, tip_dismiss_ms: @config.tip_dismiss_ms, callbacks: {
@@ -132,7 +142,8 @@ module Gemba
         on_pause_on_focus_loss_change: method(:apply_pause_on_focus_loss),
         on_open_config_dir:     method(:open_config_dir),
         on_open_recordings_dir: method(:open_recordings_dir),
-        on_close:               method(:on_child_window_close),
+        on_open_replay_player:  method(:show_replay_player),
+        on_dismiss: dismiss, on_close: dismiss,
         on_save:                method(:save_config),
       })
 
@@ -148,7 +159,7 @@ module Gemba
       @core = nil
       @rom_path = nil
       @initial_rom = rom_path
-      @modal_child = nil  # tracks which child window is open
+      # Modal child windows tracked by @modal_stack (created above)
       @sdl2_ready = false
       @animate_started = false
 
@@ -339,13 +350,12 @@ module Gemba
 
     def show_rom_info
       return unless @core && !@core.destroyed?
-      return bell if @modal_child
-      @modal_child = :rom_info
-      enter_modal
+      return bell if @modal_stack.active?
       saves = @config.saves_dir
       sav_name = File.basename(@rom_path, File.extname(@rom_path)) + '.sav'
       sav_path = File.join(saves, sav_name)
-      @rom_info_window.show(@core, rom_path: @rom_path, save_path: sav_path)
+      @modal_stack.push(:rom_info, @rom_info_window,
+        show_args: { core: @core, rom_path: @rom_path, save_path: sav_path })
     end
 
     # -- Save states (delegated to SaveStateManager) -------------------------
@@ -403,31 +413,46 @@ module Gemba
     end
 
     def show_settings(tab: nil)
-      return bell if @modal_child
-      @modal_child = :settings
-      enter_modal
-      @settings_window.show(tab: tab)
+      return bell if @modal_stack.active?
+      @modal_stack.push(:settings, @settings_window, show_args: { tab: tab })
+    end
+
+    def show_replay_player
+      # Can push on top of settings — stack auto-withdraws it
+      @replay_player ||= ReplayPlayer.new(
+        app: @app,
+        sound: true,
+        callbacks: {
+          on_dismiss: proc { @modal_stack.pop },
+          on_request_speed: method(:set_event_loop_speed),
+        }
+      )
+      @modal_stack.push(:replay_player, @replay_player)
     end
 
     def show_state_picker
       return unless @save_mgr&.state_dir
-      return bell if @modal_child
-      @modal_child = :picker
-      enter_modal
-      @state_picker.show(state_dir: @save_mgr.state_dir, quick_slot: @quick_save_slot)
+      return bell if @modal_stack.active?
+      @modal_stack.push(:picker, @state_picker,
+        show_args: { state_dir: @save_mgr.state_dir, quick_slot: @quick_save_slot })
     end
 
-    def on_child_window_close
-      @toast&.destroy
-      toggle_pause if @core && !@was_paused_before_modal
-      @modal_child = nil
-    end
+    # ── ModalStack callbacks ───────────────────────────────────────
 
-    def enter_modal
+    def modal_entered(name)
       @was_paused_before_modal = @paused
       toggle_fast_forward if @fast_forward
       toggle_pause if @core && !@paused
-      locale_key = MODAL_LABELS[@modal_child] || @modal_child.to_s
+    end
+
+    def modal_exited
+      @toast&.destroy
+      toggle_pause if @core && !@was_paused_before_modal
+    end
+
+    def modal_focus_changed(name)
+      @toast&.destroy
+      locale_key = MODAL_LABELS[name] || name.to_s
       label = translate(locale_key)
       @toast&.show(translate('toast.waiting_for', label: label), permanent: true)
     end
@@ -783,7 +808,7 @@ module Gemba
 
     def setup_global_hotkeys
       @app.bind('.', 'KeyPress', :keysym, '%s') do |k, state_str|
-        next if @sdl2_ready || @modal_child
+        next if @sdl2_ready || @modal_stack.active?
 
         if k == 'Escape'
           self.running = false

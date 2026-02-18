@@ -53,6 +53,20 @@ module Gemba
       cleanup_photos
     end
 
+    # ModalStack protocol
+    def show_modal(state_dir: nil, quick_slot: 1, **_)
+      @state_dir = state_dir
+      @quick_slot = quick_slot
+      build_ui unless @built
+      refresh
+      super()
+    end
+
+    def withdraw
+      super
+      cleanup_photos
+    end
+
     private
 
     def build_ui
