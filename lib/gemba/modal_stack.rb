@@ -3,8 +3,7 @@
 module Gemba
   # Push/pop stack for modal child windows.
   #
-  # Replaces ad-hoc @modal_child flag juggling with a proper stack so that
-  # one modal can push another (e.g. Settings → Replay Player) and the
+  # One modal can push another (e.g. Settings → Replay Player) and the
   # previous modal is automatically re-shown on pop.
   #
   # Windows must implement the ModalWindow protocol:

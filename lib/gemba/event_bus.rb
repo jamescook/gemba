@@ -5,8 +5,6 @@ require_relative "logging"
 module Gemba
   # Publish/subscribe event bus for decoupled communication.
   #
-  # Replaces callback-hash threading where intermediary classes (e.g.
-  # SettingsWindow) pass callbacks through without inspecting them.
   # Emitters fire named events, subscribers listen — no intermediaries.
   #
   # Lives at Gemba.bus (module-level). Player creates it at startup;
