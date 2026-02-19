@@ -124,9 +124,10 @@ module Gemba
       },
     }.freeze
 
-    def initialize(path: nil)
+    def initialize(path: nil, subscribe: true)
       @path = path || self.class.default_path
       @data = load_file
+      subscribe_to_bus if subscribe
     end
 
     # @return [String] path to the config file
@@ -584,6 +585,14 @@ module Gemba
     end
 
     private
+
+    def subscribe_to_bus
+      Gemba.bus.on(:rom_loaded) do |rom_id:, path:, **|
+        activate_game(rom_id)
+        add_recent_rom(path)
+        save!
+      end
+    end
 
     def global
       @proxy || global_base

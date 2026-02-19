@@ -125,6 +125,7 @@ module Gemba
       @per_game_enabled = false
 
       build_toplevel(translate('menu.settings'), geometry: '700x600') { setup_ui }
+      subscribe_to_bus
     end
 
     # Delegates to GamepadTab
@@ -173,6 +174,14 @@ module Gemba
     # Enable the Save button (called when any setting changes)
     def mark_dirty
       @app.command(SAVE_BTN, 'configure', state: :normal)
+    end
+
+    # Subscribe to bus events this object cares about.
+    def subscribe_to_bus
+      Gemba.bus.on(:rom_loaded) do |**|
+        set_per_game_available(true)
+        set_per_game_active(Gemba.user_config.per_game_settings?)
+      end
     end
 
     # Enable/disable the per-game checkbox (called when ROM loads/unloads).

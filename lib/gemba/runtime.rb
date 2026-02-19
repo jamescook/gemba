@@ -7,6 +7,7 @@
 require "teek/platform"
 require "gemba_ext"
 require_relative "version"
+require_relative "event_bus"
 require_relative "config"
 require_relative "locale"
 require_relative "core"

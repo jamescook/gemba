@@ -127,7 +127,6 @@ module TeekTestHelper
     # Read bgerror log before cleanup
     bgerrors = File.read(bgerror_path).strip rescue ""
     File.delete(bgerror_path) rescue nil
-    code_path = code_file.path
 
     unless status
       # Timed out - capture any output before killing so errors are visible

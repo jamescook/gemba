@@ -18,6 +18,7 @@ module Gemba
   class AppController
     include Gemba
     include Locale::Translatable
+    include BusEmitter
 
     DEFAULT_SCALE = 3
     EVENT_LOOP_FAST_MS = 1
@@ -168,6 +169,29 @@ module Gemba
         frame&.receive(:toggle_show_fps)
         show = frame&.show_fps? || false
         @app.set_variable(SettingsWindow::VAR_SHOW_FPS, show ? '1' : '0')
+      end
+
+      # ── ROM loaded reactions ──────────────────────────────────────────
+      # Config, RomLibrary, and SettingsWindow each subscribe themselves
+      # via subscribe_to_bus. AppController only handles what it owns.
+
+      bus.on(:rom_loaded) do |**|
+        refresh_from_config
+      end
+
+      bus.on(:rom_loaded) do |title:, path:, saves_dir:, **|
+        @window.set_title("gemba \u2014 #{title}")
+        @app.command(@view_menu, :entryconfigure, 1, state: :normal)
+        [3, 4, 6, 8, 9].each { |i| @app.command(@emu_menu, :entryconfigure, i, state: :normal) }
+        rebuild_recent_menu
+
+        sav_name = File.basename(path, File.extname(path)) + '.sav'
+        sav_path = File.join(saves_dir, sav_name)
+        if File.exist?(sav_path)
+          @emulator_frame.receive(:show_toast, message: translate('toast.loaded_sav', name: sav_name))
+        else
+          @emulator_frame.receive(:show_toast, message: translate('toast.created_sav', name: sav_name))
+        end
       end
     end
 
@@ -424,38 +448,15 @@ module Gemba
       Gemba.log(:info) { "ROM loaded: #{loaded_core.title} (#{loaded_core.game_code}) [#{@platform.short_name}]" }
 
       rom_id = Config.rom_id(loaded_core.game_code, loaded_core.checksum)
-      @config.activate_game(rom_id)
-      refresh_from_config
 
-      # Update ROM library
-      @rom_library.add(
-        'rom_id'    => rom_id,
-        'path'      => path,
-        'title'     => loaded_core.title,
-        'game_code' => loaded_core.game_code,
-        'platform'  => @platform.short_name.downcase,
+      emit(:rom_loaded,
+        rom_id: rom_id,
+        path: path,
+        title: loaded_core.title,
+        game_code: loaded_core.game_code,
+        platform: @platform.short_name,
+        saves_dir: saves,
       )
-      @rom_library.touch(rom_id)
-      @rom_library.save!
-
-      @settings_window.set_per_game_available(true)
-      @settings_window.set_per_game_active(@config.per_game_settings?)
-
-      @window.set_title("gemba \u2014 #{loaded_core.title}")
-      @app.command(@view_menu, :entryconfigure, 1, state: :normal)
-      [3, 4, 6, 8, 9].each { |i| @app.command(@emu_menu, :entryconfigure, i, state: :normal) }
-
-      @config.add_recent_rom(path)
-      @config.save!
-      rebuild_recent_menu
-
-      sav_name = File.basename(path, File.extname(path)) + '.sav'
-      sav_path = File.join(saves, sav_name)
-      if File.exist?(sav_path)
-        @emulator_frame.receive(:show_toast, message: translate('toast.loaded_sav', name: sav_name))
-      else
-        @emulator_frame.receive(:show_toast, message: translate('toast.created_sav', name: sav_name))
-      end
 
       @emulator_frame.start_animate
     end

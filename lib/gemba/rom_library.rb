@@ -13,10 +13,11 @@ module Gemba
   class RomLibrary
     FILENAME = 'rom_library.json'
 
-    def initialize(path = self.class.default_path)
+    def initialize(path = self.class.default_path, subscribe: true)
       @path = path
       @roms = []
       load!
+      subscribe_to_bus if subscribe
     end
 
     def self.default_path
@@ -74,6 +75,20 @@ module Gemba
     end
 
     private
+
+    def subscribe_to_bus
+      Gemba.bus.on(:rom_loaded) do |rom_id:, path:, title:, game_code:, platform:, **|
+        add(
+          'rom_id'    => rom_id,
+          'path'      => path,
+          'title'     => title,
+          'game_code' => game_code,
+          'platform'  => platform.downcase,
+        )
+        touch(rom_id)
+        save!
+      end
+    end
 
     def load!
       return unless File.exist?(@path)
