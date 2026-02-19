@@ -219,7 +219,7 @@ module Gemba
       @app.command("#{menubar}.file", :add, :separator)
       @app.command("#{menubar}.file", :add, :command,
                    label: translate('menu.quit'), accelerator: 'Cmd+Q',
-                   command: proc { @running = false })
+                   command: proc { self.running = false })
 
       @app.command(:bind, '.', '<Command-o>', proc { handle_open_rom })
       @app.command(:bind, '.', '<Command-comma>', proc { show_settings })

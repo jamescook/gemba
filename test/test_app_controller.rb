@@ -60,6 +60,32 @@ class TestMGBAPlayer < Minitest::Test
     assert_includes stdout, "PASS"
   end
 
+  # File > Quit menu item exits cleanly (invokes the actual menu command).
+  def test_file_menu_quit_without_rom
+    code = <<~RUBY
+      require "gemba"
+
+      player = Gemba::AppController.new
+      app = player.app
+
+      app.after(100) do
+        app.command('.menubar.file', 'invoke', 'last')
+      end
+
+      player.run
+      puts "PASS"
+    RUBY
+
+    success, stdout, stderr, _status = tk_subprocess(code)
+
+    output = []
+    output << "STDOUT:\n#{stdout}" unless stdout.empty?
+    output << "STDERR:\n#{stderr}" unless stderr.empty?
+
+    assert success, "File > Quit should exit cleanly\n#{output.join("\n")}"
+    assert_includes stdout, "PASS"
+  end
+
   # Escape key quits without a ROM loaded.
   def test_escape_quits_without_rom
     code = <<~RUBY
