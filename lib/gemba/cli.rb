@@ -129,7 +129,7 @@ module Gemba
       apply(Gemba.user_config, options)
       Gemba.load_locale if options[:locale]
 
-      Gemba::MainWindow.new(result[:rom], sound: result[:sound], fullscreen: result[:fullscreen]).run
+      Gemba::AppController.new(result[:rom], sound: result[:sound], fullscreen: result[:fullscreen]).run
     end
 
     # --- record subcommand ---

@@ -8,12 +8,12 @@ require_relative 'platform'
 module Gemba
   # SDL2 emulation frame — owns the mGBA core, viewport, audio stream,
   # frame loop, and all rendering. Designed to be packed/unpacked inside
-  # a host window (MainWindow) so it can coexist with other "frames" like
+  # a host window (AppController) so it can coexist with other "frames" like
   # a game picker or replay viewer.
   #
   # Communication:
-  #   MainWindow → EmulatorFrame: @frame.receive(:event_name, **args)
-  #   EmulatorFrame → MainWindow: EventBus events (pause_changed, request_quit, etc.)
+  #   AppController → EmulatorFrame: @frame.receive(:event_name, **args)
+  #   EmulatorFrame → AppController: EventBus events (pause_changed, request_quit, etc.)
   #   Settings → EmulatorFrame: bus events subscribed directly
   class EmulatorFrame
     include Locale::Translatable
@@ -140,14 +140,25 @@ module Gemba
     # @return [Boolean]
     def show_fps? = @show_fps
 
-    # Allow MainWindow to control the animate loop
+    # Allow AppController to control the animate loop
     attr_writer :running
 
-    # Allow MainWindow to update scale (for screenshots)
+    # Allow AppController to update scale (for screenshots)
     attr_writer :scale
 
-    # Single entry point for MainWindow → EmulatorFrame communication.
-    # MainWindow calls @frame.receive(:event_name, **args) instead of
+    # FrameStack protocol
+    def show
+      return unless @sdl2_ready && @viewport
+      @app.command(:pack, @viewport.frame.path, fill: :both, expand: 1)
+    end
+
+    def hide
+      return unless @sdl2_ready && @viewport
+      @app.command(:pack, :forget, @viewport.frame.path) rescue nil
+    end
+
+    # Single entry point for AppController → EmulatorFrame communication.
+    # AppController calls @frame.receive(:event_name, **args) instead of
     # knowing about individual methods.
     def receive(event, **args)
       case event
@@ -307,7 +318,7 @@ module Gemba
       animate
     end
 
-    # -- Toast helpers (called by MainWindow via receive) ----------------------
+    # -- Toast helpers (called by AppController via receive) ----------------------
 
     def show_toast(msg, permanent: false)
       @toast&.show(msg, permanent: permanent)
@@ -619,7 +630,7 @@ module Gemba
     end
 
     # Write all config-derived state back to the config object.
-    # Called by MainWindow before config.save!
+    # Called by AppController before config.save!
     def write_config
       @config.volume = (@volume * 100).round
       @config.muted = @muted

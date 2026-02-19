@@ -124,7 +124,7 @@ module Gemba
       @tip_dismiss_ms = tip_dismiss_ms
       @per_game_enabled = false
 
-      build_toplevel(translate('menu.settings'), geometry: '700x560') { setup_ui }
+      build_toplevel(translate('menu.settings'), geometry: '700x600') { setup_ui }
     end
 
     # Delegates to GamepadTab

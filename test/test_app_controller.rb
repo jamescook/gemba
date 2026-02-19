@@ -16,7 +16,7 @@ class TestMGBAPlayer < Minitest::Test
       require "gemba"
       require "support/player_helpers"
 
-      player = Gemba::MainWindow.new("#{TEST_ROM}")
+      player = Gemba::AppController.new("#{TEST_ROM}")
       app = player.app
 
       poll_until_ready(player) { player.running = false }
@@ -38,7 +38,7 @@ class TestMGBAPlayer < Minitest::Test
     code = <<~RUBY
       require "gemba"
 
-      player = Gemba::MainWindow.new
+      player = Gemba::AppController.new
       app = player.app
 
       app.after(100) do
@@ -65,7 +65,7 @@ class TestMGBAPlayer < Minitest::Test
     code = <<~RUBY
       require "gemba"
 
-      player = Gemba::MainWindow.new
+      player = Gemba::AppController.new
       app = player.app
 
       app.after(100) do
@@ -95,7 +95,7 @@ class TestMGBAPlayer < Minitest::Test
       require "gemba"
       require "support/player_helpers"
 
-      player = Gemba::MainWindow.new("#{TEST_ROM}")
+      player = Gemba::AppController.new("#{TEST_ROM}")
       app = player.app
 
       poll_until_ready(player) do
@@ -139,7 +139,7 @@ class TestMGBAPlayer < Minitest::Test
       require "gemba"
       require "support/player_helpers"
 
-      player = Gemba::MainWindow.new("#{TEST_ROM}")
+      player = Gemba::AppController.new("#{TEST_ROM}")
       app = player.app
 
       poll_until_ready(player) do
@@ -181,7 +181,7 @@ class TestMGBAPlayer < Minitest::Test
       # Use a temp dir for all config/states so we don't pollute the real one
       states_dir = Dir.mktmpdir("gemba-states-test")
 
-      player = Gemba::MainWindow.new("#{TEST_ROM}")
+      player = Gemba::AppController.new("#{TEST_ROM}")
       app = player.app
       config = player.config
 
@@ -301,7 +301,7 @@ class TestMGBAPlayer < Minitest::Test
 
       states_dir = Dir.mktmpdir("gemba-debounce-test")
 
-      player = Gemba::MainWindow.new("#{TEST_ROM}")
+      player = Gemba::AppController.new("#{TEST_ROM}")
       app = player.app
       config = player.config
 
@@ -373,7 +373,7 @@ class TestMGBAPlayer < Minitest::Test
       config_dir = Dir.mktmpdir("gemba-settings-test")
       config_path = File.join(config_dir, "settings.json")
 
-      player = Gemba::MainWindow.new("#{TEST_ROM}")
+      player = Gemba::AppController.new("#{TEST_ROM}")
       app = player.app
       config = player.config
 
@@ -491,7 +491,7 @@ class TestMGBAPlayer < Minitest::Test
       sw_top = Gemba::SettingsWindow::TOP
       sp_top = Gemba::SaveStatePicker::TOP
 
-      player = Gemba::MainWindow.new("#{TEST_ROM}")
+      player = Gemba::AppController.new("#{TEST_ROM}")
       app = player.app
 
       poll_until_ready(player) do
@@ -589,7 +589,7 @@ class TestMGBAPlayer < Minitest::Test
       require "gemba"
       require "support/player_helpers"
 
-      player = Gemba::MainWindow.new
+      player = Gemba::AppController.new
       app = player.app
 
       # Stub tk_messageBox so it never blocks
@@ -629,7 +629,7 @@ class TestMGBAPlayer < Minitest::Test
       require "gemba"
       require "support/player_helpers"
 
-      player = Gemba::MainWindow.new
+      player = Gemba::AppController.new
       app = player.app
 
       # Capture tk_messageBox calls instead of blocking
@@ -670,7 +670,7 @@ class TestMGBAPlayer < Minitest::Test
       require "gemba"
       require "support/player_helpers"
 
-      player = Gemba::MainWindow.new
+      player = Gemba::AppController.new
       app = player.app
 
       # Capture tk_messageBox calls instead of blocking
@@ -718,7 +718,7 @@ class TestMGBAPlayer < Minitest::Test
       rec_dir = Dir.mktmpdir("gemba-rec-test")
 
       begin
-        player = Gemba::MainWindow.new("#{TEST_ROM}")
+        player = Gemba::AppController.new("#{TEST_ROM}")
         app = player.app
         config = player.config
         config.recordings_dir = rec_dir
@@ -776,12 +776,58 @@ class TestMGBAPlayer < Minitest::Test
     assert_includes stdout, "PASS", "Expected .grec file to be created\n#{output.join("\n")}"
   end
 
+  # -- Frame stack show/hide ---------------------------------------------------
+
+  # Loads a ROM, verifies the emulator viewport is visible (packed),
+  # then hides it and confirms it's gone. Catches missing show/hide on frames.
+  def test_emulator_frame_show_hide_round_trip
+    code = <<~RUBY
+      require "gemba"
+      require "support/player_helpers"
+
+      player = Gemba::AppController.new("#{TEST_ROM}")
+      app = player.app
+
+      poll_until_ready(player) do
+        vp_path = player.frame.viewport.frame.path
+
+        # Viewport should be visible after ROM load
+        info = app.tcl_eval("pack info \#{vp_path}") rescue ""
+        abort "FAIL: viewport not packed after load" if info.empty?
+
+        # Hide the frame, viewport should disappear
+        player.frame.hide
+        info_after = app.tcl_eval("pack info \#{vp_path}") rescue ""
+        abort "FAIL: viewport still packed after hide" unless info_after.empty?
+
+        # Show it again
+        player.frame.show
+        info_restored = app.tcl_eval("pack info \#{vp_path}") rescue ""
+        abort "FAIL: viewport not packed after show" if info_restored.empty?
+
+        puts "PASS"
+        player.running = false
+      end
+
+      player.run
+    RUBY
+
+    success, stdout, stderr, _status = tk_subprocess(code)
+
+    output = []
+    output << "STDOUT:\n#{stdout}" unless stdout.empty?
+    output << "STDERR:\n#{stderr}" unless stderr.empty?
+
+    assert success, "Frame show/hide round-trip failed\n#{output.join("\n")}"
+    assert_includes stdout, "PASS"
+  end
+
   # -- Pause CPU optimization (thread_timer_ms) --------------------------------
 
   def test_event_loop_constants
     require "gemba/emulator_frame"
-    assert_equal 1,  Gemba::MainWindow::EVENT_LOOP_FAST_MS, "fast loop should be 1ms"
-    assert_equal 50, Gemba::MainWindow::EVENT_LOOP_IDLE_MS, "idle loop should be 50ms"
+    assert_equal 1,  Gemba::AppController::EVENT_LOOP_FAST_MS, "fast loop should be 1ms"
+    assert_equal 50, Gemba::AppController::EVENT_LOOP_IDLE_MS, "idle loop should be 50ms"
   end
 
   # E2E: verify thread_timer_ms switches between idle (50ms) and fast (1ms)
@@ -793,7 +839,7 @@ class TestMGBAPlayer < Minitest::Test
       require "gemba"
       require "support/player_helpers"
 
-      player = Gemba::MainWindow.new("#{TEST_ROM}")
+      player = Gemba::AppController.new("#{TEST_ROM}")
       app = player.app
 
       poll_until_ready(player) do
@@ -866,7 +912,7 @@ class TestMGBAPlayer < Minitest::Test
       require "gemba"
       require "support/player_helpers"
 
-      player = Gemba::MainWindow.new("#{TEST_ROM}")
+      player = Gemba::AppController.new("#{TEST_ROM}")
       app = player.app
 
       poll_until_ready(player) do
@@ -941,7 +987,7 @@ class TestMGBAPlayer < Minitest::Test
       require "gemba"
       require "support/player_helpers"
 
-      player = Gemba::MainWindow.new("#{TEST_ROM}")
+      player = Gemba::AppController.new("#{TEST_ROM}")
       app = player.app
 
       poll_until_ready(player) do
