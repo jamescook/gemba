@@ -3,10 +3,7 @@
 require "minitest/autorun"
 require "tmpdir"
 require "json"
-require_relative "../lib/gemba/config"
-require_relative "../lib/gemba/locale"
-require_relative "../lib/gemba/save_state_manager"
-require_relative "../lib/gemba/platform"
+require "gemba/headless"
 
 class TestSaveStateManager < Minitest::Test
   # Recording mock for the mGBA Core.

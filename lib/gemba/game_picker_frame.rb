@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-require_relative 'event_bus'
-require_relative 'locale'
-require_relative 'rom_info'
 
 module Gemba
   # Startup frame showing a 4×4 grid of ROM cards.

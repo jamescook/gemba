@@ -1,11 +1,6 @@
 # frozen_string_literal: true
 
 require 'fileutils'
-require_relative 'event_bus'
-require_relative 'locale'
-require_relative 'modal_stack'
-require_relative 'frame_stack'
-require_relative 'platform'
 
 module Gemba
   # Application controller — the brain of the app.

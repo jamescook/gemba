@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "uri"
-require_relative "../game_index"
 
 module Gemba
   class BoxartFetcher

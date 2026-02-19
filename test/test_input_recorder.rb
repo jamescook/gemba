@@ -2,7 +2,7 @@
 
 require "minitest/autorun"
 require "gemba/headless"
-require "gemba/input_recorder"
+require "gemba/headless"
 require "tmpdir"
 
 class TestInputRecorder < Minitest::Test

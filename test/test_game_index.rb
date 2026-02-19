@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
-require "gemba/game_index"
+require "gemba/headless"
 
 class TestGameIndex < Minitest::Test
   def setup

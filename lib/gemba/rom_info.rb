@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require_relative 'game_index'
 
 module Gemba
   # Immutable snapshot of everything known about a single ROM.

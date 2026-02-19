@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
-require_relative "../lib/gemba/toast_overlay"
+require "gemba/headless"
 
 class TestToastOverlay < Minitest::Test
   # Minimal texture mock — records destroy calls.

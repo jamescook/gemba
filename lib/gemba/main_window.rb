@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require_relative 'frame_stack'
 
 module Gemba
   # Pure Tk shell — creates the app window and hosts a FrameStack.

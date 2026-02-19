@@ -3,8 +3,8 @@
 require "minitest/autorun"
 require "tmpdir"
 require "fileutils"
-require "gemba/config"
-require "gemba/rom_overrides"
+require "gemba/headless"
+require "gemba/headless"
 
 class TestRomOverrides < Minitest::Test
   def setup

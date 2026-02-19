@@ -506,7 +506,7 @@ class TestMGBAPlayer < Minitest::Test
   # -- Audio fade ramp (pure function, no Tk/SDL2 needed) --------------------
 
   def test_fade_ramp_attenuates_first_samples
-    require "gemba/emulator_frame"
+    require "gemba/headless"
     # 10 stereo frames of max-amplitude int16
     pcm = ([32767, 32767] * 10).pack('s*')
     total = 10
@@ -525,7 +525,7 @@ class TestMGBAPlayer < Minitest::Test
   end
 
   def test_fade_ramp_returns_remaining_when_pcm_shorter_than_fade
-    require "gemba/emulator_frame"
+    require "gemba/headless"
     # Only 2 stereo frames but fade wants 10
     pcm = ([20000, 20000] * 2).pack('s*')
     _result, remaining = Gemba::EmulatorFrame.apply_fade_ramp(pcm, 10, 10)
@@ -533,7 +533,7 @@ class TestMGBAPlayer < Minitest::Test
   end
 
   def test_fade_ramp_noop_when_remaining_zero
-    require "gemba/emulator_frame"
+    require "gemba/headless"
     pcm = ([10000, -10000] * 4).pack('s*')
     result, remaining = Gemba::EmulatorFrame.apply_fade_ramp(pcm, 0, 10)
     assert_equal pcm, result, "should not modify samples when remaining is 0"
@@ -886,7 +886,7 @@ class TestMGBAPlayer < Minitest::Test
   # -- Pause CPU optimization (thread_timer_ms) --------------------------------
 
   def test_event_loop_constants
-    require "gemba/app_controller"
+    require "gemba/headless"
     assert_equal 1,  Gemba::AppController::EVENT_LOOP_FAST_MS, "fast loop should be 1ms"
     assert_equal 50, Gemba::AppController::EVENT_LOOP_IDLE_MS, "idle loop should be 50ms"
   end

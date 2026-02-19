@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 require 'fileutils'
-require_relative 'locale'
-require_relative 'platform'
 
 module Gemba
   # Non-interactive GBA replay viewer with SDL2 video/audio.

@@ -3,12 +3,12 @@
 require "minitest/autorun"
 require "tmpdir"
 require "fileutils"
-require "gemba/config"
-require "gemba/rom_info"
-require "gemba/rom_overrides"
-require "gemba/game_index"
-require "gemba/boxart_fetcher"
-require "gemba/boxart/null_backend"
+require "gemba/headless"
+require "gemba/headless"
+require "gemba/headless"
+require "gemba/headless"
+require "gemba/headless"
+require "gemba/headless"
 
 class TestRomInfo < Minitest::Test
   ROM = {

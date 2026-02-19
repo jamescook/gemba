@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require_relative "child_window"
-require_relative "locale"
 
 module Gemba
   # Grid picker window for save state slots.

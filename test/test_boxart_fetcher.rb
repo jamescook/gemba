@@ -4,8 +4,8 @@ require "minitest/autorun"
 require_relative "shared/tk_test_helper"
 require "tmpdir"
 require "fileutils"
-require "gemba/boxart_fetcher"
-require "gemba/boxart/null_backend"
+require "gemba/headless"
+require "gemba/headless"
 
 class TestBoxartFetcher < Minitest::Test
   include TeekTestHelper
@@ -94,7 +94,7 @@ class TestBoxartFetcher < Minitest::Test
     assert_tk_app("boxart fetch downloads and caches") do
       require "tmpdir"
       require "webmock"
-      require "gemba/boxart_fetcher"
+      require "gemba/headless"
       WebMock.enable!
       WebMock.stub_request(:get, "https://example.com/boxart/pokemon_ruby.png")
         .to_return(status: 200, body: "\x89PNG fake".b, headers: { "Content-Type" => "image/png" })
@@ -126,7 +126,7 @@ class TestBoxartFetcher < Minitest::Test
     assert_tk_app("boxart fetch handles 404 gracefully") do
       require "tmpdir"
       require "webmock"
-      require "gemba/boxart_fetcher"
+      require "gemba/headless"
       WebMock.enable!
       WebMock.stub_request(:get, "https://example.com/boxart/pokemon_ruby.png")
         .to_return(status: 404, body: "Not Found")

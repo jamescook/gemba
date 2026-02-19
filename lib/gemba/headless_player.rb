@@ -2,7 +2,6 @@
 
 require 'fileutils'
 require 'zlib'
-require_relative 'platform'
 
 module Gemba
   # Headless mGBA player for scripting and automated testing.

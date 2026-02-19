@@ -2,7 +2,7 @@
 
 require "minitest/autorun"
 require "yaml"
-require_relative "../lib/gemba/locale"
+require "gemba/headless"
 
 class TestMGBALocale < Minitest::Test
   # -- Loading ---------------------------------------------------------------

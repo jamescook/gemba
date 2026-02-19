@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
-require "gemba/event_bus"
+require "gemba/headless"
 
 class TestEventBus < Minitest::Test
   def setup

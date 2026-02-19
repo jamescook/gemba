@@ -29,7 +29,7 @@ end
 
 class TestHotkeyMap < Minitest::Test
   def setup
-    require "gemba/hotkey_map"
+    require "gemba/headless"
   end
 
   def make_map(hotkey_data = {})

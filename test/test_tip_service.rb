@@ -8,7 +8,7 @@ class TestTipService < Minitest::Test
 
   def test_register_sets_underline_font
     assert_tk_app("register sets underlined font") do
-      require "gemba/tip_service"
+      require "gemba/headless"
       tips = Gemba::TipService.new(app)
 
       lbl = ".test_lbl"
@@ -27,7 +27,7 @@ class TestTipService < Minitest::Test
 
   def test_show_creates_tooltip
     assert_tk_app("show creates a tooltip toplevel") do
-      require "gemba/tip_service"
+      require "gemba/headless"
       tips = Gemba::TipService.new(app)
 
       lbl = ".test_lbl"
@@ -47,7 +47,7 @@ class TestTipService < Minitest::Test
 
   def test_hide_destroys_tooltip
     assert_tk_app("hide destroys tooltip") do
-      require "gemba/tip_service"
+      require "gemba/headless"
       tips = Gemba::TipService.new(app)
 
       lbl = ".test_lbl"
@@ -69,7 +69,7 @@ class TestTipService < Minitest::Test
 
   def test_toggle_behavior
     assert_tk_app("clicking same label toggles tooltip") do
-      require "gemba/tip_service"
+      require "gemba/headless"
       tips = Gemba::TipService.new(app)
 
       lbl = ".test_lbl"
@@ -96,7 +96,7 @@ class TestTipService < Minitest::Test
 
   def test_only_one_tooltip_at_a_time
     assert_tk_app("showing a second tooltip hides the first") do
-      require "gemba/tip_service"
+      require "gemba/headless"
       tips = Gemba::TipService.new(app)
 
       lbl1 = ".test_lbl1"
@@ -126,7 +126,7 @@ class TestTipService < Minitest::Test
 
   def test_dismiss_ms_is_configurable
     assert_tk_app("dismiss_ms is configurable") do
-      require "gemba/tip_service"
+      require "gemba/headless"
       tips = Gemba::TipService.new(app, dismiss_ms: 2000)
 
       assert_equal 2000, tips.dismiss_ms

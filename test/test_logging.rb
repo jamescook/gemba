@@ -3,7 +3,7 @@
 require "minitest/autorun"
 require "tmpdir"
 require "fileutils"
-require_relative "../lib/gemba/logging"
+require "gemba/headless"
 
 class TestLogging < Minitest::Test
   def setup

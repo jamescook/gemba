@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
-require "gemba/boxart/libretro_backend"
+require "gemba/headless"
 
 class TestLibretroBackend < Minitest::Test
   def setup

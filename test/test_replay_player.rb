@@ -17,7 +17,7 @@ class TestReplayPlayer < Minitest::Test
       at_exit { FileUtils.rm_rf(dir) }
 
       require "gemba/headless"
-      require "gemba/input_recorder"
+      require "gemba/headless"
 
       gir_path = File.join(dir, "pong_test.gir")
       Gemba::HeadlessPlayer.open(PONG_ROM) do |player|

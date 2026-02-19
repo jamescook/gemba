@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-require_relative "child_window"
-require_relative "locale"
-require_relative "platform"
 
 module Gemba
   # Displays ROM metadata in a read-only window.

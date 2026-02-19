@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require 'optparse'
-require_relative 'version'
 
 module Gemba
   class CLI
@@ -502,9 +501,9 @@ module Gemba
         config = Gemba.user_config
         puts "  Scale: #{config.scale}"
         puts "  Volume: #{config.volume}"
-        puts "  Muted: #{config.muted}"
+        puts "  Muted: #{config.muted?}"
         puts "  Locale: #{config.locale}"
-        puts "  Show FPS: #{config.show_fps}"
+        puts "  Show FPS: #{config.show_fps?}"
         puts "  Turbo speed: #{config.turbo_speed}"
       end
     end

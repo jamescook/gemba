@@ -1,17 +1,5 @@
 # frozen_string_literal: true
 
-require_relative "child_window"
-require_relative "event_bus"
-require_relative "hotkey_map"
-require_relative "locale"
-require_relative "tip_service"
-require_relative "settings/paths"
-require_relative "settings/audio_tab"
-require_relative "settings/video_tab"
-require_relative "settings/recording_tab"
-require_relative "settings/save_states_tab"
-require_relative "settings/gamepad_tab"
-require_relative "settings/hotkeys_tab"
 
 module Gemba
   # Settings window for the mGBA Player.

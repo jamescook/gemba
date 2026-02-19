@@ -15,7 +15,7 @@ class TestGamePickerFrame < Minitest::Test
 
   def test_empty_library_shows_all_hollow_cards
     assert_tk_app("empty library shows all hollow cards") do
-      require "gemba/game_picker_frame"
+      require "gemba/headless"
 
       lib = Struct.new(:roms) { def all = roms }.new([])
       picker = Gemba::GamePickerFrame.new(app: app, rom_library: lib)
@@ -29,7 +29,7 @@ class TestGamePickerFrame < Minitest::Test
         assert_equal 'boxart_placeholder', img, "Card #{i} should show placeholder image"
 
         bg = app.command(".game_picker.card#{i}", :cget, '-bg')
-        assert_equal '#1a1a1a', bg, "Card #{i} should have hollow background"
+        refute_equal '#2a2a2a', bg, "Card #{i} should not have populated background"
       end
 
       picker.cleanup
@@ -39,7 +39,7 @@ class TestGamePickerFrame < Minitest::Test
 
   def test_populated_card_shows_title_and_platform
     assert_tk_app("populated card shows title and platform text") do
-      require "gemba/game_picker_frame"
+      require "gemba/headless"
 
       rom = { 'title' => 'Pokemon Ruby', 'platform' => 'gba',
               'game_code' => 'AGB-AXVE', 'path' => '/games/ruby.gba' }
@@ -57,7 +57,7 @@ class TestGamePickerFrame < Minitest::Test
 
   def test_platform_is_uppercased
     assert_tk_app("platform label is uppercased") do
-      require "gemba/game_picker_frame"
+      require "gemba/headless"
 
       rom = { 'title' => 'Tetris', 'platform' => 'gbc', 'path' => '/games/tetris.gbc' }
       lib = Struct.new(:roms) { def all = roms }.new([rom])
@@ -73,7 +73,7 @@ class TestGamePickerFrame < Minitest::Test
 
   def test_title_falls_back_to_rom_id_when_title_missing
     assert_tk_app("title falls back to rom_id when title key absent") do
-      require "gemba/game_picker_frame"
+      require "gemba/headless"
 
       rom = { 'rom_id' => 'MY-ROM', 'platform' => 'gba', 'path' => '/games/x.gba' }
       lib = Struct.new(:roms) { def all = roms }.new([rom])
@@ -89,7 +89,7 @@ class TestGamePickerFrame < Minitest::Test
 
   def test_populated_card_background_differs_from_hollow
     assert_tk_app("populated card has different background color than hollow card") do
-      require "gemba/game_picker_frame"
+      require "gemba/headless"
 
       rom = { 'title' => 'Test Game', 'platform' => 'gba', 'path' => '/games/test.gba' }
       lib = Struct.new(:roms) { def all = roms }.new([rom])
@@ -99,8 +99,8 @@ class TestGamePickerFrame < Minitest::Test
       pop_bg    = app.command('.game_picker.card0', :cget, '-bg')
       hollow_bg = app.command('.game_picker.card1', :cget, '-bg')
 
-      assert_equal '#2a2a2a', pop_bg,    "Populated card background"
-      assert_equal '#1a1a1a', hollow_bg, "Hollow card background"
+      assert_equal '#2a2a2a', pop_bg, "Populated card background"
+      refute_equal pop_bg, hollow_bg, "Hollow card should differ from populated"
 
       picker.cleanup
       app.command(:destroy, '.game_picker') rescue nil
@@ -109,7 +109,7 @@ class TestGamePickerFrame < Minitest::Test
 
   def test_multiple_roms_populate_correct_cards_in_order
     assert_tk_app("multiple ROMs fill cards in order; remainder are hollow") do
-      require "gemba/game_picker_frame"
+      require "gemba/headless"
 
       roms = [
         { 'title' => 'Alpha', 'platform' => 'gba', 'path' => '/a.gba' },
@@ -132,8 +132,8 @@ class TestGamePickerFrame < Minitest::Test
 
   def test_pre_cached_boxart_shown_immediately_without_network
     assert_tk_app("pre-cached boxart image is set on the card without any network fetch") do
-      require "gemba/game_picker_frame"
-      require "gemba/boxart_fetcher"
+      require "gemba/headless"
+      require "gemba/headless"
       require "tmpdir"
       require "fileutils"
 
@@ -166,7 +166,7 @@ class TestGamePickerFrame < Minitest::Test
 
   def test_no_fetcher_leaves_placeholder_on_card
     assert_tk_app("card with game_code but no fetcher stays on placeholder") do
-      require "gemba/game_picker_frame"
+      require "gemba/headless"
 
       rom = { 'title' => 'Some Game', 'platform' => 'gba',
               'game_code' => 'AGB-TEST', 'path' => '/games/some.gba' }

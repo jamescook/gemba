@@ -1,9 +1,7 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
-require "gemba"
-require_relative "../lib/gemba/config"
-require_relative "../lib/gemba/input_mappings"
+require "gemba/headless"
 require_relative "support/input_mocks"
 
 class TestGamepadMap < Minitest::Test

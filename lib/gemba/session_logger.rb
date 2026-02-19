@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require 'logger'
-require_relative 'config'
 
 module Gemba
   # Session logger that writes to the user config logs/ directory.
@@ -62,21 +61,4 @@ module Gemba
     end
   end
 
-  # Log a message. Lazily initializes the session logger.
-  # @param level [Symbol] :debug, :info, :warn, :error
-  # @example Gemba.log(:info) { "ROM loaded" }
-  def self.log(level = :info, &block)
-    logger.log(level, &block)
-  end
-
-  # @return [Gemba::SessionLogger]
-  def self.logger
-    @logger ||= SessionLogger.new
-  end
-
-  # Override the logger (useful for tests).
-  # @param val [Gemba::SessionLogger, nil]
-  def self.logger=(val)
-    @logger = val
-  end
 end

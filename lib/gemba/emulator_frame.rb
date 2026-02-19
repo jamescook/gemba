@@ -1,9 +1,6 @@
 # frozen_string_literal: true
 
 require 'fileutils'
-require_relative 'event_bus'
-require_relative 'locale'
-require_relative 'platform'
 
 module Gemba
   # SDL2 emulation frame — owns the mGBA core, viewport, audio stream,

@@ -23,6 +23,7 @@ Gem::Specification.new do |spec|
 
   spec.add_dependency "teek", ">= 0.1.2"
   spec.add_dependency "teek-sdl2", ">= 0.2.1"
+  spec.add_dependency "zeitwerk", "~> 2.7"
 
   spec.add_development_dependency "rake", "~> 13.0"
   spec.add_development_dependency "rake-compiler", "~> 1.0"

@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require 'fileutils'
-require_relative 'locale'
 
 module Gemba
   # Manages save state persistence: save, load, screenshot capture,

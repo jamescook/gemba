@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-require_relative "platform/gba"
-require_relative "platform/gb"
-require_relative "platform/gbc"
 
 module Gemba
   module Platform
