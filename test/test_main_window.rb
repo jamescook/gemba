@@ -16,7 +16,7 @@ class TestMGBAPlayer < Minitest::Test
       require "gemba"
       require "support/player_helpers"
 
-      player = Gemba::Player.new("#{TEST_ROM}")
+      player = Gemba::MainWindow.new("#{TEST_ROM}")
       app = player.app
 
       poll_until_ready(player) { player.running = false }
@@ -38,7 +38,7 @@ class TestMGBAPlayer < Minitest::Test
     code = <<~RUBY
       require "gemba"
 
-      player = Gemba::Player.new
+      player = Gemba::MainWindow.new
       app = player.app
 
       app.after(100) do
@@ -65,7 +65,7 @@ class TestMGBAPlayer < Minitest::Test
     code = <<~RUBY
       require "gemba"
 
-      player = Gemba::Player.new
+      player = Gemba::MainWindow.new
       app = player.app
 
       app.after(100) do
@@ -95,11 +95,11 @@ class TestMGBAPlayer < Minitest::Test
       require "gemba"
       require "support/player_helpers"
 
-      player = Gemba::Player.new("#{TEST_ROM}")
+      player = Gemba::MainWindow.new("#{TEST_ROM}")
       app = player.app
 
       poll_until_ready(player) do
-        vp = player.viewport
+        vp = player.frame.viewport
         frame = vp.frame.path
 
         # User presses F11 → fullscreen on
@@ -139,11 +139,11 @@ class TestMGBAPlayer < Minitest::Test
       require "gemba"
       require "support/player_helpers"
 
-      player = Gemba::Player.new("#{TEST_ROM}")
+      player = Gemba::MainWindow.new("#{TEST_ROM}")
       app = player.app
 
       poll_until_ready(player) do
-        vp = player.viewport
+        vp = player.frame.viewport
         frame = vp.frame.path
 
         # User presses Tab → enable turbo (2x default)
@@ -181,7 +181,7 @@ class TestMGBAPlayer < Minitest::Test
       # Use a temp dir for all config/states so we don't pollute the real one
       states_dir = Dir.mktmpdir("gemba-states-test")
 
-      player = Gemba::Player.new("#{TEST_ROM}")
+      player = Gemba::MainWindow.new("#{TEST_ROM}")
       app = player.app
       config = player.config
 
@@ -190,9 +190,9 @@ class TestMGBAPlayer < Minitest::Test
       config.save_state_debounce = 0.1
 
       poll_until_ready(player) do
-        core = player.save_mgr.core
-        state_dir = player.save_mgr.state_dir
-        vp = player.viewport
+        core = player.frame.save_mgr.core
+        state_dir = player.frame.save_mgr.state_dir
+        vp = player.frame.viewport
         frame_path = vp.frame.path
 
         # Quick save (F5)
@@ -301,7 +301,7 @@ class TestMGBAPlayer < Minitest::Test
 
       states_dir = Dir.mktmpdir("gemba-debounce-test")
 
-      player = Gemba::Player.new("#{TEST_ROM}")
+      player = Gemba::MainWindow.new("#{TEST_ROM}")
       app = player.app
       config = player.config
 
@@ -309,7 +309,7 @@ class TestMGBAPlayer < Minitest::Test
       config.save_state_debounce = 5.0  # long debounce
 
       poll_until_ready(player) do
-        vp = player.viewport
+        vp = player.frame.viewport
         frame_path = vp.frame.path
 
         # First save should succeed
@@ -317,7 +317,7 @@ class TestMGBAPlayer < Minitest::Test
         app.update
 
         app.after(50) do
-          state_dir = player.save_mgr.state_dir
+          state_dir = player.frame.save_mgr.state_dir
           ss_path = File.join(state_dir, "state1.ss")
 
           first_exists = File.exist?(ss_path)
@@ -373,7 +373,7 @@ class TestMGBAPlayer < Minitest::Test
       config_dir = Dir.mktmpdir("gemba-settings-test")
       config_path = File.join(config_dir, "settings.json")
 
-      player = Gemba::Player.new("#{TEST_ROM}")
+      player = Gemba::MainWindow.new("#{TEST_ROM}")
       app = player.app
       config = player.config
 
@@ -445,11 +445,11 @@ class TestMGBAPlayer < Minitest::Test
   # -- Audio fade ramp (pure function, no Tk/SDL2 needed) --------------------
 
   def test_fade_ramp_attenuates_first_samples
-    require "gemba/player"
+    require "gemba/emulator_frame"
     # 10 stereo frames of max-amplitude int16
     pcm = ([32767, 32767] * 10).pack('s*')
     total = 10
-    result, remaining = Gemba::Player.apply_fade_ramp(pcm, total, total)
+    result, remaining = Gemba::EmulatorFrame.apply_fade_ramp(pcm, total, total)
     samples = result.unpack('s*')
 
     # First stereo pair: gain = 1 - 10/10 = 0.0 → should be 0
@@ -464,17 +464,17 @@ class TestMGBAPlayer < Minitest::Test
   end
 
   def test_fade_ramp_returns_remaining_when_pcm_shorter_than_fade
-    require "gemba/player"
+    require "gemba/emulator_frame"
     # Only 2 stereo frames but fade wants 10
     pcm = ([20000, 20000] * 2).pack('s*')
-    _result, remaining = Gemba::Player.apply_fade_ramp(pcm, 10, 10)
+    _result, remaining = Gemba::EmulatorFrame.apply_fade_ramp(pcm, 10, 10)
     assert_equal 8, remaining, "should have 8 fade samples remaining"
   end
 
   def test_fade_ramp_noop_when_remaining_zero
-    require "gemba/player"
+    require "gemba/emulator_frame"
     pcm = ([10000, -10000] * 4).pack('s*')
-    result, remaining = Gemba::Player.apply_fade_ramp(pcm, 0, 10)
+    result, remaining = Gemba::EmulatorFrame.apply_fade_ramp(pcm, 0, 10)
     assert_equal pcm, result, "should not modify samples when remaining is 0"
     assert_equal 0, remaining
   end
@@ -491,11 +491,11 @@ class TestMGBAPlayer < Minitest::Test
       sw_top = Gemba::SettingsWindow::TOP
       sp_top = Gemba::SaveStatePicker::TOP
 
-      player = Gemba::Player.new("#{TEST_ROM}")
+      player = Gemba::MainWindow.new("#{TEST_ROM}")
       app = player.app
 
       poll_until_ready(player) do
-        vp = player.viewport
+        vp = player.frame.viewport
         frame = vp.frame.path
 
         # 1. Open Settings via menu (Settings > Video = index 0)
@@ -589,7 +589,7 @@ class TestMGBAPlayer < Minitest::Test
       require "gemba"
       require "support/player_helpers"
 
-      player = Gemba::Player.new
+      player = Gemba::MainWindow.new
       app = player.app
 
       # Stub tk_messageBox so it never blocks
@@ -601,7 +601,7 @@ class TestMGBAPlayer < Minitest::Test
         app.update
 
         app.after(50) do
-          core = player.core
+          core = player.frame.core
           if core && !core.destroyed?
             $stdout.puts "TITLE=\#{core.title}"
           else
@@ -629,7 +629,7 @@ class TestMGBAPlayer < Minitest::Test
       require "gemba"
       require "support/player_helpers"
 
-      player = Gemba::Player.new
+      player = Gemba::MainWindow.new
       app = player.app
 
       # Capture tk_messageBox calls instead of blocking
@@ -670,7 +670,7 @@ class TestMGBAPlayer < Minitest::Test
       require "gemba"
       require "support/player_helpers"
 
-      player = Gemba::Player.new
+      player = Gemba::MainWindow.new
       app = player.app
 
       # Capture tk_messageBox calls instead of blocking
@@ -718,13 +718,13 @@ class TestMGBAPlayer < Minitest::Test
       rec_dir = Dir.mktmpdir("gemba-rec-test")
 
       begin
-        player = Gemba::Player.new("#{TEST_ROM}")
+        player = Gemba::MainWindow.new("#{TEST_ROM}")
         app = player.app
         config = player.config
         config.recordings_dir = rec_dir
 
         poll_until_ready(player) do
-          vp = player.viewport
+          vp = player.frame.viewport
           frame = vp.frame.path
 
           # Press F10 → start recording
@@ -733,7 +733,7 @@ class TestMGBAPlayer < Minitest::Test
 
           # Let a few frames render with the recording indicator (red dot)
           app.after(50) do
-            unless player.recording?
+            unless player.frame.recording?
               puts "FAIL: recording never started"
               player.running = false
               next
@@ -779,9 +779,9 @@ class TestMGBAPlayer < Minitest::Test
   # -- Pause CPU optimization (thread_timer_ms) --------------------------------
 
   def test_event_loop_constants
-    require "gemba/player"
-    assert_equal 1,  Gemba::Player::EVENT_LOOP_FAST_MS, "fast loop should be 1ms"
-    assert_equal 50, Gemba::Player::EVENT_LOOP_IDLE_MS, "idle loop should be 50ms"
+    require "gemba/emulator_frame"
+    assert_equal 1,  Gemba::MainWindow::EVENT_LOOP_FAST_MS, "fast loop should be 1ms"
+    assert_equal 50, Gemba::MainWindow::EVENT_LOOP_IDLE_MS, "idle loop should be 50ms"
   end
 
   # E2E: verify thread_timer_ms switches between idle (50ms) and fast (1ms)
@@ -793,13 +793,13 @@ class TestMGBAPlayer < Minitest::Test
       require "gemba"
       require "support/player_helpers"
 
-      player = Gemba::Player.new("#{TEST_ROM}")
+      player = Gemba::MainWindow.new("#{TEST_ROM}")
       app = player.app
 
       poll_until_ready(player) do
         # Wait for focus so focus_poll_tick won't interfere with pause/unpause
         poll_until_focused(player) do
-        vp = player.viewport
+        vp = player.frame.viewport
         frame = vp.frame.path
 
         # Before pause: should be fast (1ms) since ROM is running
@@ -830,8 +830,8 @@ class TestMGBAPlayer < Minitest::Test
             unless ms_resumed == 1
               xvfb_screenshot("pause_resume_fail")
               $stderr.puts "FAIL: expected thread_timer_ms=1 after resume, got \#{ms_resumed}"
-              $stderr.puts "input_focus?=\#{player.viewport.renderer.input_focus?}"
-              $stderr.puts "paused=\#{player.instance_variable_get(:@paused)}"
+              $stderr.puts "input_focus?=\#{player.frame.viewport.renderer.input_focus?}"
+              $stderr.puts "paused=\#{player.frame.paused?}"
               exit 1
             end
 
@@ -866,11 +866,11 @@ class TestMGBAPlayer < Minitest::Test
       require "gemba"
       require "support/player_helpers"
 
-      player = Gemba::Player.new("#{TEST_ROM}")
+      player = Gemba::MainWindow.new("#{TEST_ROM}")
       app = player.app
 
       poll_until_ready(player) do
-        renderer = player.viewport.renderer
+        renderer = player.frame.viewport.renderer
 
         # Ensure the window has focus before testing focus *loss*
         poll_until_focused(player) do
@@ -903,8 +903,8 @@ class TestMGBAPlayer < Minitest::Test
           # production (Tk's mainloop pumps Cocoa) but is untested in CI.
           renderer.show_window
           renderer.raise_window
-          app.command(:event, 'generate', player.viewport.frame.path, '<KeyPress>', keysym: 'p')
-          app.command(:event, 'generate', player.viewport.frame.path, '<KeyRelease>', keysym: 'p')
+          app.command(:event, 'generate', player.frame.viewport.frame.path, '<KeyPress>', keysym: 'p')
+          app.command(:event, 'generate', player.frame.viewport.frame.path, '<KeyRelease>', keysym: 'p')
 
           app.after(100) do
             ms_regained = app.interp.thread_timer_ms
@@ -941,14 +941,14 @@ class TestMGBAPlayer < Minitest::Test
       require "gemba"
       require "support/player_helpers"
 
-      player = Gemba::Player.new("#{TEST_ROM}")
+      player = Gemba::MainWindow.new("#{TEST_ROM}")
       app = player.app
 
       poll_until_ready(player) do
         # Give focus poll a chance to fire (polls every 200ms)
         app.after(400) do
           ms = app.interp.thread_timer_ms
-          paused = player.instance_variable_get(:@paused)
+          paused = player.frame.paused?
           if paused
             $stderr.puts "FAIL: ROM started paused (thread_timer_ms=\#{ms})"
             exit 1

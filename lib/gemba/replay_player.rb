@@ -252,7 +252,7 @@ module Gemba
       load_replay(gir_path)
     end
 
-    # ── SDL2 init (stripped-down from Player) ─────────────────────────
+    # ── SDL2 init ────────────────────────────────────────────────────
 
     def init_sdl2
       return if @sdl2_ready
@@ -511,7 +511,7 @@ module Gemba
         vol = volume_override || @volume
         pcm = apply_volume_to_pcm(pcm, vol) if vol < 1.0
         if @audio_fade_in > 0
-          pcm, @audio_fade_in = Player.apply_fade_ramp(pcm, @audio_fade_in, FADE_IN_FRAMES)
+          pcm, @audio_fade_in = EmulatorFrame.apply_fade_ramp(pcm, @audio_fade_in, FADE_IN_FRAMES)
         end
         @stream.queue(pcm)
       end

@@ -36,7 +36,7 @@ end
 # Falls back to xdotool to force focus if polling alone doesn't work.
 def poll_until_focused(player, timeout_ms: 2_000, &block)
   app = player.app
-  renderer = player.viewport.renderer
+  renderer = player.frame.viewport.renderer
   deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout_ms / 1000.0
   tried_xdotool = false
   check = proc do
