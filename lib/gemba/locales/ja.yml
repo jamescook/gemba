@@ -5,6 +5,7 @@ menu:
   quit: "終了"
   settings: "設定"
   view: "表示"
+  game_library: "ゲームライブラリ"
   fullscreen: "フルスクリーン"
   rom_info: "ROM情報…"
   open_logs_dir: "ログフォルダを開く"
@@ -43,6 +44,8 @@ toast:
 dialog:
   game_running_title: "ゲーム実行中"
   game_running_msg: "別のゲームが実行中です。{name}に切り替えますか？"
+  return_to_library_title: "ゲームライブラリに戻る"
+  return_to_library_msg: "ゲームライブラリに戻りますか？保存されていない進行状況は失われます。"
   drop_error_title: "ドロップエラー"
   drop_single_file_only: "ROMファイルを1つだけドロップしてください。"
   drop_unsupported_type: "対応していないファイル形式: {ext}"
@@ -141,6 +144,12 @@ picker:
   no_preview: "プレビューなし"
   slot: "スロット{n}"
   close: "閉じる"
+
+game_picker:
+  menu:
+    play: "プレイ"
+    set_boxart: "カスタム画像を設定"
+    remove: "ライブラリから削除"
 
 rom_info:
   title: "ROM情報"

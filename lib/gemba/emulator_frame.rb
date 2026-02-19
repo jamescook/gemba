@@ -120,6 +120,7 @@ module Gemba
     def muted? = @muted
 
     # @return [Boolean]
+    def aspect_ratio = nil   # emulator drives its own geometry via apply_scale
     def sdl2_ready? = @sdl2_ready
 
     # @return [Boolean]
@@ -344,6 +345,11 @@ module Gemba
       @stream&.destroy unless @stream&.destroyed?
       @texture&.destroy unless @texture&.destroyed?
       @core&.destroy unless @core&.destroyed?
+      if @viewport
+        @app.command(:destroy, @viewport.frame.path) rescue nil
+        @viewport.destroy rescue nil
+      end
+      @sdl2_ready = false
       RomResolver.cleanup_temp
     end
 
@@ -704,14 +710,10 @@ module Gemba
     # -- Frame loop -------------------------------------------------------------
 
     def animate
-      if @running
-        tick
-        delay = (@core && !@paused) ? 1 : 100
-        @app.after(delay) { animate }
-      else
-        cleanup
-        @app.command(:destroy, '.')
-      end
+      return unless @running
+      tick
+      delay = (@core && !@paused) ? 1 : 100
+      @app.after(delay) { animate }
     end
 
     def tick

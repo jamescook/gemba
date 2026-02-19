@@ -26,6 +26,22 @@ module Gemba
       @app.set_window_geometry("#{w}x#{h}")
     end
 
+    def set_aspect(numer, denom)
+      @app.command(:wm, 'aspect', '.', numer, denom, numer, denom)
+    end
+
+    def set_minsize(w, h)
+      @app.command(:wm, 'minsize', '.', w, h)
+    end
+
+    def reset_minsize
+      @app.command(:wm, 'minsize', '.', 0, 0)
+    end
+
+    def reset_aspect_ratio
+      @app.command(:wm, 'aspect', '.', '', '', '', '')
+    end
+
     def set_timer_speed(ms)
       @app.interp.thread_timer_ms = ms
     end

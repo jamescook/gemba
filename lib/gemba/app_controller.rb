@@ -92,8 +92,15 @@ module Gemba
       @settings_window.refresh_hotkeys(@hotkeys.labels)
       push_settings_to_ui
 
-      @game_picker = GamePickerFrame.new(app: @app, rom_library: @rom_library)
+      boxart_backend = BoxartFetcher::LibretroBackend.new
+      @boxart_fetcher = BoxartFetcher.new(app: @app, cache_dir: Config.boxart_dir, backend: boxart_backend)
+      @rom_overrides  = RomOverrides.new
+      @game_picker = GamePickerFrame.new(app: @app, rom_library: @rom_library,
+                                         boxart_fetcher: @boxart_fetcher, rom_overrides: @rom_overrides)
       @frame_stack.push(:picker, @game_picker)
+      @window.set_geometry(GamePickerFrame::PICKER_DEFAULT_W, GamePickerFrame::PICKER_DEFAULT_H)
+      @window.set_minsize(GamePickerFrame::PICKER_MIN_W, GamePickerFrame::PICKER_MIN_H)
+      apply_frame_aspect(@game_picker)
 
       setup_drop_target
       setup_global_hotkeys
@@ -111,18 +118,32 @@ module Gemba
 
     # Current active frame (for tests and external access)
     def frame = @frame_stack.current_frame
+    def current_view = @frame_stack.current
 
     def running=(val)
       @running = val
       @emulator_frame&.running = val
       return if val
-      unless @emulator_frame&.sdl2_ready?
-        cleanup
-        @app.command(:destroy, '.')
-      end
+      cleanup
+      @app.command(:destroy, '.')
+    end
+
+    def disable_confirmations!
+      @disable_confirmations = true
     end
 
     private
+
+    def confirm(title:, message:)
+      return true if @disable_confirmations
+      result = @app.command('tk_messageBox',
+        parent: '.',
+        title: title,
+        message: message,
+        type: :okcancel,
+        icon: :warning)
+      result == 'ok'
+    end
 
     # ── Bus subscriptions ──────────────────────────────────────────────
 
@@ -181,7 +202,8 @@ module Gemba
 
       bus.on(:rom_loaded) do |title:, path:, saves_dir:, **|
         @window.set_title("gemba \u2014 #{title}")
-        @app.command(@view_menu, :entryconfigure, 1, state: :normal)
+        @app.command(@view_menu, :entryconfigure, 0, state: :normal)  # Game Library
+        @app.command(@view_menu, :entryconfigure, 2, state: :normal)  # ROM Info
         [3, 4, 6, 8, 9].each { |i| @app.command(@emu_menu, :entryconfigure, i, state: :normal) }
         rebuild_recent_menu
 
@@ -242,6 +264,9 @@ module Gemba
       @app.command(:menu, view_menu, tearoff: 0)
       @app.command(menubar, :add, :cascade, label: translate('menu.view'), menu: view_menu)
 
+      @app.command(view_menu, :add, :command,
+                   label: translate('menu.game_library'), state: :disabled,
+                   command: proc { show_game_library })
       @app.command(view_menu, :add, :command,
                    label: translate('menu.fullscreen'), accelerator: 'F11',
                    command: proc { toggle_fullscreen })
@@ -328,6 +353,30 @@ module Gemba
 
     # ── Modals ─────────────────────────────────────────────────────────
 
+    def show_game_library
+      return if @frame_stack.current == :picker
+      return bell if @modal_stack.active?
+
+      if frame&.rom_loaded?
+        return unless confirm(
+          title: translate('dialog.return_to_library_title'),
+          message: translate('dialog.return_to_library_msg'),
+        )
+      end
+
+      @emulator_frame&.running = false
+      @emulator_frame&.cleanup
+      @frame_stack.pop
+      @emulator_frame = nil
+      @rom_path = nil
+      @window.set_title("gemba")
+      @window.set_geometry(GamePickerFrame::PICKER_DEFAULT_W, GamePickerFrame::PICKER_DEFAULT_H)
+      @window.set_minsize(GamePickerFrame::PICKER_MIN_W, GamePickerFrame::PICKER_MIN_H)
+      apply_frame_aspect(@game_picker)
+      @app.command(@view_menu, :entryconfigure, 0, state: :disabled)
+      set_event_loop_speed(:idle)
+    end
+
     def show_settings(tab: nil)
       return bell if @modal_stack.active?
       @modal_stack.push(:settings, @settings_window, show_args: { tab: tab })
@@ -396,44 +445,28 @@ module Gemba
         return
       end
 
-      # Lazy-create EmulatorFrame on first ROM load
-      unless @emulator_frame
-        @emulator_frame = EmulatorFrame.new(
-          app: @app, config: @config, platform: @platform, sound: @sound,
-          scale: @scale, kb_map: @kb_map, gp_map: @gp_map,
-          keyboard: @keyboard, hotkeys: @hotkeys,
-          frame_limit: @frame_limit,
-          volume: @config.volume / 100.0,
-          muted: @config.muted?,
-          turbo_speed: @config.turbo_speed,
-          turbo_volume: @config.turbo_volume_pct / 100.0,
-          keep_aspect_ratio: @config.keep_aspect_ratio?,
-          show_fps: @config.show_fps?,
-          pixel_filter: @config.pixel_filter,
-          integer_scale: @config.integer_scale?,
-          color_correction: @config.color_correction?,
-          frame_blending: @config.frame_blending?,
-          rewind_enabled: @config.rewind_enabled?,
-          rewind_seconds: @config.rewind_seconds,
-          quick_save_slot: @config.quick_save_slot,
-          save_state_backup: @config.save_state_backup?,
-          recording_compression: @config.recording_compression,
-          pause_on_focus_loss: @config.pause_on_focus_loss?,
-        )
-        @emulator_frame.init_sdl2
-
+      # One-time gamepad subsystem init
+      unless @gamepad_inited
+        @gamepad_inited = true
         Teek::SDL2::Gamepad.init_subsystem
         Teek::SDL2::Gamepad.on_added { |_| refresh_gamepads }
         Teek::SDL2::Gamepad.on_removed { |_| @gamepad = nil; @gp_map.device = nil; refresh_gamepads }
         refresh_gamepads
         start_gamepad_probe
+      end
 
+      # Create EmulatorFrame (fresh each time after returning from game library)
+      unless @emulator_frame
+        @emulator_frame = create_emulator_frame
+        @emulator_frame.init_sdl2
         @window.fullscreen = true if @fullscreen
       end
 
       # Push emulator onto frame stack (hides picker automatically)
       if @frame_stack.current != :emulator
         @frame_stack.push(:emulator, @emulator_frame)
+        @window.reset_minsize
+        apply_frame_aspect(@emulator_frame)
       end
 
       saves = @config.saves_dir
@@ -441,10 +474,8 @@ module Gemba
       @rom_path = path
 
       new_platform = @emulator_frame.platform
-      if new_platform != @platform
-        @platform = new_platform
-        apply_scale(@scale)
-      end
+      @platform = new_platform
+      apply_scale(@scale)
       Gemba.log(:info) { "ROM loaded: #{loaded_core.title} (#{loaded_core.game_code}) [#{@platform.short_name}]" }
 
       rom_id = Config.rom_id(loaded_core.game_code, loaded_core.checksum)
@@ -499,13 +530,10 @@ module Gemba
     def confirm_rom_change(new_path)
       return true unless frame&.rom_loaded?
       name = File.basename(new_path)
-      result = @app.command('tk_messageBox',
-        parent: '.',
+      confirm(
         title: translate('dialog.game_running_title'),
         message: translate('dialog.game_running_msg', name: name),
-        type: :okcancel,
-        icon: :warning)
-      result == 'ok'
+      )
     end
 
     def setup_drop_target
@@ -601,6 +629,39 @@ module Gemba
     def toggle_fullscreen
       @fullscreen = !@fullscreen
       @window.fullscreen = @fullscreen
+    end
+
+    def create_emulator_frame
+      EmulatorFrame.new(
+        app: @app, config: @config, platform: @platform, sound: @sound,
+        scale: @scale, kb_map: @kb_map, gp_map: @gp_map,
+        keyboard: @keyboard, hotkeys: @hotkeys,
+        frame_limit: @frame_limit,
+        volume: @config.volume / 100.0,
+        muted: @config.muted?,
+        turbo_speed: @config.turbo_speed,
+        turbo_volume: @config.turbo_volume_pct / 100.0,
+        keep_aspect_ratio: @config.keep_aspect_ratio?,
+        show_fps: @config.show_fps?,
+        pixel_filter: @config.pixel_filter,
+        integer_scale: @config.integer_scale?,
+        color_correction: @config.color_correction?,
+        frame_blending: @config.frame_blending?,
+        rewind_enabled: @config.rewind_enabled?,
+        rewind_seconds: @config.rewind_seconds,
+        quick_save_slot: @config.quick_save_slot,
+        save_state_backup: @config.save_state_backup?,
+        recording_compression: @config.recording_compression,
+        pause_on_focus_loss: @config.pause_on_focus_loss?,
+      )
+    end
+
+    def apply_frame_aspect(frame)
+      if (ratio = frame.aspect_ratio)
+        @window.set_aspect(*ratio)
+      else
+        @window.reset_aspect_ratio
+      end
     end
 
     def apply_scale(new_scale)

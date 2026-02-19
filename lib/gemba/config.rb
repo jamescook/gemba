@@ -584,6 +584,16 @@ module Gemba
       File.join(config_dir, 'logs')
     end
 
+    # @return [String] default directory for cached box art images
+    def self.boxart_dir
+      File.join(config_dir, 'boxart')
+    end
+
+    # @return [String] path to the per-ROM overrides JSON file
+    def self.rom_overrides_path
+      File.join(config_dir, 'rom_overrides.json')
+    end
+
     private
 
     def subscribe_to_bus

@@ -60,6 +60,41 @@ class TestMGBAPlayer < Minitest::Test
     assert_includes stdout, "PASS"
   end
 
+  # View > Game Library returns to picker after loading a ROM.
+  def test_view_menu_game_library_returns_to_picker
+    code = <<~'RUBY'.sub('ROM_PATH', TEST_ROM)
+      require "gemba"
+      require "support/player_helpers"
+
+      player = Gemba::AppController.new("ROM_PATH")
+      player.disable_confirmations!
+      app = player.app
+
+      poll_until_ready(player) do
+        puts "BEFORE=#{player.current_view}"
+
+        app.command('.menubar.view', 'invoke', 0)
+
+        app.after(100) do
+          puts "AFTER=#{player.current_view}"
+          player.running = false
+        end
+      end
+
+      player.run
+    RUBY
+
+    success, stdout, stderr, _status = tk_subprocess(code)
+
+    output = []
+    output << "STDOUT:\n#{stdout}" unless stdout.empty?
+    output << "STDERR:\n#{stderr}" unless stderr.empty?
+
+    assert success, "View > Game Library should return to picker\n#{output.join("\n")}"
+    assert_includes stdout, "BEFORE=emulator"
+    assert_includes stdout, "AFTER=picker"
+  end
+
   # File > Quit menu item exits cleanly (invokes the actual menu command).
   def test_file_menu_quit_without_rom
     code = <<~RUBY
@@ -851,7 +886,7 @@ class TestMGBAPlayer < Minitest::Test
   # -- Pause CPU optimization (thread_timer_ms) --------------------------------
 
   def test_event_loop_constants
-    require "gemba/emulator_frame"
+    require "gemba/app_controller"
     assert_equal 1,  Gemba::AppController::EVENT_LOOP_FAST_MS, "fast loop should be 1ms"
     assert_equal 50, Gemba::AppController::EVENT_LOOP_IDLE_MS, "idle loop should be 50ms"
   end

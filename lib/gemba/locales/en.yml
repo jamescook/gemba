@@ -5,6 +5,7 @@ menu:
   quit: "Quit"
   settings: "Settings"
   view: "View"
+  game_library: "Game Library"
   fullscreen: "Fullscreen"
   rom_info: "ROM Info…"
   open_logs_dir: "Open Logs Directory"
@@ -43,6 +44,8 @@ toast:
 dialog:
   game_running_title: "Game Running"
   game_running_msg: "Another game is running. Switch to {name}?"
+  return_to_library_title: "Return to Game Library"
+  return_to_library_msg: "Return to the Game Library? Unsaved progress will be lost."
   drop_error_title: "Drop Error"
   drop_single_file_only: "Please drop a single ROM file."
   drop_unsupported_type: "Unsupported file type: {ext}"
@@ -141,6 +144,12 @@ picker:
   no_preview: "No preview"
   slot: "Slot {n}"
   close: "Close"
+
+game_picker:
+  menu:
+    play: "Play"
+    set_boxart: "Set Boxart"
+    remove: "Remove from Library"
 
 rom_info:
   title: "ROM Info"
