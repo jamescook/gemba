@@ -381,17 +381,17 @@ module Gemba
 
     def load_rom(path)
       rom_path = begin
-        RomLoader.resolve(path)
-      rescue RomLoader::NoRomInZip => e
+        RomResolver.resolve(path)
+      rescue RomResolver::NoRomInZip => e
         show_rom_error(translate('dialog.no_rom_in_zip', name: e.message))
         return
-      rescue RomLoader::MultipleRomsInZip => e
+      rescue RomResolver::MultipleRomsInZip => e
         show_rom_error(translate('dialog.multiple_roms_in_zip', name: e.message))
         return
-      rescue RomLoader::UnsupportedFormat => e
+      rescue RomResolver::UnsupportedFormat => e
         show_rom_error(translate('dialog.drop_unsupported_type', ext: e.message))
         return
-      rescue RomLoader::ZipReadError => e
+      rescue RomResolver::ZipReadError => e
         show_rom_error(translate('dialog.zip_read_error', detail: e.message))
         return
       end
@@ -529,7 +529,7 @@ module Gemba
 
       path = paths.first
       ext = File.extname(path).downcase
-      unless RomLoader::SUPPORTED_EXTENSIONS.include?(ext)
+      unless RomResolver::SUPPORTED_EXTENSIONS.include?(ext)
         @app.command('tk_messageBox',
           parent: '.',
           title: translate('dialog.drop_error_title'),
@@ -780,7 +780,7 @@ module Gemba
       @cleaned_up = true
       @emulator_frame&.cleanup
       @game_picker&.cleanup
-      RomLoader.cleanup_temp
+      RomResolver.cleanup_temp
     end
   end
 end

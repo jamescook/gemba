@@ -11,7 +11,7 @@ require_relative "event_bus"
 require_relative "config"
 require_relative "locale"
 require_relative "core"
-require_relative "rom_loader"
+require_relative "rom_resolver"
 require_relative "logging"
 require_relative "platform_open"
 

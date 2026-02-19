@@ -18,7 +18,7 @@ module Gemba
     # @param config [Config, nil] config object (uses default if nil)
     def initialize(rom_path, config: nil)
       @config = config || Gemba.user_config
-      rom_path = RomLoader.resolve(rom_path)
+      rom_path = RomResolver.resolve(rom_path)
 
       saves = @config.saves_dir
       FileUtils.mkdir_p(saves) unless File.directory?(saves)

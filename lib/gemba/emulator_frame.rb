@@ -344,7 +344,7 @@ module Gemba
       @stream&.destroy unless @stream&.destroyed?
       @texture&.destroy unless @texture&.destroyed?
       @core&.destroy unless @core&.destroyed?
-      RomLoader.cleanup_temp
+      RomResolver.cleanup_temp
     end
 
     # -- Emulation control ------------------------------------------------------
