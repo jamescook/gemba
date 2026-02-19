@@ -212,7 +212,7 @@ module Gemba
 
     def pick_custom_boxart(card, rom_info)
       return unless @overrides
-      filetypes = '{{Image Files} {.png .jpg .jpeg}} {{All Files} *}'
+      filetypes = '{{PNG Images} {.png}}'
       path = @app.tcl_eval("tk_getOpenFile -filetypes {#{filetypes}}")
       return if path.to_s.strip.empty?
       dest = @overrides.set_custom_boxart(rom_info.rom_id, path)
