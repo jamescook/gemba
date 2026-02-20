@@ -97,6 +97,8 @@ module Gemba
       @window.set_minsize(GamePickerFrame::PICKER_MIN_W, GamePickerFrame::PICKER_MIN_H)
       apply_frame_aspect(@game_picker)
 
+      @help_auto_paused = false
+
       setup_drop_target
       setup_global_hotkeys
       setup_bus_subscriptions
@@ -762,6 +764,10 @@ module Gemba
     # ── Global hotkeys (pre-SDL2) ──────────────────────────────────────
 
     def setup_global_hotkeys
+      # '?' toggles the hotkey reference panel. Bound on 'all' so it fires even
+      # when the help window itself has focus after being shown.
+      @app.bind('all', 'KeyPress-question') { toggle_help }
+
       @app.bind('.', 'KeyPress', :keysym, '%s') do |k, state_str|
         next if frame&.sdl2_ready? || @modal_stack.active?
 
@@ -778,6 +784,23 @@ module Gemba
     end
 
     # ── Helpers ────────────────────────────────────────────────────────
+
+    def toggle_help
+      return if @fullscreen
+      return if @modal_stack.active?
+
+      @help_window ||= HelpWindow.new(app: @app, hotkeys: @hotkeys)
+
+      if @help_window.visible?
+        @help_window.hide
+        frame&.receive(:pause) if @help_auto_paused  # toggle back to playing
+        @help_auto_paused = false
+      else
+        @help_auto_paused = frame&.rom_loaded? && !frame&.paused?
+        frame&.receive(:pause) if @help_auto_paused  # pause while reading
+        @help_window.show
+      end
+    end
 
     def bell
       @app.command(:bell)

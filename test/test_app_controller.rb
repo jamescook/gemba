@@ -1077,4 +1077,103 @@ class TestMGBAPlayer < Minitest::Test
     assert success, "ROM started paused\n#{output.join("\n")}"
     assert_includes stdout, "PASS", "Expected PASS in output\n#{output.join("\n")}"
   end
+
+  def test_question_hotkey_shows_help_window
+    code = <<~RUBY
+      require "gemba"
+
+      player = Gemba::AppController.new
+      app = player.app
+
+      app.after(100) do
+        app.tcl_eval("focus -force .")
+        app.update
+        app.tcl_eval("event generate . <KeyPress-question>")
+        app.update
+        state = app.tcl_eval("wm state .help_window")
+        puts state == 'normal' ? "PASS" : "FAIL: help window not visible (state=\#{state})"
+        player.running = false
+      end
+
+      player.run
+    RUBY
+
+    success, stdout, stderr, _status = tk_subprocess(code)
+
+    output = []
+    output << "STDOUT:\n#{stdout}" unless stdout.empty?
+    output << "STDERR:\n#{stderr}" unless stderr.empty?
+
+    assert success, "? hotkey should show help window\n#{output.join("\n")}"
+    assert_includes stdout, "PASS", "Expected PASS in output\n#{output.join("\n")}"
+  end
+
+  def test_question_hotkey_toggles_help_window
+    code = <<~RUBY
+      require "gemba"
+
+      player = Gemba::AppController.new
+      app = player.app
+
+      app.after(100) do
+        app.tcl_eval("focus -force .")
+        app.update
+        # First press — show
+        app.tcl_eval("event generate . <KeyPress-question>")
+        app.update
+        # Second press — hide
+        app.tcl_eval("event generate . <KeyPress-question>")
+        app.update
+        state = app.tcl_eval("wm state .help_window")
+        puts state == 'withdrawn' ? "PASS" : "FAIL: help window still visible after second ? press (state=\#{state})"
+        player.running = false
+      end
+
+      player.run
+    RUBY
+
+    success, stdout, stderr, _status = tk_subprocess(code)
+
+    output = []
+    output << "STDOUT:\n#{stdout}" unless stdout.empty?
+    output << "STDERR:\n#{stderr}" unless stderr.empty?
+
+    assert success, "second ? press should hide help window\n#{output.join("\n")}"
+    assert_includes stdout, "PASS", "Expected PASS in output\n#{output.join("\n")}"
+  end
+
+  def test_help_window_hidden_in_fullscreen
+    code = <<~RUBY
+      require "gemba"
+
+      player = Gemba::AppController.new
+      app = player.app
+
+      app.after(100) do
+        app.tcl_eval("focus -force .")
+        app.update
+        # Go fullscreen via bus
+        Gemba.bus.emit(:request_fullscreen)
+        app.update
+        # Press ? — should be suppressed
+        app.tcl_eval("event generate . <KeyPress-question>")
+        app.update
+        exists = app.tcl_eval("winfo exists .help_window")
+        state = exists == '1' ? app.tcl_eval("wm state .help_window") : 'withdrawn'
+        puts state != 'normal' ? "PASS" : "FAIL: help window visible in fullscreen"
+        player.running = false
+      end
+
+      player.run
+    RUBY
+
+    success, stdout, stderr, _status = tk_subprocess(code)
+
+    output = []
+    output << "STDOUT:\n#{stdout}" unless stdout.empty?
+    output << "STDERR:\n#{stderr}" unless stderr.empty?
+
+    assert success, "? hotkey should be suppressed in fullscreen\n#{output.join("\n")}"
+    assert_includes stdout, "PASS", "Expected PASS in output\n#{output.join("\n")}"
+  end
 end
