@@ -21,7 +21,7 @@ Gem::Specification.new do |spec|
   spec.extensions    = ["ext/gemba/extconf.rb"]
   spec.required_ruby_version = ">= 3.2"
 
-  spec.add_dependency "teek", ">= 0.1.2"
+  spec.add_dependency "teek", ">= 0.1.5"
   spec.add_dependency "teek-sdl2", ">= 0.2.1"
   spec.add_dependency "zeitwerk", "~> 2.7"
 

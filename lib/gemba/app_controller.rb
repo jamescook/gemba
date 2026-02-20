@@ -779,14 +779,12 @@ module Gemba
     def on_cursor_motion
       show_cursor
       return unless frame&.rom_loaded? && !frame&.paused?
-      $stderr.puts "[cursor] motion — scheduling hide in #{CURSOR_HIDE_MS}ms"
       @cursor_hide_job = @app.after(CURSOR_HIDE_MS) { hide_cursor }
     end
 
     def hide_cursor
       return if @cursor_hidden
       @cursor_hidden = true
-      $stderr.puts "[cursor] hide  sdl2=#{Teek::SDL2.respond_to?(:hide_cursor)}"
       Teek::SDL2.hide_cursor if Teek::SDL2.respond_to?(:hide_cursor)
     end
 
@@ -795,7 +793,6 @@ module Gemba
       @cursor_hide_job = nil
       return unless @cursor_hidden
       @cursor_hidden = false
-      $stderr.puts "[cursor] show  sdl2=#{Teek::SDL2.respond_to?(:show_cursor)}"
       Teek::SDL2.show_cursor if Teek::SDL2.respond_to?(:show_cursor)
     end
 
