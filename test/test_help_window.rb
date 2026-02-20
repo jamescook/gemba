@@ -18,6 +18,7 @@ class TestHelpWindow < Minitest::Test
       win = Gemba::HelpWindow.new(app: app, hotkeys: hotkeys)
       app.show
       win.show
+      app.update  # flush pending Tk map events before checking visibility
 
       assert win.visible?, "help window should be visible after show"
 

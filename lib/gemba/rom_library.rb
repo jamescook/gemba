@@ -77,13 +77,14 @@ module Gemba
     private
 
     def subscribe_to_bus
-      Gemba.bus.on(:rom_loaded) do |rom_id:, path:, title:, game_code:, platform:, **|
+      Gemba.bus.on(:rom_loaded) do |rom_id:, path:, title:, game_code:, platform:, md5: nil, **|
         add(
           'rom_id'    => rom_id,
           'path'      => path,
           'title'     => title,
           'game_code' => game_code,
           'platform'  => platform.downcase,
+          'md5'       => md5,
         )
         touch(rom_id)
         save!

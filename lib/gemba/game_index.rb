@@ -22,6 +22,15 @@ module Gemba
       "DMG" => "gb_games.json",
     }.freeze
 
+    MD5_FILES = {
+      "AGB" => "gba_md5.json",
+      "CGB" => "gbc_md5.json",
+      "DMG" => "gb_md5.json",
+    }.freeze
+
+    # Maps RomLibrary platform short names → GameIndex prefixes
+    PLATFORM_PREFIX = { "gba" => "AGB", "gbc" => "CGB", "gb" => "DMG" }.freeze
+
     class << self
       # Look up a canonical game name by serial code.
       # @param game_code [String] e.g. "AGB-AXVE", "CGB-BYTE", "DMG-XXXX"
@@ -30,10 +39,24 @@ module Gemba
         return nil unless game_code && !game_code.empty?
 
         platform = game_code.split("-", 2).first
-        index = index_for(platform)
+        index = index_for(platform, PLATFORM_FILES)
         return nil unless index
 
         index[game_code]
+      end
+
+      # Look up a canonical game name by MD5 hex digest.
+      # @param md5      [String] hex MD5 of ROM content (any case)
+      # @param platform [String] short name from RomLibrary — "gba", "gbc", or "gb"
+      # @return [String, nil]
+      def lookup_by_md5(md5, platform)
+        return nil unless md5 && !md5.empty?
+
+        prefix = PLATFORM_PREFIX[platform.to_s.downcase]
+        return nil unless prefix
+
+        idx = index_for(prefix, MD5_FILES)
+        idx&.[](md5.downcase)
       end
 
       # Force-reload all indexes (useful after re-baking).
@@ -43,17 +66,18 @@ module Gemba
 
       private
 
-      def index_for(platform)
+      def index_for(platform, files)
         @indexes ||= {}
-        return @indexes[platform] if @indexes.key?(platform)
+        key = "#{platform}:#{files.object_id}"
+        return @indexes[key] if @indexes.key?(key)
 
-        file = PLATFORM_FILES[platform]
-        return(@indexes[platform] = nil) unless file
+        file = files[platform]
+        return(@indexes[key] = nil) unless file
 
         path = File.join(DATA_DIR, file)
-        return(@indexes[platform] = nil) unless File.exist?(path)
+        return(@indexes[key] = nil) unless File.exist?(path)
 
-        @indexes[platform] = JSON.parse(File.read(path))
+        @indexes[key] = JSON.parse(File.read(path))
       end
     end
   end

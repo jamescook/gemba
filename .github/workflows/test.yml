@@ -29,6 +29,9 @@ jobs:
         ruby: ['4.0']
     steps:
     - uses: actions/checkout@v4
+      with:
+        submodules: true
+        shallow-submodules: true
 
     - name: Set up Docker Buildx
       id: buildx
@@ -107,6 +110,9 @@ jobs:
         ruby: ['4.0']
     steps:
     - uses: actions/checkout@v4
+      with:
+        submodules: true
+        shallow-submodules: true
 
     - name: Set up Docker Buildx
       id: buildx

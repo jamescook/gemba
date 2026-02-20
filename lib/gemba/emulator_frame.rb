@@ -88,6 +88,7 @@ module Gemba
       @input_recorder = nil
       @save_mgr = nil
       @rewind_frame_counter = 0
+      @achievement_backend = Achievements::NullBackend.new
     end
 
     # -- Public accessors -------------------------------------------------------
@@ -112,6 +113,17 @@ module Gemba
 
     # @return [Integer] turbo speed multiplier (0 = uncapped)
     attr_reader :turbo_speed
+
+    # @return [Achievements::Backend]
+    attr_reader :achievement_backend
+
+    # Swap in a new achievement backend. Registers callbacks that forward
+    # unlock events through EventBus for any UI consumer to handle.
+    # @param backend [Achievements::Backend]
+    def achievement_backend=(backend)
+      @achievement_backend = backend
+      backend.on_unlock { |ach| emit(:achievement_unlocked, achievement: ach) }
+    end
 
     # @return [Boolean]
     def muted? = @muted
@@ -272,7 +284,7 @@ module Gemba
     # @param bios_path [String, nil] full path to BIOS file (loaded before reset)
     # @param rom_source_path [String] original path (for input recorder)
     # @return [Core] the new core
-    def load_core(rom_path, saves_dir:, bios_path: nil, rom_source_path: nil)
+    def load_core(rom_path, saves_dir:, bios_path: nil, rom_source_path: nil, md5: nil)
       stop_recording if @recorder&.recording?
       stop_input_recording if @input_recorder&.recording?
 
@@ -284,6 +296,7 @@ module Gemba
       FileUtils.mkdir_p(saves_dir) unless File.directory?(saves_dir)
       @core = Core.new(rom_path, saves_dir, bios_path)
       @rom_source_path = rom_source_path || rom_path
+      @rom_md5         = md5
 
       new_platform = Platform.for(@core)
       if new_platform != @platform
@@ -306,6 +319,8 @@ module Gemba
       @fps_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       @next_frame = @fps_time
       @audio_samples_produced = 0
+
+      @achievement_backend.load_game(@core, @rom_source_path, @rom_md5)
 
       @core
     end
@@ -415,8 +430,17 @@ module Gemba
 
     def load_state(slot)
       return unless @save_mgr
-      _ok, msg = @save_mgr.load_state(slot)
+      ok, msg = @save_mgr.load_state(slot)
       @toast&.show(msg) if msg
+      # After a save state loads, memory jumps abruptly to whatever it was when
+      # the state was saved.  Achievements that were already in stage 3 (active)
+      # would fire immediately if the saved memory happens to satisfy their
+      # conditions.  Reset all achievements back through the priming/waiting
+      # startup sequence — same as what rcheevos does on state load.
+      if ok
+        Gemba.log(:info) { "save state loaded (slot #{slot}) — resetting achievement runtime" }
+        @achievement_backend.reset_runtime
+      end
     end
 
     def quick_save
@@ -427,8 +451,13 @@ module Gemba
 
     def quick_load
       return unless @save_mgr
-      _ok, msg = @save_mgr.quick_load
+      ok, msg = @save_mgr.quick_load
       @toast&.show(msg) if msg
+      # Same as load_state — memory jumped, reset achievement runtime.
+      if ok
+        Gemba.log(:info) { "quick save state loaded — resetting achievement runtime" }
+        @achievement_backend.reset_runtime
+      end
     end
 
     # -- Screenshot -------------------------------------------------------------
@@ -806,6 +835,7 @@ module Gemba
           @rewind_frame_counter = 0
         end
       end
+      @achievement_backend.do_frame(@core)
     end
 
     # -- Input ------------------------------------------------------------------
@@ -817,17 +847,17 @@ module Gemba
         else
           mods = HotkeyMap.modifiers_from_state(state_str.to_i)
           case @hotkeys.action_for(k, modifiers: mods)
-          when :quit          then emit(:request_quit)
+          when :quit          then @app.command(:event, 'generate', '.', '<<Quit>>')
           when :pause         then toggle_pause
           when :fast_forward  then toggle_fast_forward
           when :fullscreen    then emit(:request_fullscreen)
           when :show_fps      then emit(:request_show_fps_toggle)
-          when :quick_save    then quick_save
-          when :quick_load    then quick_load
+          when :quick_save    then @app.command(:event, 'generate', '.', '<<QuickSave>>')
+          when :quick_load    then @app.command(:event, 'generate', '.', '<<QuickLoad>>')
           when :save_states   then emit(:request_save_states)
           when :screenshot    then take_screenshot
           when :rewind        then do_rewind
-          when :record        then toggle_recording
+          when :record        then @app.command(:event, 'generate', '.', '<<RecordToggle>>')
           when :input_record  then toggle_input_recording
           when :open_rom      then emit(:request_open_rom)
           else @keyboard.press(k)
@@ -843,6 +873,14 @@ module Gemba
       @viewport.bind('FocusOut') { @has_focus = false }
 
       start_focus_poll
+
+      # Virtual event bindings — bound on '.' so tests can trigger them directly
+      # without needing widget focus. Physical key handlers above translate to
+      # these virtual events so the action logic lives in one place.
+      @app.command(:bind, '.', '<<Quit>>',         proc { emit(:request_quit) })
+      @app.command(:bind, '.', '<<QuickSave>>',    proc { quick_save })
+      @app.command(:bind, '.', '<<QuickLoad>>',    proc { quick_load })
+      @app.command(:bind, '.', '<<RecordToggle>>', proc { toggle_recording })
 
       # Alt+Return fullscreen toggle (emulator convention)
       @app.command(:bind, @viewport.frame.path, '<Alt-Return>', proc { emit(:request_fullscreen) })

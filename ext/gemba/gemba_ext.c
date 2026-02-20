@@ -1,4 +1,5 @@
 #include "gemba_ext.h"
+#include "rc_runtime.h"
 #include <mgba/core/config.h>
 #include <mgba/core/serialize.h>
 #include <ruby/thread.h>
@@ -19,6 +20,7 @@ void blip_set_rates(struct blip_t *, double clock_rate, double sample_rate);
 
 VALUE mGemba;
 static VALUE cCore;
+static VALUE ra_empty_array; /* frozen [] returned by do_frame when nothing triggered */
 
 /* No-op logger — prevents segfault when mGBA tries to log
  * without a logger configured (the default is NULL). */
@@ -647,6 +649,50 @@ mgba_core_maker_code(VALUE self)
 }
 
 /* --------------------------------------------------------- */
+/* Core#bus_read8(address)                                   */
+/* Read one byte from the GBA address bus.                   */
+/* Returns 0..255 as an Integer.                             */
+/* Primarily used by the achievement subsystem to evaluate   */
+/* memory conditions (IWRAM, EWRAM, registers).              */
+/* --------------------------------------------------------- */
+
+static VALUE
+mgba_core_bus_read8(VALUE self, VALUE addr)
+{
+    struct mgba_core *mc = get_mgba_core(self);
+    uint32_t address = (uint32_t)NUM2UINT(addr);
+    uint8_t val = (uint8_t)mc->core->busRead8(mc->core, address);
+    return UINT2NUM(val);
+}
+
+/* Core#bus_read16(address)                                  */
+/* Read two bytes (little-endian) from the GBA address bus.  */
+/* Returns 0..65535 as an Integer.                           */
+/* --------------------------------------------------------- */
+
+static VALUE
+mgba_core_bus_read16(VALUE self, VALUE addr)
+{
+    struct mgba_core *mc = get_mgba_core(self);
+    uint32_t address = (uint32_t)NUM2UINT(addr);
+    uint16_t val = (uint16_t)mc->core->busRead16(mc->core, address);
+    return UINT2NUM(val);
+}
+
+/* Core#bus_read32(address)                                  */
+/* Read four bytes (little-endian) from the GBA address bus. */
+/* Returns 0..4294967295 as an Integer.                      */
+/* --------------------------------------------------------- */
+
+static VALUE
+mgba_core_bus_read32(VALUE self, VALUE addr)
+{
+    struct mgba_core *mc = get_mgba_core(self);
+    uint32_t address = (uint32_t)NUM2UINT(addr);
+    uint32_t val = mc->core->busRead32(mc->core, address);
+    return UINT2NUM(val);
+}
+
 /* Core#save_state_to_file(path)                             */
 /* Save the complete emulator state to a file.               */
 /* Returns true on success, false on failure.                */
@@ -1047,6 +1093,216 @@ mgba_core_bios_loaded_p(VALUE self)
 }
 
 /* --------------------------------------------------------- */
+/* Gemba::RARuntime — thin wrapper around rc_runtime_t       */
+/*                    (RetroAchievements/rcheevos)           */
+/* --------------------------------------------------------- */
+
+/* Achievement IDs arrive from Ruby as numeric strings ("12345").
+ * rcheevos uses uint32_t internally.  ra_id_to_u32 parses them;
+ * ra_id_to_str converts back for the do_frame return array. */
+static uint32_t
+ra_id_to_u32(VALUE rb_id)
+{
+    Check_Type(rb_id, T_STRING);
+    return (uint32_t)strtoul(StringValueCStr(rb_id), NULL, 10);
+}
+
+/* GBA RA-address-space → mGBA bus address.
+ *   0x000000–0x07FFFF → IWRAM  0x03000000
+ *   0x080000+         → EWRAM  0x02000000 + (addr - 0x080000)
+ * rcheevos passes raw RA addresses to the peek callback. */
+static inline uint32_t
+ra_to_gba_addr(uint32_t ra_addr)
+{
+    if (ra_addr < 0x08000)
+        return 0x03000000 + ra_addr;
+    else
+        return 0x02000000 + (ra_addr - 0x08000);
+}
+
+/* rcheevos peek callback — called by rc_runtime_do_frame for every
+ * memory read.  Translates RA addresses to GBA bus addresses and
+ * reads 1, 2, or 4 bytes in little-endian order. */
+static uint32_t
+ra_peek(uint32_t ra_addr, uint32_t num_bytes, void *ud)
+{
+    struct mCore *core = (struct mCore *)ud;
+    uint32_t gba = ra_to_gba_addr(ra_addr);
+    switch (num_bytes) {
+    case 1: return (uint32_t)core->busRead8(core,  gba);
+    case 2: return (uint32_t)core->busRead16(core, gba);
+    case 4: return           core->busRead32(core, gba);
+    default: return 0;
+    }
+}
+
+/* Triggered-ID collection for do_frame.
+ * rc_runtime_event_handler_t has no userdata parameter, so we stash
+ * a pointer to frame-local storage in a static before each call and
+ * clear it after.  Ruby's GVL ensures single-threaded execution here. */
+typedef struct {
+    uint32_t ids[256];
+    int      count;
+} ra_frame_ctx_t;
+
+static ra_frame_ctx_t *s_ra_frame_ctx = NULL;
+
+static void
+ra_event_handler(const rc_runtime_event_t *event)
+{
+    if (!s_ra_frame_ctx) return;
+    if (event->type == RC_RUNTIME_EVENT_ACHIEVEMENT_TRIGGERED &&
+        s_ra_frame_ctx->count < 256)
+        s_ra_frame_ctx->ids[s_ra_frame_ctx->count++] = event->id;
+}
+
+/* Wrapper struct — embeds rc_runtime_t by value so a single allocation
+ * covers both our bookkeeping and the rcheevos runtime internals. */
+typedef struct {
+    rc_runtime_t rc;
+    int          count; /* number of currently activated achievements */
+} ra_wrapper_t;
+
+static void
+ra_wrapper_free(void *ptr)
+{
+    ra_wrapper_t *w = (ra_wrapper_t *)ptr;
+    rc_runtime_destroy(&w->rc);
+    xfree(w);
+}
+
+static VALUE cRARuntime;
+
+static const rb_data_type_t ra_runtime_type = {
+    .wrap_struct_name = "Gemba::RARuntime",
+    .function = {
+        .dmark = NULL,
+        .dfree = ra_wrapper_free,
+        .dsize = NULL,
+    },
+    .flags = RUBY_TYPED_FREE_IMMEDIATELY,
+};
+
+static VALUE
+ra_runtime_alloc(VALUE klass)
+{
+    ra_wrapper_t *w = ALLOC(ra_wrapper_t);
+    rc_runtime_init(&w->rc);
+    w->count = 0;
+    return TypedData_Wrap_Struct(klass, &ra_runtime_type, w);
+}
+
+static ra_wrapper_t *
+get_ra_wrapper(VALUE self)
+{
+    ra_wrapper_t *w;
+    TypedData_Get_Struct(self, ra_wrapper_t, &ra_runtime_type, w);
+    return w;
+}
+
+/*
+ * RARuntime#activate(id, memaddr) → nil
+ * Parse memaddr and register the achievement in the rcheevos runtime.
+ * Raises ArgumentError if rcheevos rejects the condition string.
+ */
+static VALUE
+ra_runtime_rb_activate(VALUE self, VALUE rb_id, VALUE rb_memaddr)
+{
+    Check_Type(rb_memaddr, T_STRING);
+    ra_wrapper_t *w  = get_ra_wrapper(self);
+    uint32_t      id = ra_id_to_u32(rb_id);
+    int rc = rc_runtime_activate_achievement(&w->rc, id,
+                                             StringValueCStr(rb_memaddr),
+                                             NULL, 0);
+    if (rc != RC_OK)
+        rb_raise(rb_eArgError,
+                 "RARuntime: rcheevos rejected memaddr (err %d): %s",
+                 rc, StringValueCStr(rb_memaddr));
+    w->count++;
+    return Qnil;
+}
+
+/*
+ * RARuntime#deactivate(id) → nil
+ */
+static VALUE
+ra_runtime_rb_deactivate(VALUE self, VALUE rb_id)
+{
+    ra_wrapper_t *w = get_ra_wrapper(self);
+    rc_runtime_deactivate_achievement(&w->rc, ra_id_to_u32(rb_id));
+    if (w->count > 0) w->count--;
+    return Qnil;
+}
+
+/*
+ * RARuntime#reset_all → nil
+ * Reset every achievement to WAITING state (as if freshly activated).
+ * Call this after loading a save state so delta/prior histories are
+ * discarded and achievements can't fire spuriously.
+ */
+static VALUE
+ra_runtime_rb_reset_all(VALUE self)
+{
+    rc_runtime_reset(&get_ra_wrapper(self)->rc);
+    return Qnil;
+}
+
+/*
+ * RARuntime#clear → nil
+ * Destroy all achievements and reinitialise the runtime from scratch.
+ */
+static VALUE
+ra_runtime_rb_clear(VALUE self)
+{
+    ra_wrapper_t *w = get_ra_wrapper(self);
+    rc_runtime_destroy(&w->rc);
+    rc_runtime_init(&w->rc);
+    w->count = 0;
+    return Qnil;
+}
+
+/*
+ * RARuntime#do_frame(core) → Array<String>
+ * Evaluate all active achievements against current emulator memory.
+ * Returns an array of string IDs for achievements that triggered.
+ */
+static VALUE
+ra_runtime_rb_do_frame(VALUE self, VALUE rb_core)
+{
+    struct mgba_core *mc;
+    TypedData_Get_Struct(rb_core, struct mgba_core, &mgba_core_type, mc);
+    if (mc->destroyed || !mc->core)
+        rb_raise(rb_eRuntimeError, "mGBA core has been destroyed");
+
+    ra_wrapper_t    *w   = get_ra_wrapper(self);
+    ra_frame_ctx_t   ctx = { .count = 0 };
+
+    s_ra_frame_ctx = &ctx;
+    rc_runtime_do_frame(&w->rc, ra_event_handler, ra_peek, mc->core, NULL);
+    s_ra_frame_ctx = NULL;
+
+    if (ctx.count == 0) return ra_empty_array;
+
+    VALUE result = rb_ary_new_capa(ctx.count);
+    char  buf[16];
+    for (int i = 0; i < ctx.count; i++) {
+        snprintf(buf, sizeof(buf), "%u", ctx.ids[i]);
+        rb_ary_push(result, rb_str_new_cstr(buf));
+    }
+    return result;
+}
+
+/*
+ * RARuntime#count → Integer
+ * Number of currently activated achievements.
+ */
+static VALUE
+ra_runtime_rb_count(VALUE self)
+{
+    return INT2NUM(get_ra_wrapper(self)->count);
+}
+
+/* --------------------------------------------------------- */
 /* Init                                                      */
 /* --------------------------------------------------------- */
 
@@ -1132,6 +1388,9 @@ Init_gemba_ext(void)
     rb_define_method(cCore, "destroyed?",  mgba_core_destroyed_p, 0);
     rb_define_method(cCore, "load_bios",    mgba_core_load_bios, 1);
     rb_define_method(cCore, "bios_loaded?", mgba_core_bios_loaded_p, 0);
+    rb_define_method(cCore, "bus_read8",    mgba_core_bus_read8, 1);
+    rb_define_method(cCore, "bus_read16",   mgba_core_bus_read16, 1);
+    rb_define_method(cCore, "bus_read32",   mgba_core_bus_read32, 1);
 
     /* BIOS checksum utility */
     rb_define_module_function(mGemba, "gba_bios_checksum", mgba_gba_bios_checksum, 1);
@@ -1164,6 +1423,20 @@ Init_gemba_ext(void)
     rb_hash_aset(btn_bits, ID2SYM(rb_intern("select")), INT2NUM(1 << GEMBA_KEY_SELECT));
     OBJ_FREEZE(btn_bits);
     rb_define_const(mGemba, "GBA_BTN_BITS", btn_bits);
+
+    /* Frozen empty array returned by RARuntime#do_frame when nothing triggered */
+    ra_empty_array = rb_ary_freeze(rb_ary_new_capa(0));
+    rb_gc_register_mark_object(ra_empty_array);
+
+    /* Gemba::RARuntime — RA condition evaluator */
+    cRARuntime = rb_define_class_under(mGemba, "RARuntime", rb_cObject);
+    rb_define_alloc_func(cRARuntime, ra_runtime_alloc);
+    rb_define_method(cRARuntime, "activate",   ra_runtime_rb_activate,   2);
+    rb_define_method(cRARuntime, "deactivate", ra_runtime_rb_deactivate, 1);
+    rb_define_method(cRARuntime, "reset_all",  ra_runtime_rb_reset_all,  0);
+    rb_define_method(cRARuntime, "clear",      ra_runtime_rb_clear,      0);
+    rb_define_method(cRARuntime, "do_frame",   ra_runtime_rb_do_frame,   1);
+    rb_define_method(cRARuntime, "count",      ra_runtime_rb_count,      0);
 
     /* Toast background generator */
     rb_define_module_function(mGemba, "toast_background", mgba_toast_background, 3);

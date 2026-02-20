@@ -18,6 +18,7 @@ module Gemba
     :platform,           # String  — uppercased, e.g. "GBA"
     :game_code,          # String? — 4-char code e.g. "AGB-AXVE", or nil
     :path,               # String  — absolute path to the ROM file
+    :md5,                # String? — MD5 hex digest of ROM content, or nil (lazy)
     :has_official_entry, # Boolean — GameIndex has an entry for this game_code
     :cached_boxart_path, # String? — auto-fetched cover from libretro CDN, or nil
     :custom_boxart_path  # String? — user-set cover image path, or nil
@@ -34,17 +35,20 @@ module Gemba
     # @param rom      [Hash]          entry from RomLibrary#all
     # @param fetcher  [BoxartFetcher, nil]
     # @param overrides [RomOverrides, nil]
-    def self.from_rom(rom, fetcher: nil, overrides: nil)
+    def self.from_rom(rom, fetcher: nil, overrides: nil, game_index: GameIndex)
       game_code = rom['game_code']
       rom_id    = rom['rom_id']
 
       new(
         rom_id:             rom_id,
-        title:              rom['title'] || rom['rom_id'] || '???',
+        title:              game_index.lookup(game_code) ||
+                            game_index.lookup_by_md5(rom['md5'], rom['platform'] || 'gba') ||
+                            rom['title'] || rom['rom_id'] || '???',
         platform:           (rom['platform'] || 'gba').upcase,
         game_code:          game_code,
         path:               rom['path'],
-        has_official_entry: game_code ? !GameIndex.lookup(game_code).nil? : false,
+        md5:                rom['md5'],
+        has_official_entry: game_code ? !game_index.lookup(game_code).nil? : false,
         cached_boxart_path: (fetcher.cached_path(game_code) if fetcher&.cached?(game_code)),
         custom_boxart_path: overrides&.custom_boxart(rom_id),
       )

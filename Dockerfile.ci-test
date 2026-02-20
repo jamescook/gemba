@@ -127,6 +127,7 @@ RUN --mount=type=cache,target=/bundle-cache \
 COPY Rakefile ./
 COPY ext/ ext/
 COPY lib/ lib/
+COPY vendor/rcheevos/ vendor/rcheevos/
 
 # Compile gemba C extension
 RUN MAKEFLAGS="-j$(nproc)" bundle exec rake compile

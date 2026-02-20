@@ -60,18 +60,33 @@ def poll_until_focused(player, timeout_ms: 2_000, &block)
   app.after(50, &check)
 end
 
-def poll_until_ready(player, timeout_ms: 5_000, &block)
-  app = player.app
+# Polls every 50ms until the given condition block returns truthy, then
+# yields the action block.  Aborts with exit 1 if the deadline is exceeded.
+#
+# Example — wait for a menu entry to become enabled:
+#   poll_until(app, timeout_ms: 3_000,
+#              condition: -> { app.tcl_eval('...entrycget 0 -state').strip == 'normal' }) do
+#     app.command(...)
+#   end
+def poll_until(app, timeout_ms: 5_000, condition:, label: "condition", &block)
   deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout_ms / 1000.0
   check = proc do
-    if player.ready?
+    if condition.call
       block.call
     elsif Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
-      $stderr.puts "FAIL: Player not ready within #{timeout_ms}ms"
+      $stderr.puts "FAIL: #{label} not true within #{timeout_ms}ms"
       exit 1
     else
       app.after(50, &check)
     end
   end
   app.after(50, &check)
+end
+
+def poll_until_ready(player, timeout_ms: 5_000, &block)
+  poll_until(player.app, timeout_ms: timeout_ms,
+             condition: -> { player.ready? },
+             label: "Player not ready") do
+    block.call
+  end
 end

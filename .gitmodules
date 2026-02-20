@@ -1,0 +1,3 @@
+[submodule "vendor/rcheevos"]
+	path = vendor/rcheevos
+	url = git@github.com:RetroAchievements/rcheevos.git

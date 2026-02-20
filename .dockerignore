@@ -1,5 +1,6 @@
 # Don't send build artifacts to Docker daemon
 vendor/
+!vendor/rcheevos/
 coverage/
 tmp/
 **/*.gem

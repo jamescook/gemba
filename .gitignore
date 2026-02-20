@@ -8,7 +8,11 @@
 Makefile
 
 # Vendor build artifacts (rebuilt with `rake deps`)
-vendor/
+# Ignore specific build artifact dirs; vendor/rcheevos is a tracked submodule
+vendor/install
+vendor/mgba
+vendor/install/
+vendor/mgba/
 
 # Gem build
 *.gem

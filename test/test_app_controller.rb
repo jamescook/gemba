@@ -17,6 +17,7 @@ class TestMGBAPlayer < Minitest::Test
       require "support/player_helpers"
 
       player = Gemba::AppController.new("#{TEST_ROM}")
+      player.disable_confirmations!
       app = player.app
 
       poll_until_ready(player) { player.running = false }
@@ -39,6 +40,7 @@ class TestMGBAPlayer < Minitest::Test
       require "gemba"
 
       player = Gemba::AppController.new
+      player.disable_confirmations!
       app = player.app
 
       app.after(100) do
@@ -70,11 +72,11 @@ class TestMGBAPlayer < Minitest::Test
       player.disable_confirmations!
       app = player.app
 
-      poll_until_ready(player) do
+      poll_until(app, timeout_ms: 5_000,
+                 condition: -> { app.tcl_eval('.menubar.view entrycget 0 -state').strip == 'normal' },
+                 label: "View menu entry never became enabled") do
         puts "BEFORE=#{player.current_view}"
-
-        app.command('.menubar.view', 'invoke', 0)
-
+        app.tcl_eval('.menubar.view invoke 0')
         app.after(100) do
           puts "AFTER=#{player.current_view}"
           player.running = false
@@ -157,6 +159,7 @@ class TestMGBAPlayer < Minitest::Test
       require "support/player_helpers"
 
       player = Gemba::AppController.new("#{TEST_ROM}")
+      player.disable_confirmations!
       app = player.app
 
       poll_until_ready(player) do
@@ -173,8 +176,8 @@ class TestMGBAPlayer < Minitest::Test
           app.update
 
           app.after(50) do
-            # User presses q → quit
-            app.command(:event, 'generate', frame, '<KeyPress>', keysym: 'q')
+            # Trigger quit via virtual event — no focus dependency
+            app.command(:event, 'generate', '.', '<<Quit>>')
           end
         end
       end
@@ -201,6 +204,7 @@ class TestMGBAPlayer < Minitest::Test
       require "support/player_helpers"
 
       player = Gemba::AppController.new("#{TEST_ROM}")
+      player.disable_confirmations!
       app = player.app
 
       poll_until_ready(player) do
@@ -212,8 +216,8 @@ class TestMGBAPlayer < Minitest::Test
         app.update
 
         app.after(50) do
-          # User presses q → quit (while still in turbo)
-          app.command(:event, 'generate', frame, '<KeyPress>', keysym: 'q')
+          # Trigger quit via virtual event — no focus dependency
+          app.command(:event, 'generate', '.', '<<Quit>>')
         end
       end
 
@@ -255,11 +259,8 @@ class TestMGBAPlayer < Minitest::Test
         # Recompute state_dir after overriding config.states_dir
         player.frame.save_mgr.state_dir = player.frame.save_mgr.state_dir_for_rom(core)
         state_dir = player.frame.save_mgr.state_dir
-        vp = player.frame.viewport
-        frame_path = vp.frame.path
-
-        # Quick save (F5)
-        app.command(:event, 'generate', frame_path, '<KeyPress>', keysym: 'F5')
+        # Quick save
+        app.command(:event, 'generate', '.', '<<QuickSave>>')
         app.update
 
         app.after(50) do
@@ -283,7 +284,7 @@ class TestMGBAPlayer < Minitest::Test
 
           # Save again to test backup rotation (after debounce)
           app.after(50) do
-            app.command(:event, 'generate', frame_path, '<KeyPress>', keysym: 'F5')
+            app.command(:event, 'generate', '.', '<<QuickSave>>')
             app.update
 
             app.after(50) do
@@ -300,8 +301,8 @@ class TestMGBAPlayer < Minitest::Test
                 exit 1
               end
 
-              # Quick load (F8)
-              app.command(:event, 'generate', frame_path, '<KeyPress>', keysym: 'F8')
+              # Quick load
+              app.command(:event, 'generate', '.', '<<QuickLoad>>')
               app.update
 
               app.after(50) do
@@ -374,11 +375,9 @@ class TestMGBAPlayer < Minitest::Test
       poll_until_ready(player) do
         # Recompute state_dir after overriding config.states_dir
         player.frame.save_mgr.state_dir = player.frame.save_mgr.state_dir_for_rom(player.frame.save_mgr.core)
-        vp = player.frame.viewport
-        frame_path = vp.frame.path
 
         # First save should succeed
-        app.command(:event, 'generate', frame_path, '<KeyPress>', keysym: 'F5')
+        app.command(:event, 'generate', '.', '<<QuickSave>>')
         app.update
 
         app.after(50) do
@@ -389,7 +388,7 @@ class TestMGBAPlayer < Minitest::Test
           first_mtime = first_exists ? File.mtime(ss_path) : nil
 
           # Immediate second save should be debounced (within 5s window)
-          app.command(:event, 'generate', frame_path, '<KeyPress>', keysym: 'F5')
+          app.command(:event, 'generate', '.', '<<QuickSave>>')
           app.update
 
           app.after(50) do
@@ -789,11 +788,8 @@ class TestMGBAPlayer < Minitest::Test
         config.recordings_dir = rec_dir
 
         poll_until_ready(player) do
-          vp = player.frame.viewport
-          frame = vp.frame.path
-
-          # Press F10 → start recording
-          app.command(:event, 'generate', frame, '<KeyPress>', keysym: 'F10')
+          # Start recording via virtual event (no focus needed)
+          app.command(:event, 'generate', '.', '<<RecordToggle>>')
           app.update
 
           # Let a few frames render with the recording indicator (red dot)
@@ -804,10 +800,8 @@ class TestMGBAPlayer < Minitest::Test
               next
             end
 
-            # Refocus needed under xvfb after timer callbacks
-            app.tcl_eval("focus -force \#{frame}")
-            # Press F10 → stop recording
-            app.command(:event, 'generate', frame, '<KeyPress>', keysym: 'F10')
+            # Stop recording via virtual event
+            app.command(:event, 'generate', '.', '<<RecordToggle>>')
             app.update
 
             app.after(50) do
@@ -1090,9 +1084,7 @@ class TestMGBAPlayer < Minitest::Test
       app = player.app
 
       app.after(100) do
-        app.tcl_eval("focus -force .")
-        app.update
-        app.tcl_eval("event generate . <KeyPress-question>")
+        app.command(:event, 'generate', '.', '<<ToggleHelpWindow>>')
         app.update
         state = app.tcl_eval("wm state .help_window")
         puts state == 'normal' ? "PASS" : "FAIL: help window not visible (state=\#{state})"
@@ -1120,13 +1112,11 @@ class TestMGBAPlayer < Minitest::Test
       app = player.app
 
       app.after(100) do
-        app.tcl_eval("focus -force .")
-        app.update
         # First press — show
-        app.tcl_eval("event generate . <KeyPress-question>")
+        app.command(:event, 'generate', '.', '<<ToggleHelpWindow>>')
         app.update
         # Second press — hide
-        app.tcl_eval("event generate . <KeyPress-question>")
+        app.command(:event, 'generate', '.', '<<ToggleHelpWindow>>')
         app.update
         state = app.tcl_eval("wm state .help_window")
         puts state == 'withdrawn' ? "PASS" : "FAIL: help window still visible after second ? press (state=\#{state})"
@@ -1154,13 +1144,11 @@ class TestMGBAPlayer < Minitest::Test
       app = player.app
 
       app.after(100) do
-        app.tcl_eval("focus -force .")
-        app.update
         # Go fullscreen via bus
         Gemba.bus.emit(:request_fullscreen)
         app.update
-        # Press ? — should be suppressed
-        app.tcl_eval("event generate . <KeyPress-question>")
+        # Toggle help — should be suppressed in fullscreen
+        app.command(:event, 'generate', '.', '<<ToggleHelpWindow>>')
         app.update
         exists = app.tcl_eval("winfo exists .help_window")
         state = exists == '1' ? app.tcl_eval("wm state .help_window") : 'withdrawn'

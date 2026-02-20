@@ -72,6 +72,25 @@ module TeekTestHelper
           })
         end
       end
+
+      # Wrap after() to capture the full Ruby backtrace before Teek converts
+      # the exception to a Tcl error (at which point the backtrace is lost).
+      def after(ms, on_error: :raise, &block)
+        path = ENV['GEMBA_BGERROR_LOG']
+        return super unless path
+        super(ms, on_error: on_error) do
+          begin
+            block.call
+          rescue => e
+            File.open(path, 'a') do |f|
+              f.puts "Ruby exception in after(#{ms}ms): #{e.class}: #{e.message}"
+              f.puts e.backtrace.join("\n")
+              f.puts "---"
+            end
+            raise
+          end
+        end
+      end
     end
     Teek::App.prepend(BgerrorCapture)
   RUBY
