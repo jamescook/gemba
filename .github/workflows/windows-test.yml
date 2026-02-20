@@ -82,7 +82,8 @@ jobs:
       run: |
         MSYS2_ROOT="${{ steps.msys2.outputs.root }}"
         export PATH="$MSYS2_ROOT/ucrt64/bin:$PATH"
-        bundle install --path vendor/bundle
+        bundle config set path vendor/bundle
+        bundle install
 
     - name: Save Bundler cache
       if: always() && steps.bundler-cache.outputs.cache-hit != 'true'
