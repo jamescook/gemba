@@ -50,6 +50,8 @@ module Gemba
       'recording_compression' => 1,
       'pause_on_focus_loss'  => true,
       'log_level'            => 'info',
+      'bios_path'            => nil,
+      'skip_bios'            => false,
     }.freeze
 
     # Settings that can be overridden per ROM. Maps config key → locale key.
@@ -65,6 +67,8 @@ module Gemba
       'turbo_speed'       => 'settings.turbo_speed',
       'quick_save_slot'   => 'settings.quick_save_slot',
       'save_state_backup' => 'settings.keep_backup',
+      'bios_path'         => 'settings.bios_path',
+      'skip_bios'         => 'settings.skip_bios',
     }.freeze
 
     PER_GAME_KEYS = PER_GAME_SETTINGS.keys.to_set.freeze
@@ -403,6 +407,23 @@ module Gemba
       global['pause_on_focus_loss'] = !!val
     end
 
+    # @return [String, nil] BIOS filename (relative to Config.bios_dir), or nil for HLE
+    def bios_path
+      global['bios_path']
+    end
+
+    def bios_path=(val)
+      global['bios_path'] = val.nil? ? nil : val.to_s
+    end
+
+    def skip_bios?
+      !!global['skip_bios']
+    end
+
+    def skip_bios=(val)
+      global['skip_bios'] = !!val
+    end
+
     # @return [String] log level (debug, info, warn, error)
     def log_level
       global['log_level']
@@ -587,6 +608,11 @@ module Gemba
     # @return [String] default directory for cached box art images
     def self.boxart_dir
       File.join(config_dir, 'boxart')
+    end
+
+    # @return [String] directory for BIOS files
+    def self.bios_dir
+      File.join(config_dir, 'bios')
     end
 
     # @return [String] path to the per-ROM overrides JSON file

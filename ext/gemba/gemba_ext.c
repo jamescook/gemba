@@ -259,8 +259,8 @@ get_mgba_core(VALUE self)
 static VALUE
 mgba_core_initialize(int argc, VALUE *argv, VALUE self)
 {
-    VALUE rom_path, save_dir;
-    rb_scan_args(argc, argv, "11", &rom_path, &save_dir);
+    VALUE rom_path, save_dir, bios_path;
+    rb_scan_args(argc, argv, "12", &rom_path, &save_dir, &bios_path);
 
     struct mgba_core *mc;
     TypedData_Get_Struct(self, struct mgba_core, &mgba_core_type, mc);
@@ -322,6 +322,17 @@ mgba_core_initialize(int argc, VALUE *argv, VALUE self)
         struct mCoreOptions opts = { 0 };
         opts.savegamePath = (char *)StringValueCStr(save_dir);
         mDirectorySetMapOptions(&core->dirs, &opts);
+    }
+
+    /* 7b. Load BIOS if provided (must be before reset) */
+    if (!NIL_P(bios_path)) {
+        Check_Type(bios_path, T_STRING);
+        struct VFile *bvf = VFileOpen(StringValueCStr(bios_path), O_RDONLY);
+        if (bvf) {
+            if (!core->loadBIOS(core, bvf, 0)) {
+                bvf->close(bvf);
+            }
+        }
     }
 
     /* 8. Reset */
@@ -1019,8 +1030,65 @@ mgba_count_changed_pixels(VALUE mod, VALUE delta)
 }
 
 /* --------------------------------------------------------- */
+/* Core#bios_loaded?                                         */
+/* Returns true if a BIOS VFile is attached to this core.   */
+/* GBA only; returns false for other platforms.             */
+/* --------------------------------------------------------- */
+
+static VALUE
+mgba_core_bios_loaded_p(VALUE self)
+{
+    struct mgba_core *mc = get_mgba_core(self);
+    if (mc->core->platform(mc->core) != mPLATFORM_GBA) {
+        return Qfalse;
+    }
+    struct GBA *gba = (struct GBA *)mc->core->board;
+    return gba->biosVf ? Qtrue : Qfalse;
+}
+
+/* --------------------------------------------------------- */
 /* Init                                                      */
 /* --------------------------------------------------------- */
+
+/* --------------------------------------------------------- */
+/* Core#load_bios(path)                                      */
+/* Load a BIOS file from path. Must be called before reset.  */
+/* Returns true on success, false on failure.                */
+/* --------------------------------------------------------- */
+
+static VALUE
+mgba_core_load_bios(VALUE self, VALUE rb_path)
+{
+    struct mgba_core *mc = get_mgba_core(self);
+    Check_Type(rb_path, T_STRING);
+    const char *path = StringValueCStr(rb_path);
+
+    struct VFile *vf = VFileOpen(path, O_RDONLY);
+    if (!vf) {
+        return Qfalse;
+    }
+
+    bool ok = mc->core->loadBIOS(mc->core, vf, 0);
+    if (!ok) {
+        vf->close(vf);
+    }
+    /* mGBA takes ownership of vf on success; do not close */
+    return ok ? Qtrue : Qfalse;
+}
+
+/* --------------------------------------------------------- */
+/* Gemba.gba_bios_checksum(bytes)                            */
+/* Compute GBA BIOS checksum (mGBA algorithm) on raw bytes.  */
+/* --------------------------------------------------------- */
+
+static VALUE
+mgba_gba_bios_checksum(VALUE self, VALUE rb_bytes)
+{
+    Check_Type(rb_bytes, T_STRING);
+    long len = RSTRING_LEN(rb_bytes);
+    uint32_t result = GBAChecksum((uint32_t *)RSTRING_PTR(rb_bytes), (size_t)(len / 4));
+    return UINT2NUM(result);
+}
 
 void
 Init_gemba_ext(void)
@@ -1062,6 +1130,13 @@ Init_gemba_ext(void)
     rb_define_method(cCore, "rewind_count",  mgba_core_rewind_count, 0);
     rb_define_method(cCore, "destroy",     mgba_core_destroy, 0);
     rb_define_method(cCore, "destroyed?",  mgba_core_destroyed_p, 0);
+    rb_define_method(cCore, "load_bios",    mgba_core_load_bios, 1);
+    rb_define_method(cCore, "bios_loaded?", mgba_core_bios_loaded_p, 0);
+
+    /* BIOS checksum utility */
+    rb_define_module_function(mGemba, "gba_bios_checksum", mgba_gba_bios_checksum, 1);
+    rb_define_const(mGemba, "GBA_BIOS_CHECKSUM",    UINT2NUM(GBA_BIOS_CHECKSUM));
+    rb_define_const(mGemba, "GBA_DS_BIOS_CHECKSUM", UINT2NUM(GBA_DS_BIOS_CHECKSUM));
 
     /* GBA key constants (bitmask values for set_keys) */
     rb_define_const(mGemba, "KEY_A",      INT2NUM(1 << GEMBA_KEY_A));

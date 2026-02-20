@@ -79,6 +79,10 @@ module Gemba
           options[:turbo_speed] = v.clamp(0, 4)
         end
 
+        o.on("--bios PATH", "Path to GBA BIOS file (overrides saved setting)") do |v|
+          options[:bios] = File.expand_path(v)
+        end
+
         o.on("--locale LANG", "Language (en, ja, auto)") do |v|
           options[:locale] = v
         end
@@ -104,6 +108,7 @@ module Gemba
       config.show_fps = true if options[:show_fps]
       config.turbo_speed = options[:turbo_speed] if options[:turbo_speed]
       config.locale = options[:locale] if options[:locale]
+      config.bios_path = options[:bios] if options[:bios]
     end
 
     def self.run_play(argv, dry_run: false)

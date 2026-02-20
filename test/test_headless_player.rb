@@ -199,4 +199,21 @@ class TestHeadlessPlayer < Minitest::Test
       assert_equal 0, player.rewind_count
     end
   end
+
+  # -- BIOS loading -----------------------------------------------------------
+
+  FAKE_BIOS = File.expand_path("fixtures/fake_bios.bin", __dir__)
+
+  def test_bios_not_loaded_by_default
+    Gemba::HeadlessPlayer.open(TEST_ROM) do |player|
+      refute player.core.bios_loaded?
+    end
+  end
+
+  def test_bios_loaded_when_path_given
+    skip "fake_bios.bin not present" unless File.exist?(FAKE_BIOS)
+    Gemba::HeadlessPlayer.open(TEST_ROM, bios_path: FAKE_BIOS) do |player|
+      assert player.core.bios_loaded?
+    end
+  end
 end

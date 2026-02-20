@@ -15,13 +15,13 @@ module Gemba
   class HeadlessPlayer
     # @param rom_path [String] path to ROM file (.gba, .gb, .gbc, .zip)
     # @param config [Config, nil] config object (uses default if nil)
-    def initialize(rom_path, config: nil)
+    def initialize(rom_path, config: nil, bios_path: nil)
       @config = config || Gemba.user_config
       rom_path = RomResolver.resolve(rom_path)
 
       saves = @config.saves_dir
       FileUtils.mkdir_p(saves) unless File.directory?(saves)
-      @core = Core.new(rom_path, saves)
+      @core = Core.new(rom_path, saves, bios_path)
       @keys = 0
     end
 

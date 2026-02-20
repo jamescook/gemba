@@ -269,9 +269,10 @@ module Gemba
     # Load (or reload) a ROM core. Creates Core + SaveStateManager.
     # @param rom_path [String] resolved path to the ROM file
     # @param saves_dir [String] directory for .sav files
+    # @param bios_path [String, nil] full path to BIOS file (loaded before reset)
     # @param rom_source_path [String] original path (for input recorder)
     # @return [Core] the new core
-    def load_core(rom_path, saves_dir:, rom_source_path: nil)
+    def load_core(rom_path, saves_dir:, bios_path: nil, rom_source_path: nil)
       stop_recording if @recorder&.recording?
       stop_input_recording if @input_recorder&.recording?
 
@@ -281,7 +282,7 @@ module Gemba
       @stream.clear
 
       FileUtils.mkdir_p(saves_dir) unless File.directory?(saves_dir)
-      @core = Core.new(rom_path, saves_dir)
+      @core = Core.new(rom_path, saves_dir, bios_path)
       @rom_source_path = rom_source_path || rom_path
 
       new_platform = Platform.for(@core)

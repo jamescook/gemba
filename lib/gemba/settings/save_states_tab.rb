@@ -21,6 +21,11 @@ module Gemba
         @mark_dirty = mark_dirty
       end
 
+      def load_from_config(config)
+        @app.set_variable(VAR_QUICK_SLOT, config.quick_save_slot.to_s)
+        @app.set_variable(VAR_BACKUP,     config.save_state_backup? ? '1' : '0')
+      end
+
       def build
         @app.command('ttk::frame', FRAME)
         @app.command(Paths::NB, 'add', FRAME, text: translate('settings.save_states'))

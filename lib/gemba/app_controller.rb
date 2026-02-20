@@ -465,7 +465,8 @@ module Gemba
       end
 
       saves = @config.saves_dir
-      loaded_core = @emulator_frame.load_core(rom_path, saves_dir: saves, rom_source_path: path)
+      bios_path = resolve_bios_path
+      loaded_core = @emulator_frame.load_core(rom_path, saves_dir: saves, bios_path: bios_path, rom_source_path: path)
       @rom_path = path
 
       new_platform = @emulator_frame.platform
@@ -573,34 +574,35 @@ module Gemba
 
     # ── Config ─────────────────────────────────────────────────────────
 
+    def resolve_bios_path
+      name = @config.bios_path
+      return nil if name.nil? || name.empty?
+      # Absolute path (e.g. from --bios CLI flag) used directly;
+      # bare filename looked up in bios_dir (set via Settings UI).
+      full = File.absolute_path?(name) ? name : File.join(Config.bios_dir, name)
+      if File.exist?(full)
+        Gemba.log(:info) { "BIOS: #{File.basename(full)}" }
+        full
+      else
+        Gemba.log(:warn) { "BIOS configured but file not found: #{full}" }
+        nil
+      end
+    end
+
     def save_config
       @config.scale = @scale
       frame&.receive(:write_config)
       @kb_map.save_to_config
       @gp_map.save_to_config
       @hotkeys.save_to_config
+      bios_name = @app.get_variable(SettingsWindow::VAR_BIOS_PATH).to_s.strip
+      @config.bios_path = bios_name.empty? ? nil : bios_name
+      @config.skip_bios = @app.get_variable(SettingsWindow::VAR_SKIP_BIOS) == '1'
       @config.save!
     end
 
     def push_settings_to_ui
-      @app.set_variable(SettingsWindow::VAR_SCALE, "#{@config.scale}x")
-      turbo_label = @config.turbo_speed == 0 ? 'Uncapped' : "#{@config.turbo_speed}x"
-      @app.set_variable(SettingsWindow::VAR_TURBO, turbo_label)
-      @app.set_variable(SettingsWindow::VAR_ASPECT_RATIO, @config.keep_aspect_ratio? ? '1' : '0')
-      @app.set_variable(SettingsWindow::VAR_SHOW_FPS, @config.show_fps? ? '1' : '0')
-      @app.set_variable(SettingsWindow::VAR_TOAST_DURATION, "#{@config.toast_duration}s")
-      filter_label = @config.pixel_filter == 'nearest' ? translate('settings.filter_nearest') : translate('settings.filter_linear')
-      @app.set_variable(SettingsWindow::VAR_FILTER, filter_label)
-      @app.set_variable(SettingsWindow::VAR_INTEGER_SCALE, @config.integer_scale? ? '1' : '0')
-      @app.set_variable(SettingsWindow::VAR_COLOR_CORRECTION, @config.color_correction? ? '1' : '0')
-      @app.set_variable(SettingsWindow::VAR_FRAME_BLENDING, @config.frame_blending? ? '1' : '0')
-      @app.set_variable(SettingsWindow::VAR_REWIND_ENABLED, @config.rewind_enabled? ? '1' : '0')
-      @app.set_variable(SettingsWindow::VAR_VOLUME, @config.volume.to_s)
-      @app.set_variable(SettingsWindow::VAR_MUTE, @config.muted? ? '1' : '0')
-      @app.set_variable(SettingsWindow::VAR_QUICK_SLOT, @config.quick_save_slot.to_s)
-      @app.set_variable(SettingsWindow::VAR_SS_BACKUP, @config.save_state_backup? ? '1' : '0')
-      @app.set_variable(SettingsWindow::VAR_REC_COMPRESSION, @config.recording_compression.to_s)
-      @app.set_variable(SettingsWindow::VAR_PAUSE_FOCUS, @config.pause_on_focus_loss? ? '1' : '0')
+      emit(:config_loaded, config: @config)
     end
 
     def refresh_from_config

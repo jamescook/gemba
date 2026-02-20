@@ -7,6 +7,8 @@
 #include <mgba/core/directories.h>
 #include <mgba/core/log.h>
 #include <mgba-util/vfs.h>
+#include <mgba/internal/gba/bios.h>
+#include <mgba/internal/gba/gba.h>
 
 extern VALUE mGemba;
 

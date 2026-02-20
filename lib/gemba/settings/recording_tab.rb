@@ -19,6 +19,10 @@ module Gemba
         @mark_dirty = mark_dirty
       end
 
+      def load_from_config(config)
+        @app.set_variable(VAR_COMPRESSION, config.recording_compression.to_s)
+      end
+
       def build
         @app.command('ttk::frame', FRAME)
         @app.command(Paths::NB, 'add', FRAME, text: translate('settings.recording'))

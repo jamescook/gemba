@@ -51,8 +51,8 @@ module Gemba
     end
 
     def cleanup
-      @photos.each_value { |name| @app.command(:image, :delete, name) rescue nil }
-      @photos.clear
+      @photos&.each_value { |name| @app.command(:image, :delete, name) rescue nil }
+      @photos&.clear
     end
 
     def receive(event, **args)
