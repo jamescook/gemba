@@ -252,6 +252,8 @@ class TestMGBAPlayer < Minitest::Test
 
       poll_until_ready(player) do
         core = player.frame.save_mgr.core
+        # Recompute state_dir after overriding config.states_dir
+        player.frame.save_mgr.state_dir = player.frame.save_mgr.state_dir_for_rom(core)
         state_dir = player.frame.save_mgr.state_dir
         vp = player.frame.viewport
         frame_path = vp.frame.path
@@ -370,6 +372,8 @@ class TestMGBAPlayer < Minitest::Test
       config.save_state_debounce = 5.0  # long debounce
 
       poll_until_ready(player) do
+        # Recompute state_dir after overriding config.states_dir
+        player.frame.save_mgr.state_dir = player.frame.save_mgr.state_dir_for_rom(player.frame.save_mgr.core)
         vp = player.frame.viewport
         frame_path = vp.frame.path
 
