@@ -58,9 +58,13 @@ end
 
 loader = Zeitwerk::Loader.new
 loader.push_dir(File.expand_path("../..", __FILE__))  # lib/ as root
-loader.inflector.inflect("gba" => "GBA", "gb" => "GB", "gbc" => "GBC", "cli" => "CLI")
+loader.inflector.inflect(
+  "gba" => "GBA", "gb" => "GB", "gbc" => "GBC", "cli" => "CLI",
+  "ips" => "IPS", "bps" => "BPS", "ups" => "UPS"
+)
 loader.ignore(__FILE__)  # bootstrap file — not a constant
 loader.ignore(File.expand_path("../../gemba.rb", __FILE__))  # entry point, not a constant
+loader.ignore(File.expand_path("../platform_open.rb", __FILE__))  # module method, not a constant
 loader.setup
 
 # Initialize locale on require

@@ -20,6 +20,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - ROM Info window showing title, game code, publisher, platform, resolution
 - Session logging
 - CLI subcommands for decoding `.grec` and `.gir` files
+- ROM Patcher — apply IPS, BPS, and UPS patch files via GUI (View > Patch ROM…) or CLI (`gemba patch`)
+- ZIP ROM support in patcher — drag in a zipped ROM and the output is a plain `.gba`
+- Mouse cursor auto-hides after 2 seconds of inactivity while a game is playing; restores on movement or pause
+- `?` hotkey toggles a floating hotkey reference panel beside the emulator window; emulation auto-pauses while it is open
+- Help window auto-pauses emulation while open
+- BIOS loading — configure a GBA BIOS file via Settings > System; gemba validates the file size (16 384 bytes), identifies Official GBA BIOS and NDS GBA Mode BIOS by checksum, and copies it to the gemba data directory; "Skip BIOS intro" option available for supported files
 
 ### Changed
 
@@ -30,6 +36,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - Games no longer start paused on Linux/Windows when window doesn't have focus at startup
+- Opening the Logs Directory menu item no longer crashes (platform_open was not loaded by Zeitwerk)
 
 ## [0.1.1] — 2026-02-17
 

@@ -98,10 +98,13 @@ module Gemba
       apply_frame_aspect(@game_picker)
 
       @help_auto_paused = false
+      @cursor_hidden    = false
+      @cursor_hide_job  = nil
 
       setup_drop_target
       setup_global_hotkeys
       setup_bus_subscriptions
+      setup_cursor_autohide
     end
 
     def run
@@ -174,6 +177,7 @@ module Gemba
       bus.on(:pause_changed) do |paused|
         label = paused ? translate('menu.resume') : translate('menu.pause')
         @app.command(@emu_menu, :entryconfigure, 0, label: label)
+        show_cursor if paused
       end
       bus.on(:recording_changed)       { update_recording_menu }
       bus.on(:input_recording_changed) { update_input_recording_menu }
@@ -271,6 +275,9 @@ module Gemba
       @app.command(view_menu, :add, :command,
                    label: translate('menu.rom_info'), state: :disabled,
                    command: proc { show_rom_info })
+      @app.command(view_menu, :add, :command,
+                   label: translate('menu.patch_rom'),
+                   command: proc { show_patcher })
       @app.command(view_menu, :add, :separator)
       @app.command(view_menu, :add, :command,
                    label: translate('menu.open_logs_dir'),
@@ -763,6 +770,35 @@ module Gemba
 
     # ── Global hotkeys (pre-SDL2) ──────────────────────────────────────
 
+    CURSOR_HIDE_MS = 2000
+
+    def setup_cursor_autohide
+      @app.bind('.', '<Motion>') { on_cursor_motion }
+    end
+
+    def on_cursor_motion
+      show_cursor
+      return unless frame&.rom_loaded? && !frame&.paused?
+      $stderr.puts "[cursor] motion — scheduling hide in #{CURSOR_HIDE_MS}ms"
+      @cursor_hide_job = @app.after(CURSOR_HIDE_MS) { hide_cursor }
+    end
+
+    def hide_cursor
+      return if @cursor_hidden
+      @cursor_hidden = true
+      $stderr.puts "[cursor] hide  sdl2=#{Teek::SDL2.respond_to?(:hide_cursor)}"
+      Teek::SDL2.hide_cursor if Teek::SDL2.respond_to?(:hide_cursor)
+    end
+
+    def show_cursor
+      @app.after_cancel(@cursor_hide_job) if @cursor_hide_job
+      @cursor_hide_job = nil
+      return unless @cursor_hidden
+      @cursor_hidden = false
+      $stderr.puts "[cursor] show  sdl2=#{Teek::SDL2.respond_to?(:show_cursor)}"
+      Teek::SDL2.show_cursor if Teek::SDL2.respond_to?(:show_cursor)
+    end
+
     def setup_global_hotkeys
       # '?' toggles the hotkey reference panel. Bound on 'all' so it fires even
       # when the help window itself has focus after being shown.
@@ -800,6 +836,11 @@ module Gemba
         frame&.receive(:pause) if @help_auto_paused  # pause while reading
         @help_window.show
       end
+    end
+
+    def show_patcher
+      @patcher_window ||= PatcherWindow.new(app: @app)
+      @patcher_window.show
     end
 
     def bell

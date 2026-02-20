@@ -9,6 +9,7 @@ menu:
   fullscreen: "Fullscreen"
   rom_info: "ROM Info…"
   open_logs_dir: "Open Logs Directory"
+  patch_rom: "Patch ROM…"
   emulation: "Emulation"
   pause: "Pause"
   resume: "Resume"
@@ -180,6 +181,23 @@ replay:
   replay_player: "Input Replay"
   ended: "Replay complete ({frames} frames)"
   empty_hint: "Open Input Recording (Cmd+O)"
+
+patcher:
+  title: "Patch ROM"
+  rom_label: "ROM file:"
+  patch_label: "Patch file:"
+  outdir_label: "Output dir:"
+  browse: "Browse…"
+  apply: "Apply Patch"
+  working: "Applying patch…"
+  done: "Done →"
+  err_missing_fields: "Please fill in all fields."
+  err_rom_not_found: "ROM file not found."
+  err_patch_not_found: "Patch file not found."
+  err_failed: "Patch failed:"
+  overwrite_title: "File Exists"
+  overwrite_msg: "{path} already exists. Overwrite it?"
+  thread_mode_warn: "Note: Progress may appear stuck on Ruby < 4"
 
 player:
   open_rom_hint: "File > Open ROM…"

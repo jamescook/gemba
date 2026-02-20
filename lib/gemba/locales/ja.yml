@@ -9,6 +9,7 @@ menu:
   fullscreen: "フルスクリーン"
   rom_info: "ROM情報…"
   open_logs_dir: "ログフォルダを開く"
+  patch_rom: "ROMをパッチ…"
   emulation: "エミュレーション"
   pause: "一時停止"
   resume: "再開"
@@ -180,6 +181,23 @@ replay:
   replay_player: "入力リプレイ"
   ended: "リプレイ完了（{frames}フレーム）"
   empty_hint: "入力記録を開く (Cmd+O)"
+
+patcher:
+  title: "ROMをパッチ"
+  rom_label: "ROMファイル:"
+  patch_label: "パッチファイル:"
+  outdir_label: "出力フォルダ:"
+  browse: "参照…"
+  apply: "パッチを適用"
+  working: "パッチ適用中…"
+  done: "完了 →"
+  err_missing_fields: "すべての項目を入力してください。"
+  err_rom_not_found: "ROMファイルが見つかりません。"
+  err_patch_not_found: "パッチファイルが見つかりません。"
+  err_failed: "パッチ失敗:"
+  overwrite_title: "ファイルが存在します"
+  overwrite_msg: "{path} は既に存在します。上書きしますか？"
+  thread_mode_warn: "注意: Ruby < 4 ではプログレスが止まって見える場合があります"
 
 player:
   open_rom_hint: "ファイル > ROMを開く…"

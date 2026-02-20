@@ -608,6 +608,11 @@ module Gemba
       File.join(config_dir, 'boxart')
     end
 
+    # @return [String] default directory for patched ROMs
+    def self.default_patches_dir
+      File.join(config_dir, 'patches')
+    end
+
     # @return [String] directory for BIOS files
     def self.bios_dir
       File.join(config_dir, 'bios')
