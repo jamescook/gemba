@@ -353,7 +353,8 @@ class TestRomPatcher < Minitest::Test
 
   def test_patch_with_zip_rom_produces_gba_output
     require 'zip'
-    Dir.mktmpdir do |dir|
+    dir = Dir.mktmpdir
+    begin
       # Build a tiny ROM and wrap it in a zip
       rom_data   = blank_rom
       zip_path   = File.join(dir, "game.zip")
@@ -373,6 +374,9 @@ class TestRomPatcher < Minitest::Test
       assert File.exist?(out_path), "expected output at #{out_path}"
       assert_equal ".gba", File.extname(out_path)
       assert_equal "\xFF".b, File.binread(out_path, 1)
+    ensure
+      # Windows may still hold the zip file handle until GC — ignore EACCES on cleanup
+      FileUtils.remove_entry(dir) rescue nil
     end
   end
 end
