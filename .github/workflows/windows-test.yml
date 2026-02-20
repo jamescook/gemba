@@ -24,7 +24,6 @@ jobs:
       uses: ruby/setup-ruby@v1
       with:
         ruby-version: ${{ github.event.inputs.ruby_version }}
-        bundler-cache: true
 
     - name: Locate MSYS2
       id: msys2
@@ -69,6 +68,29 @@ jobs:
           mingw-w64-ucrt-x86_64-SDL2_gfx \
           mingw-w64-ucrt-x86_64-mgba \
           mingw-w64-ucrt-x86_64-imagemagick
+
+    - name: Restore Bundler cache
+      id: bundler-cache
+      uses: actions/cache/restore@v5
+      with:
+        path: vendor/bundle
+        key: bundler-windows-ruby${{ github.event.inputs.ruby_version }}-${{ hashFiles('Gemfile.lock') }}
+
+    - name: Bundle install
+      if: steps.bundler-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        MSYS2_ROOT="${{ steps.msys2.outputs.root }}"
+        export PATH="$MSYS2_ROOT/ucrt64/bin:$PATH"
+        bundle config set path vendor/bundle
+        bundle install
+
+    - name: Save Bundler cache
+      if: always() && steps.bundler-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v5
+      with:
+        path: vendor/bundle
+        key: bundler-windows-ruby${{ github.event.inputs.ruby_version }}-${{ hashFiles('Gemfile.lock') }}
 
     - name: Restore compiled extension
       id: ext-cache

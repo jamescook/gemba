@@ -11,7 +11,7 @@ module Gemba
     if p.darwin?
       system('open', dir)
     elsif p.windows?
-      system('explorer.exe', dir)
+      system('explorer.exe', dir.tr('/', '\\'))
     else
       system('xdg-open', dir)
     end

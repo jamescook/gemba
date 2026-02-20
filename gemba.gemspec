@@ -21,8 +21,9 @@ Gem::Specification.new do |spec|
   spec.extensions    = ["ext/gemba/extconf.rb"]
   spec.required_ruby_version = ">= 3.2"
 
-  spec.add_dependency "teek", ">= 0.1.2"
-  spec.add_dependency "teek-sdl2", ">= 0.1.3"
+  spec.add_dependency "teek", ">= 0.1.5"
+  spec.add_dependency "teek-sdl2", ">= 0.2.1"
+  spec.add_dependency "zeitwerk", "~> 2.7"
 
   spec.add_development_dependency "rake", "~> 13.0"
   spec.add_development_dependency "rake-compiler", "~> 1.0"
@@ -32,6 +33,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "listen", "~> 3.0"
 
   spec.requirements << "libmgba development headers"
+  spec.add_development_dependency "webmock", "~> 3.0"
   spec.add_development_dependency "rubyzip", ">= 2.4"
 
   spec.requirements << "rubyzip gem >= 2.4 (optional, for loading ROMs from .zip files)"

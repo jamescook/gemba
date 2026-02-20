@@ -3,8 +3,7 @@
 require "minitest/autorun"
 require "tmpdir"
 require "json"
-require_relative "../lib/gemba/config"
-require_relative "../lib/gemba/version"
+require "gemba/headless"
 
 class TestMGBAConfig < Minitest::Test
   def setup

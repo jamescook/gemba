@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
-require_relative "../lib/gemba/input_mappings"
+require "gemba/headless"
 
 class TestVirtualKeyboard < Minitest::Test
   def setup

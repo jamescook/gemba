@@ -259,8 +259,8 @@ get_mgba_core(VALUE self)
 static VALUE
 mgba_core_initialize(int argc, VALUE *argv, VALUE self)
 {
-    VALUE rom_path, save_dir;
-    rb_scan_args(argc, argv, "11", &rom_path, &save_dir);
+    VALUE rom_path, save_dir, bios_path;
+    rb_scan_args(argc, argv, "12", &rom_path, &save_dir, &bios_path);
 
     struct mgba_core *mc;
     TypedData_Get_Struct(self, struct mgba_core, &mgba_core_type, mc);
@@ -324,8 +324,52 @@ mgba_core_initialize(int argc, VALUE *argv, VALUE self)
         mDirectorySetMapOptions(&core->dirs, &opts);
     }
 
+    /* 7b. Load BIOS if provided (must be before reset) */
+    if (!NIL_P(bios_path)) {
+        Check_Type(bios_path, T_STRING);
+        struct VFile *bvf = VFileOpen(StringValueCStr(bios_path), O_RDONLY);
+        if (bvf) {
+            if (!core->loadBIOS(core, bvf, 0)) {
+                bvf->close(bvf);
+            }
+        }
+    }
+
     /* 8. Reset */
     core->reset(core);
+
+    /* 8b. Re-query dimensions now that the ROM is loaded and the board
+     * pointer is populated.  For GB/GBC, the pre-load query returns the
+     * SGB frame size (256x224) because core->board is NULL at that point.
+     * After reset the real model is known, so desiredVideoDimensions
+     * returns the correct 160x144 for non-SGB games.  When the
+     * dimensions shrink we must reallocate and call setVideoBuffer so
+     * the stride matches the actual width. */
+    {
+        unsigned w2, h2;
+        core->desiredVideoDimensions(core, &w2, &h2);
+        if (w2 != w || h2 != h) {
+            color_t *new_vbuf = calloc((size_t)w2 * h2, sizeof(color_t));
+            uint32_t *new_prev = calloc((size_t)w2 * h2, sizeof(uint32_t));
+            if (!new_vbuf || !new_prev) {
+                free(new_vbuf);
+                free(new_prev);
+                free(mc->video_buffer);
+                mc->video_buffer = NULL;
+                free(mc->prev_frame);
+                mc->prev_frame = NULL;
+                core->deinit(core);
+                rb_raise(rb_eNoMemError, "failed to reallocate video buffer");
+            }
+            free(mc->video_buffer);
+            free(mc->prev_frame);
+            mc->video_buffer = new_vbuf;
+            mc->prev_frame = new_prev;
+            core->setVideoBuffer(core, mc->video_buffer, w2);
+        }
+        mc->width  = (int)w2;
+        mc->height = (int)h2;
+    }
 
     /* 9. Autoload save file (.sav alongside ROM, or in save_dir).
      * Creates the .sav if it doesn't exist yet. */
@@ -986,8 +1030,65 @@ mgba_count_changed_pixels(VALUE mod, VALUE delta)
 }
 
 /* --------------------------------------------------------- */
+/* Core#bios_loaded?                                         */
+/* Returns true if a BIOS VFile is attached to this core.   */
+/* GBA only; returns false for other platforms.             */
+/* --------------------------------------------------------- */
+
+static VALUE
+mgba_core_bios_loaded_p(VALUE self)
+{
+    struct mgba_core *mc = get_mgba_core(self);
+    if (mc->core->platform(mc->core) != mPLATFORM_GBA) {
+        return Qfalse;
+    }
+    struct GBA *gba = (struct GBA *)mc->core->board;
+    return gba->biosVf ? Qtrue : Qfalse;
+}
+
+/* --------------------------------------------------------- */
 /* Init                                                      */
 /* --------------------------------------------------------- */
+
+/* --------------------------------------------------------- */
+/* Core#load_bios(path)                                      */
+/* Load a BIOS file from path. Must be called before reset.  */
+/* Returns true on success, false on failure.                */
+/* --------------------------------------------------------- */
+
+static VALUE
+mgba_core_load_bios(VALUE self, VALUE rb_path)
+{
+    struct mgba_core *mc = get_mgba_core(self);
+    Check_Type(rb_path, T_STRING);
+    const char *path = StringValueCStr(rb_path);
+
+    struct VFile *vf = VFileOpen(path, O_RDONLY);
+    if (!vf) {
+        return Qfalse;
+    }
+
+    bool ok = mc->core->loadBIOS(mc->core, vf, 0);
+    if (!ok) {
+        vf->close(vf);
+    }
+    /* mGBA takes ownership of vf on success; do not close */
+    return ok ? Qtrue : Qfalse;
+}
+
+/* --------------------------------------------------------- */
+/* Gemba.gba_bios_checksum(bytes)                            */
+/* Compute GBA BIOS checksum (mGBA algorithm) on raw bytes.  */
+/* --------------------------------------------------------- */
+
+static VALUE
+mgba_gba_bios_checksum(VALUE self, VALUE rb_bytes)
+{
+    Check_Type(rb_bytes, T_STRING);
+    long len = RSTRING_LEN(rb_bytes);
+    uint32_t result = GBAChecksum((uint32_t *)RSTRING_PTR(rb_bytes), (size_t)(len / 4));
+    return UINT2NUM(result);
+}
 
 void
 Init_gemba_ext(void)
@@ -1029,6 +1130,13 @@ Init_gemba_ext(void)
     rb_define_method(cCore, "rewind_count",  mgba_core_rewind_count, 0);
     rb_define_method(cCore, "destroy",     mgba_core_destroy, 0);
     rb_define_method(cCore, "destroyed?",  mgba_core_destroyed_p, 0);
+    rb_define_method(cCore, "load_bios",    mgba_core_load_bios, 1);
+    rb_define_method(cCore, "bios_loaded?", mgba_core_bios_loaded_p, 0);
+
+    /* BIOS checksum utility */
+    rb_define_module_function(mGemba, "gba_bios_checksum", mgba_gba_bios_checksum, 1);
+    rb_define_const(mGemba, "GBA_BIOS_CHECKSUM",    UINT2NUM(GBA_BIOS_CHECKSUM));
+    rb_define_const(mGemba, "GBA_DS_BIOS_CHECKSUM", UINT2NUM(GBA_DS_BIOS_CHECKSUM));
 
     /* GBA key constants (bitmask values for set_keys) */
     rb_define_const(mGemba, "KEY_A",      INT2NUM(1 << GEMBA_KEY_A));
@@ -1041,6 +1149,21 @@ Init_gemba_ext(void)
     rb_define_const(mGemba, "KEY_DOWN",   INT2NUM(1 << GEMBA_KEY_DOWN));
     rb_define_const(mGemba, "KEY_R",      INT2NUM(1 << GEMBA_KEY_R));
     rb_define_const(mGemba, "KEY_L",      INT2NUM(1 << GEMBA_KEY_L));
+
+    /* GBA button name → bitmask hash (shared by KeyboardMap and GamepadMap) */
+    VALUE btn_bits = rb_hash_new();
+    rb_hash_aset(btn_bits, ID2SYM(rb_intern("a")),      INT2NUM(1 << GEMBA_KEY_A));
+    rb_hash_aset(btn_bits, ID2SYM(rb_intern("b")),      INT2NUM(1 << GEMBA_KEY_B));
+    rb_hash_aset(btn_bits, ID2SYM(rb_intern("l")),      INT2NUM(1 << GEMBA_KEY_L));
+    rb_hash_aset(btn_bits, ID2SYM(rb_intern("r")),      INT2NUM(1 << GEMBA_KEY_R));
+    rb_hash_aset(btn_bits, ID2SYM(rb_intern("up")),     INT2NUM(1 << GEMBA_KEY_UP));
+    rb_hash_aset(btn_bits, ID2SYM(rb_intern("down")),   INT2NUM(1 << GEMBA_KEY_DOWN));
+    rb_hash_aset(btn_bits, ID2SYM(rb_intern("left")),   INT2NUM(1 << GEMBA_KEY_LEFT));
+    rb_hash_aset(btn_bits, ID2SYM(rb_intern("right")),  INT2NUM(1 << GEMBA_KEY_RIGHT));
+    rb_hash_aset(btn_bits, ID2SYM(rb_intern("start")),  INT2NUM(1 << GEMBA_KEY_START));
+    rb_hash_aset(btn_bits, ID2SYM(rb_intern("select")), INT2NUM(1 << GEMBA_KEY_SELECT));
+    OBJ_FREEZE(btn_bits);
+    rb_define_const(mGemba, "GBA_BTN_BITS", btn_bits);
 
     /* Toast background generator */
     rb_define_module_function(mGemba, "toast_background", mgba_toast_background, 3);

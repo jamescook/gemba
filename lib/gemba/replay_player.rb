@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require 'fileutils'
-require_relative 'locale'
 
 module Gemba
   # Non-interactive GBA replay viewer with SDL2 video/audio.
@@ -17,16 +16,10 @@ module Gemba
     include Gemba
     include Locale::Translatable
 
-    GBA_W  = 240
-    GBA_H  = 160
     DEFAULT_SCALE = 3
 
     AUDIO_FREQ     = 44100
-    GBA_FPS        = 59.7272
-    FRAME_PERIOD   = 1.0 / GBA_FPS
-
-    AUDIO_BUF_CAPACITY = (AUDIO_FREQ / GBA_FPS * 6).to_i
-    MAX_DELTA          = 0.005
+    MAX_DELTA      = 0.005
     FF_MAX_FRAMES      = 10
     FADE_IN_FRAMES     = (AUDIO_FREQ * 0.02).to_i
     EVENT_LOOP_FAST_MS = 1
@@ -82,6 +75,7 @@ module Gemba
       @pixel_filter  = @config.pixel_filter
       @integer_scale = @config.integer_scale?
       @hotkeys = HotkeyMap.new(@config)
+      @platform = Platform.default
 
       if app
         # Child mode: use parent's app, build in a Toplevel
@@ -99,8 +93,8 @@ module Gemba
         @callbacks = {}
         @top = '.'
 
-        win_w = GBA_W * @scale
-        win_h = GBA_H * @scale
+        win_w = @platform.width * @scale
+        win_h = @platform.height * @scale
         @app.set_window_title("[REPLAY]")
         @app.set_window_geometry("#{win_w}x#{win_h}")
 
@@ -151,6 +145,15 @@ module Gemba
 
     private
 
+    def frame_period = 1.0 / @platform.fps
+    def audio_buf_capacity = (AUDIO_FREQ / @platform.fps * 6).to_i
+
+    def recreate_texture
+      @texture&.destroy
+      @texture = @viewport.renderer.create_texture(@platform.width, @platform.height, :streaming)
+      @texture.scale_mode = @pixel_filter.to_sym
+    end
+
     def start_replay_or_idle
       if @gir_path && !@animate_started
         load_replay(@gir_path)
@@ -166,8 +169,8 @@ module Gemba
     def build_child_toplevel
       @app.command(:toplevel, @top)
       @app.command(:wm, 'title', @top, translate('replay.replay_player'))
-      win_w = GBA_W * @scale
-      win_h = GBA_H * @scale
+      win_w = @platform.width * @scale
+      win_h = @platform.height * @scale
       @app.command(:wm, 'geometry', @top, "#{win_w}x#{win_h}")
       @app.command(:wm, 'transient', @top, '.')
       on_close = @callbacks[:on_dismiss] || proc { hide }
@@ -204,6 +207,11 @@ module Gemba
 
       @core&.destroy unless @core&.destroyed?
       @core = Core.new(rom_path, @config.saves_dir)
+      new_platform = Platform.for(@core)
+      if new_platform != @platform
+        @platform = new_platform
+        recreate_texture
+      end
       @replayer.validate!(@core)
       @core.load_state_from_file(@replayer.anchor_state_path)
 
@@ -242,15 +250,15 @@ module Gemba
       load_replay(gir_path)
     end
 
-    # ── SDL2 init (stripped-down from Player) ─────────────────────────
+    # ── SDL2 init ────────────────────────────────────────────────────
 
     def init_sdl2
       return if @sdl2_ready
 
       @app.command('tk', 'busy', @top)
 
-      win_w = GBA_W * @scale
-      win_h = GBA_H * @scale
+      win_w = @platform.width * @scale
+      win_h = @platform.height * @scale
 
       @top_frame = child_path('replay_frame') unless @standalone
       if @top_frame
@@ -262,7 +270,7 @@ module Gemba
       @viewport = Teek::SDL2::Viewport.new(@app, width: win_w, height: win_h, vsync: false, **parent_opts)
       @viewport.pack(fill: :both, expand: true)
 
-      @texture = @viewport.renderer.create_texture(GBA_W, GBA_H, :streaming)
+      @texture = @viewport.renderer.create_texture(@platform.width, @platform.height, :streaming)
       @texture.scale_mode = @pixel_filter.to_sym
 
       font_path = File.join(ASSETS_DIR, 'JetBrainsMonoNL-Regular.ttf')
@@ -420,9 +428,9 @@ module Gemba
         run_one_frame
         queue_audio
 
-        fill = (@stream.queued_samples.to_f / AUDIO_BUF_CAPACITY).clamp(0.0, 1.0)
+        fill = (@stream.queued_samples.to_f / audio_buf_capacity).clamp(0.0, 1.0)
         ratio = (1.0 - MAX_DELTA) + 2.0 * fill * MAX_DELTA
-        @next_frame += FRAME_PERIOD * ratio
+        @next_frame += frame_period * ratio
         frames += 1
       end
 
@@ -462,7 +470,7 @@ module Gemba
           end
           frames += 1
         end
-        @next_frame += FRAME_PERIOD
+        @next_frame += frame_period
       end
       @next_frame = now if now - @next_frame > 0.1
       return if frames == 0
@@ -501,7 +509,7 @@ module Gemba
         vol = volume_override || @volume
         pcm = apply_volume_to_pcm(pcm, vol) if vol < 1.0
         if @audio_fade_in > 0
-          pcm, @audio_fade_in = Player.apply_fade_ramp(pcm, @audio_fade_in, FADE_IN_FRAMES)
+          pcm, @audio_fade_in = EmulatorFrame.apply_fade_ramp(pcm, @audio_fade_in, FADE_IN_FRAMES)
         end
         @stream.queue(pcm)
       end
@@ -544,13 +552,13 @@ module Gemba
       return nil unless @keep_aspect_ratio
 
       out_w, out_h = @viewport.renderer.output_size
-      scale_x = out_w.to_f / GBA_W
-      scale_y = out_h.to_f / GBA_H
+      scale_x = out_w.to_f / @platform.width
+      scale_y = out_h.to_f / @platform.height
       scale = [scale_x, scale_y].min
       scale = scale.floor if @integer_scale && scale >= 1.0
 
-      dest_w = (GBA_W * scale).to_i
-      dest_h = (GBA_H * scale).to_i
+      dest_w = (@platform.width * scale).to_i
+      dest_h = (@platform.height * scale).to_i
       dest_x = (out_w - dest_w) / 2
       dest_y = (out_h - dest_h) / 2
 
@@ -632,11 +640,11 @@ module Gemba
 
       pixels = @core.video_buffer_argb
       photo_name = "__gemba_rp_ss_#{object_id}"
-      out_w = GBA_W * @scale
-      out_h = GBA_H * @scale
+      out_w = @platform.width * @scale
+      out_h = @platform.height * @scale
       @app.command(:image, :create, :photo, photo_name,
                    width: out_w, height: out_h)
-      @app.interp.photo_put_zoomed_block(photo_name, pixels, GBA_W, GBA_H,
+      @app.interp.photo_put_zoomed_block(photo_name, pixels, @platform.width, @platform.height,
                                          zoom_x: @scale, zoom_y: @scale, format: :argb)
       @app.command(photo_name, :write, path, format: :png)
       @app.command(:image, :delete, photo_name)

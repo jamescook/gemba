@@ -1,9 +1,7 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
-require "gemba"
-require_relative "../lib/gemba/version"
-require_relative "../lib/gemba/cli"
+require "gemba/headless"
 
 class TestCLI < Minitest::Test
   def parse_play(args)

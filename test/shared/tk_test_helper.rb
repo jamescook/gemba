@@ -49,6 +49,33 @@ module TeekTestHelper
   # Default timeout for subprocess tests (can be overridden via TK_TEST_TIMEOUT env var)
   DEFAULT_SUBPROCESS_TIMEOUT = 5
 
+  # Tcl bgerror capture preamble — prepended to subprocess code so that
+  # any unhandled Tcl background error is written to a log file instead
+  # of vanishing into the void. tk_subprocess reads the log after the
+  # subprocess exits and appends it to stderr.
+  BGERROR_PREAMBLE = <<~'RUBY'
+    require 'teek'
+    module BgerrorCapture
+      def initialize(*)
+        super
+        if (path = ENV['GEMBA_BGERROR_LOG'])
+          tcl_eval(%Q{
+            proc bgerror {msg} {
+              set fd [open {#{path}} a]
+              puts $fd "bgerror: $msg"
+              if {[info exists ::errorInfo]} {
+                puts $fd $::errorInfo
+              }
+              puts $fd "---"
+              close $fd
+            }
+          })
+        end
+      end
+    end
+    Teek::App.prepend(BgerrorCapture)
+  RUBY
+
   def tk_subprocess(code, coverage: true, timeout: nil)
     timeout ||= Integer(ENV['TK_TEST_TIMEOUT'] || DEFAULT_SUBPROCESS_TIMEOUT)
 
@@ -57,18 +84,31 @@ module TeekTestHelper
     load_paths = $LOAD_PATH.select { |p| p.start_with?(project_root) }
     load_path_args = load_paths.flat_map { |p| ["-I", p] }
 
-    # Prepend SimpleCov setup for coverage merging
-    full_code = coverage ? "#{TeekTestHelper.simplecov_preamble}\n#{code}" : code
+    # Temp file for capturing Tcl bgerror output
+    require 'tempfile'
+    bgerror_file = Tempfile.new(['bgerror', '.log'])
+    bgerror_path = bgerror_file.path
+    bgerror_file.close
+
+    # Prepend SimpleCov + bgerror capture
+    preamble = coverage ? "#{TeekTestHelper.simplecov_preamble}\n" : ""
+    full_code = "#{preamble}#{BGERROR_PREAMBLE}\n#{code}"
+
+    # Write code to temp file so backtraces show real line numbers
+    code_file = Tempfile.new(['tk_test', '.rb'])
+    code_file.write(full_code)
+    code_file.close
 
     # Pass env vars to subprocess
     env = {}
     env['VISUAL'] = '1' if ENV['VISUAL']
     env['COVERAGE'] = '1' if ENV['COVERAGE']
+    env['GEMBA_BGERROR_LOG'] = bgerror_path
 
     # -rbundler/setup activates Bundler in the subprocess so path: gems
     # (e.g. teek, teek-sdl2 from sibling repos) are on the load path.
     stdin, stdout, stderr, wait_thr = Open3.popen3(
-      env, RbConfig.ruby, "-rbundler/setup", *load_path_args, "-e", full_code
+      env, RbConfig.ruby, "-rbundler/setup", *load_path_args, code_file.path
     )
     stdin.close
 
@@ -84,6 +124,10 @@ module TeekTestHelper
       end
     end
 
+    # Read bgerror log before cleanup
+    bgerrors = File.read(bgerror_path).strip rescue ""
+    File.delete(bgerror_path) rescue nil
+
     unless status
       # Timed out - capture any output before killing so errors are visible
       out = stdout.read_nonblock(64 * 1024) rescue ""
@@ -92,13 +136,20 @@ module TeekTestHelper
       wait_thr.join
       stdout.close
       stderr.close
-      return [false, out, "Test timed out after #{timeout}s\n#{err}", nil]
+      err = "Test timed out after #{timeout}s\n#{err}"
+      err = "#{err}\nTcl bgerror log:\n#{bgerrors}" unless bgerrors.empty?
+      code_file.unlink rescue nil
+      return [false, out, err, nil]
     end
 
     out = stdout.read
     err = stderr.read
     stdout.close
     stderr.close
+
+    # Append bgerrors to stderr so they surface in test output
+    err = "#{err}\nTcl bgerror log:\n#{bgerrors}" unless bgerrors.empty?
+    code_file.unlink rescue nil
 
     [status.success?, out, err, status]
   end
@@ -282,6 +333,23 @@ module TeekTestHelper
   #
   # The test code has access to `app` (a Teek::App instance) and minitest assertions.
   # Do NOT create your own TkRoot or call root.destroy - worker manages this.
+  #
+  # == event generate gotcha: mouse button events ==
+  #
+  # The TestWorker calls `app.hide` (wm withdraw .) after every test.
+  # `event generate <Button-N>` silently does nothing when the root window is
+  # withdrawn because widgets are not mapped/viewable without a visible ancestor.
+  # Always call `app.show` + `app.update` before generating mouse button events:
+  #
+  #   picker.show
+  #   app.show    # ← required: deiconify root so widgets are viewable
+  #   app.update  # ← let Tk map all windows
+  #   app.tcl_eval("event generate .widget <Button-3> -x 10 -y 10")
+  #   app.update
+  #
+  # Key events additionally require focus:
+  #   app.tcl_eval("focus -force .widget")
+  #   app.update
   #
   # Example:
   #   def test_something

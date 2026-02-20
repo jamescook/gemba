@@ -5,9 +5,11 @@ menu:
   quit: "終了"
   settings: "設定"
   view: "表示"
+  game_library: "ゲームライブラリ"
   fullscreen: "フルスクリーン"
   rom_info: "ROM情報…"
   open_logs_dir: "ログフォルダを開く"
+  patch_rom: "ROMをパッチ…"
   emulation: "エミュレーション"
   pause: "一時停止"
   resume: "再開"
@@ -43,6 +45,8 @@ toast:
 dialog:
   game_running_title: "ゲーム実行中"
   game_running_msg: "別のゲームが実行中です。{name}に切り替えますか？"
+  return_to_library_title: "ゲームライブラリに戻る"
+  return_to_library_msg: "ゲームライブラリに戻りますか？保存されていない進行状況は失われます。"
   drop_error_title: "ドロップエラー"
   drop_single_file_only: "ROMファイルを1つだけドロップしてください。"
   drop_unsupported_type: "対応していないファイル形式: {ext}"
@@ -118,6 +122,15 @@ settings:
   tip_per_game: "ROM毎に映像・音声・ステートセーブの設定を個別に保存します。"
   tip_turbo_speed: "早送りホットキー使用時の速度。"
   tip_toast_duration: "画面上の通知の表示時間。"
+  system: "システム"
+  bios_header: "GBA BIOS"
+  bios_path: "BIOSファイル:"
+  bios_browse: "参照…"
+  bios_clear: "クリア"
+  bios_not_set: "未設定 — 内蔵HLEを使用（ほとんどのゲームに推奨）"
+  bios_not_found: "ファイルが見つかりません"
+  skip_bios: "起動アニメーションをスキップ"
+  tip_skip_bios: "ゲームボーイアドバンスのロゴ画面をスキップして\n直接ゲームを開始します。実BIOSが必要です。"
   recording: "録画"
   recording_compression: "圧縮レベル:"
   tip_recording_compression: ".grecファイルのzlib圧縮レベル。\n1 = 最速（デフォルト）、6以上は効果が小さくなります。"
@@ -142,6 +155,13 @@ picker:
   slot: "スロット{n}"
   close: "閉じる"
 
+game_picker:
+  menu:
+    play: "プレイ"
+    quick_load: "クイックロード"
+    set_boxart: "カスタム画像を設定"
+    remove: "ライブラリから削除"
+
 rom_info:
   title: "ROM情報"
   field_title: "タイトル:"
@@ -161,6 +181,23 @@ replay:
   replay_player: "入力リプレイ"
   ended: "リプレイ完了（{frames}フレーム）"
   empty_hint: "入力記録を開く (Cmd+O)"
+
+patcher:
+  title: "ROMをパッチ"
+  rom_label: "ROMファイル:"
+  patch_label: "パッチファイル:"
+  outdir_label: "出力フォルダ:"
+  browse: "参照…"
+  apply: "パッチを適用"
+  working: "パッチ適用中…"
+  done: "完了 →"
+  err_missing_fields: "すべての項目を入力してください。"
+  err_rom_not_found: "ROMファイルが見つかりません。"
+  err_patch_not_found: "パッチファイルが見つかりません。"
+  err_failed: "パッチ失敗:"
+  overwrite_title: "ファイルが存在します"
+  overwrite_msg: "{path} は既に存在します。上書きしますか？"
+  thread_mode_warn: "注意: Ruby < 4 ではプログレスが止まって見える場合があります"
 
 player:
   open_rom_hint: "ファイル > ROMを開く…"

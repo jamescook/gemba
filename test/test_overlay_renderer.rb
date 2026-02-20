@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "minitest/autorun"
-require_relative "../lib/gemba/overlay_renderer"
+require "gemba/headless"
 
 class TestOverlayRenderer < Minitest::Test
   class MockTexture

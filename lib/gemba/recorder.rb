@@ -30,13 +30,14 @@ module Gemba
     # @param audio_rate [Integer] audio sample rate (default 44100)
     # @param audio_channels [Integer] audio channels (default 2)
     # @param compression [Integer] zlib compression level 1-9 (default 1 = fastest)
-    def initialize(path, width:, height:, audio_rate: 44100, audio_channels: 2,
-                   compression: Zlib::BEST_SPEED)
+    def initialize(path, width:, height:, fps_fraction:, audio_rate: 44100,
+                   audio_channels: 2, compression: Zlib::BEST_SPEED)
       @path = path
       @width = width
       @height = height
       @audio_rate = audio_rate
       @audio_channels = audio_channels
+      @fps_fraction = fps_fraction
       @compression = compression
       @frame_size = width * height * 4
       @recording = false
@@ -127,7 +128,7 @@ module Gemba
       h << MAGIC                              # 8 bytes
       h << [VERSION].pack('C')                # 1 byte
       h << [@width, @height].pack('v2')       # 4 bytes
-      h << [262_144, 4389].pack('V2')         # 8 bytes (fps = 262144/4389 ≈ 59.7272)
+      h << @fps_fraction.pack('V2')            # 8 bytes (fps as numerator/denominator)
       h << [@audio_rate].pack('V')            # 4 bytes
       h << [@audio_channels, 16].pack('C2')   # 2 bytes
       h << ("\0" * 5)                         # 5 bytes reserved

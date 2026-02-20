@@ -50,6 +50,8 @@ module Gemba
       'recording_compression' => 1,
       'pause_on_focus_loss'  => true,
       'log_level'            => 'info',
+      'bios_path'            => nil,
+      'skip_bios'            => false,
     }.freeze
 
     # Settings that can be overridden per ROM. Maps config key → locale key.
@@ -124,9 +126,10 @@ module Gemba
       },
     }.freeze
 
-    def initialize(path: nil)
+    def initialize(path: nil, subscribe: true)
       @path = path || self.class.default_path
       @data = load_file
+      subscribe_to_bus if subscribe
     end
 
     # @return [String] path to the config file
@@ -402,6 +405,23 @@ module Gemba
       global['pause_on_focus_loss'] = !!val
     end
 
+    # @return [String, nil] BIOS filename (relative to Config.bios_dir), or nil for HLE
+    def bios_path
+      global['bios_path']
+    end
+
+    def bios_path=(val)
+      global['bios_path'] = val.nil? ? nil : val.to_s
+    end
+
+    def skip_bios?
+      !!global['skip_bios']
+    end
+
+    def skip_bios=(val)
+      global['skip_bios'] = !!val
+    end
+
     # @return [String] log level (debug, info, warn, error)
     def log_level
       global['log_level']
@@ -583,7 +603,35 @@ module Gemba
       File.join(config_dir, 'logs')
     end
 
+    # @return [String] default directory for cached box art images
+    def self.boxart_dir
+      File.join(config_dir, 'boxart')
+    end
+
+    # @return [String] default directory for patched ROMs
+    def self.default_patches_dir
+      File.join(config_dir, 'patches')
+    end
+
+    # @return [String] directory for BIOS files
+    def self.bios_dir
+      File.join(config_dir, 'bios')
+    end
+
+    # @return [String] path to the per-ROM overrides JSON file
+    def self.rom_overrides_path
+      File.join(config_dir, 'rom_overrides.json')
+    end
+
     private
+
+    def subscribe_to_bus
+      Gemba.bus.on(:rom_loaded) do |rom_id:, path:, **|
+        activate_game(rom_id)
+        add_recent_rom(path)
+        save!
+      end
+    end
 
     def global
       @proxy || global_base

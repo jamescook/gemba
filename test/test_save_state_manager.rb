@@ -3,9 +3,7 @@
 require "minitest/autorun"
 require "tmpdir"
 require "json"
-require_relative "../lib/gemba/config"
-require_relative "../lib/gemba/locale"
-require_relative "../lib/gemba/save_state_manager"
+require "gemba/headless"
 
 class TestSaveStateManager < Minitest::Test
   # Recording mock for the mGBA Core.
@@ -92,7 +90,7 @@ class TestSaveStateManager < Minitest::Test
   end
 
   def new_manager(core: @core, config: @config, app: @app)
-    mgr = Gemba::SaveStateManager.new(core: core, config: config, app: app)
+    mgr = Gemba::SaveStateManager.new(core: core, config: config, app: app, platform: Gemba::Platform.default)
     mgr.state_dir = mgr.state_dir_for_rom(core)
     mgr
   end

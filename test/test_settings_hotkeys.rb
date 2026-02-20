@@ -8,8 +8,8 @@ class TestMGBASettingsHotkeys < Minitest::Test
 
   def test_hotkeys_tab_exists
     assert_tk_app("hotkeys tab exists in notebook") do
-      require "gemba/settings_window"
-      require "gemba/hotkey_map"
+      require "gemba/headless"
+      require "gemba/headless"
       sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
@@ -21,8 +21,8 @@ class TestMGBASettingsHotkeys < Minitest::Test
 
   def test_hotkey_buttons_show_default_keysyms
     assert_tk_app("hotkey buttons show default keysyms") do
-      require "gemba/settings_window"
-      require "gemba/hotkey_map"
+      require "gemba/headless"
+      require "gemba/headless"
       sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
@@ -40,8 +40,8 @@ class TestMGBASettingsHotkeys < Minitest::Test
 
   def test_clicking_hotkey_button_enters_listen_mode
     assert_tk_app("clicking hotkey button enters listen mode") do
-      require "gemba/settings_window"
-      require "gemba/hotkey_map"
+      require "gemba/headless"
+      require "gemba/headless"
       sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
@@ -57,8 +57,8 @@ class TestMGBASettingsHotkeys < Minitest::Test
 
   def test_capture_updates_label_and_fires_callback
     assert_tk_app("capturing hotkey updates label and fires callback") do
-      require "gemba/settings_window"
-      require "gemba/hotkey_map"
+      require "gemba/headless"
+      require "gemba/headless"
       received_action = nil
       received_key = nil
       Gemba.bus = Gemba::EventBus.new
@@ -85,8 +85,8 @@ class TestMGBASettingsHotkeys < Minitest::Test
 
   def test_capture_enables_undo_button
     assert_tk_app("capturing hotkey enables undo button") do
-      require "gemba/settings_window"
-      require "gemba/hotkey_map"
+      require "gemba/headless"
+      require "gemba/headless"
       sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
@@ -108,8 +108,8 @@ class TestMGBASettingsHotkeys < Minitest::Test
 
   def test_undo_fires_callback_and_disables
     assert_tk_app("undo fires on_undo_hotkeys and disables button") do
-      require "gemba/settings_window"
-      require "gemba/hotkey_map"
+      require "gemba/headless"
+      require "gemba/headless"
       undo_called = false
       Gemba.bus = Gemba::EventBus.new
       Gemba.bus.on(:undo_hotkeys) { undo_called = true }
@@ -135,8 +135,8 @@ class TestMGBASettingsHotkeys < Minitest::Test
 
   def test_reset_restores_defaults
     assert_tk_app("reset restores default hotkey labels") do
-      require "gemba/settings_window"
-      require "gemba/hotkey_map"
+      require "gemba/headless"
+      require "gemba/headless"
       reset_called = false
       Gemba.bus = Gemba::EventBus.new
       Gemba.bus.on(:hotkey_reset) { reset_called = true }
@@ -169,8 +169,8 @@ class TestMGBASettingsHotkeys < Minitest::Test
 
   def test_refresh_hotkeys_updates_labels
     assert_tk_app("refresh_hotkeys updates button labels") do
-      require "gemba/settings_window"
-      require "gemba/hotkey_map"
+      require "gemba/headless"
+      require "gemba/headless"
       sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
@@ -188,8 +188,8 @@ class TestMGBASettingsHotkeys < Minitest::Test
 
   def test_cancel_listen_restores_label
     assert_tk_app("canceling listen restores original label") do
-      require "gemba/settings_window"
-      require "gemba/hotkey_map"
+      require "gemba/headless"
+      require "gemba/headless"
       sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
@@ -211,8 +211,8 @@ class TestMGBASettingsHotkeys < Minitest::Test
 
   def test_capture_without_listen_is_noop
     assert_tk_app("capture without listen mode is a no-op") do
-      require "gemba/settings_window"
-      require "gemba/hotkey_map"
+      require "gemba/headless"
+      require "gemba/headless"
       received = false
       Gemba.bus = Gemba::EventBus.new
       Gemba.bus.on(:hotkey_changed) { |*| received = true }
@@ -234,8 +234,8 @@ class TestMGBASettingsHotkeys < Minitest::Test
 
   def test_hotkey_rejected_when_conflicting_with_gamepad_key
     assert_tk_app("hotkey rejected when key conflicts with gamepad mapping") do
-      require "gemba/settings_window"
-      require "gemba/hotkey_map"
+      require "gemba/headless"
+      require "gemba/headless"
       received = false
       conflict_msg = nil
       Gemba.bus = Gemba::EventBus.new
@@ -267,8 +267,8 @@ class TestMGBASettingsHotkeys < Minitest::Test
 
   def test_hotkey_accepted_when_no_conflict
     assert_tk_app("hotkey accepted when no conflict") do
-      require "gemba/settings_window"
-      require "gemba/hotkey_map"
+      require "gemba/headless"
+      require "gemba/headless"
       received_action = nil
       Gemba.bus = Gemba::EventBus.new
       Gemba.bus.on(:hotkey_changed) { |a, _| received_action = a }
@@ -293,8 +293,8 @@ class TestMGBASettingsHotkeys < Minitest::Test
 
   def test_capture_modifier_then_key_produces_combo
     assert_tk_app("modifier + key produces combo hotkey") do
-      require "gemba/settings_window"
-      require "gemba/hotkey_map"
+      require "gemba/headless"
+      require "gemba/headless"
       received_action = nil
       received_hk = nil
       Gemba.bus = Gemba::EventBus.new
@@ -322,8 +322,8 @@ class TestMGBASettingsHotkeys < Minitest::Test
 
   def test_capture_multi_modifier_combo
     assert_tk_app("multi-modifier combo (Ctrl+Shift+S)") do
-      require "gemba/settings_window"
-      require "gemba/hotkey_map"
+      require "gemba/headless"
+      require "gemba/headless"
       received_hk = nil
       Gemba.bus = Gemba::EventBus.new
       Gemba.bus.on(:hotkey_changed) { |_, hk| received_hk = hk }
@@ -347,8 +347,8 @@ class TestMGBASettingsHotkeys < Minitest::Test
 
   def test_combo_hotkey_skips_gamepad_conflict_validation
     assert_tk_app("combo hotkey skips gamepad conflict validation") do
-      require "gemba/settings_window"
-      require "gemba/hotkey_map"
+      require "gemba/headless"
+      require "gemba/headless"
       received_hk = nil
       Gemba.bus = Gemba::EventBus.new
       Gemba.bus.on(:hotkey_changed) { |_, hk| received_hk = hk }
@@ -374,8 +374,8 @@ class TestMGBASettingsHotkeys < Minitest::Test
 
   def test_refresh_hotkeys_shows_combo_display_name
     assert_tk_app("refresh_hotkeys shows combo display name") do
-      require "gemba/settings_window"
-      require "gemba/hotkey_map"
+      require "gemba/headless"
+      require "gemba/headless"
       sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
@@ -391,8 +391,8 @@ class TestMGBASettingsHotkeys < Minitest::Test
 
   def test_bind_script_modifier_combo_roundtrip
     assert_tk_app("Tcl bind script round-trip with modifier+key combo") do
-      require "gemba/settings_window"
-      require "gemba/hotkey_map"
+      require "gemba/headless"
+      require "gemba/headless"
       received_hk = nil
       Gemba.bus = Gemba::EventBus.new
       Gemba.bus.on(:hotkey_changed) { |_, hk| received_hk = hk }
@@ -425,8 +425,8 @@ class TestMGBASettingsHotkeys < Minitest::Test
 
   def test_record_hotkey_button_shows_default
     assert_tk_app("record hotkey button shows F10") do
-      require "gemba/settings_window"
-      require "gemba/hotkey_map"
+      require "gemba/headless"
+      require "gemba/headless"
       sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update
@@ -438,8 +438,8 @@ class TestMGBASettingsHotkeys < Minitest::Test
 
   def test_open_rom_hotkey_button_shows_default
     assert_tk_app("open rom hotkey button shows Ctrl+O") do
-      require "gemba/settings_window"
-      require "gemba/hotkey_map"
+      require "gemba/headless"
+      require "gemba/headless"
       sw = Gemba::SettingsWindow.new(app)
       sw.show
       app.update

@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require_relative "paths"
 
 module Gemba
   module Settings
@@ -36,6 +35,22 @@ module Gemba
         @app = app
         @tips = tips
         @mark_dirty = mark_dirty
+      end
+
+      def load_from_config(config)
+        @app.set_variable(VAR_SCALE, "#{config.scale}x")
+        turbo_label = config.turbo_speed == 0 ? translate('settings.uncapped') : "#{config.turbo_speed}x"
+        @app.set_variable(VAR_TURBO, turbo_label)
+        @app.set_variable(VAR_ASPECT_RATIO,     config.keep_aspect_ratio?   ? '1' : '0')
+        @app.set_variable(VAR_SHOW_FPS,         config.show_fps?             ? '1' : '0')
+        @app.set_variable(VAR_TOAST_DURATION,   "#{config.toast_duration}s")
+        filter_label = config.pixel_filter == 'nearest' ? translate('settings.filter_nearest') : translate('settings.filter_linear')
+        @app.set_variable(VAR_FILTER,           filter_label)
+        @app.set_variable(VAR_INTEGER_SCALE,    config.integer_scale?        ? '1' : '0')
+        @app.set_variable(VAR_COLOR_CORRECTION, config.color_correction?     ? '1' : '0')
+        @app.set_variable(VAR_FRAME_BLENDING,   config.frame_blending?       ? '1' : '0')
+        @app.set_variable(VAR_REWIND_ENABLED,   config.rewind_enabled?       ? '1' : '0')
+        @app.set_variable(VAR_PAUSE_FOCUS,      config.pause_on_focus_loss?  ? '1' : '0')
       end
 
       def build

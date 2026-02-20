@@ -16,7 +16,7 @@ class TestMGBAPlayer < Minitest::Test
       require "gemba"
       require "support/player_helpers"
 
-      player = Gemba::Player.new("#{TEST_ROM}")
+      player = Gemba::AppController.new("#{TEST_ROM}")
       app = player.app
 
       poll_until_ready(player) { player.running = false }
@@ -38,7 +38,7 @@ class TestMGBAPlayer < Minitest::Test
     code = <<~RUBY
       require "gemba"
 
-      player = Gemba::Player.new
+      player = Gemba::AppController.new
       app = player.app
 
       app.after(100) do
@@ -60,12 +60,73 @@ class TestMGBAPlayer < Minitest::Test
     assert_includes stdout, "PASS"
   end
 
+  # View > Game Library returns to picker after loading a ROM.
+  def test_view_menu_game_library_returns_to_picker
+    code = <<~'RUBY'.sub('ROM_PATH', TEST_ROM)
+      require "gemba"
+      require "support/player_helpers"
+
+      player = Gemba::AppController.new("ROM_PATH")
+      player.disable_confirmations!
+      app = player.app
+
+      poll_until_ready(player) do
+        puts "BEFORE=#{player.current_view}"
+
+        app.command('.menubar.view', 'invoke', 0)
+
+        app.after(100) do
+          puts "AFTER=#{player.current_view}"
+          player.running = false
+        end
+      end
+
+      player.run
+    RUBY
+
+    success, stdout, stderr, _status = tk_subprocess(code)
+
+    output = []
+    output << "STDOUT:\n#{stdout}" unless stdout.empty?
+    output << "STDERR:\n#{stderr}" unless stderr.empty?
+
+    assert success, "View > Game Library should return to picker\n#{output.join("\n")}"
+    assert_includes stdout, "BEFORE=emulator"
+    assert_includes stdout, "AFTER=picker"
+  end
+
+  # File > Quit menu item exits cleanly (invokes the actual menu command).
+  def test_file_menu_quit_without_rom
+    code = <<~RUBY
+      require "gemba"
+
+      player = Gemba::AppController.new
+      app = player.app
+
+      app.after(100) do
+        app.command('.menubar.file', 'invoke', 'last')
+      end
+
+      player.run
+      puts "PASS"
+    RUBY
+
+    success, stdout, stderr, _status = tk_subprocess(code)
+
+    output = []
+    output << "STDOUT:\n#{stdout}" unless stdout.empty?
+    output << "STDERR:\n#{stderr}" unless stderr.empty?
+
+    assert success, "File > Quit should exit cleanly\n#{output.join("\n")}"
+    assert_includes stdout, "PASS"
+  end
+
   # Escape key quits without a ROM loaded.
   def test_escape_quits_without_rom
     code = <<~RUBY
       require "gemba"
 
-      player = Gemba::Player.new
+      player = Gemba::AppController.new
       app = player.app
 
       app.after(100) do
@@ -95,11 +156,11 @@ class TestMGBAPlayer < Minitest::Test
       require "gemba"
       require "support/player_helpers"
 
-      player = Gemba::Player.new("#{TEST_ROM}")
+      player = Gemba::AppController.new("#{TEST_ROM}")
       app = player.app
 
       poll_until_ready(player) do
-        vp = player.viewport
+        vp = player.frame.viewport
         frame = vp.frame.path
 
         # User presses F11 → fullscreen on
@@ -139,11 +200,11 @@ class TestMGBAPlayer < Minitest::Test
       require "gemba"
       require "support/player_helpers"
 
-      player = Gemba::Player.new("#{TEST_ROM}")
+      player = Gemba::AppController.new("#{TEST_ROM}")
       app = player.app
 
       poll_until_ready(player) do
-        vp = player.viewport
+        vp = player.frame.viewport
         frame = vp.frame.path
 
         # User presses Tab → enable turbo (2x default)
@@ -181,7 +242,7 @@ class TestMGBAPlayer < Minitest::Test
       # Use a temp dir for all config/states so we don't pollute the real one
       states_dir = Dir.mktmpdir("gemba-states-test")
 
-      player = Gemba::Player.new("#{TEST_ROM}")
+      player = Gemba::AppController.new("#{TEST_ROM}")
       app = player.app
       config = player.config
 
@@ -190,9 +251,11 @@ class TestMGBAPlayer < Minitest::Test
       config.save_state_debounce = 0.1
 
       poll_until_ready(player) do
-        core = player.save_mgr.core
-        state_dir = player.save_mgr.state_dir
-        vp = player.viewport
+        core = player.frame.save_mgr.core
+        # Recompute state_dir after overriding config.states_dir
+        player.frame.save_mgr.state_dir = player.frame.save_mgr.state_dir_for_rom(core)
+        state_dir = player.frame.save_mgr.state_dir
+        vp = player.frame.viewport
         frame_path = vp.frame.path
 
         # Quick save (F5)
@@ -301,7 +364,7 @@ class TestMGBAPlayer < Minitest::Test
 
       states_dir = Dir.mktmpdir("gemba-debounce-test")
 
-      player = Gemba::Player.new("#{TEST_ROM}")
+      player = Gemba::AppController.new("#{TEST_ROM}")
       app = player.app
       config = player.config
 
@@ -309,7 +372,9 @@ class TestMGBAPlayer < Minitest::Test
       config.save_state_debounce = 5.0  # long debounce
 
       poll_until_ready(player) do
-        vp = player.viewport
+        # Recompute state_dir after overriding config.states_dir
+        player.frame.save_mgr.state_dir = player.frame.save_mgr.state_dir_for_rom(player.frame.save_mgr.core)
+        vp = player.frame.viewport
         frame_path = vp.frame.path
 
         # First save should succeed
@@ -317,7 +382,7 @@ class TestMGBAPlayer < Minitest::Test
         app.update
 
         app.after(50) do
-          state_dir = player.save_mgr.state_dir
+          state_dir = player.frame.save_mgr.state_dir
           ss_path = File.join(state_dir, "state1.ss")
 
           first_exists = File.exist?(ss_path)
@@ -373,7 +438,7 @@ class TestMGBAPlayer < Minitest::Test
       config_dir = Dir.mktmpdir("gemba-settings-test")
       config_path = File.join(config_dir, "settings.json")
 
-      player = Gemba::Player.new("#{TEST_ROM}")
+      player = Gemba::AppController.new("#{TEST_ROM}")
       app = player.app
       config = player.config
 
@@ -445,11 +510,11 @@ class TestMGBAPlayer < Minitest::Test
   # -- Audio fade ramp (pure function, no Tk/SDL2 needed) --------------------
 
   def test_fade_ramp_attenuates_first_samples
-    require "gemba/player"
+    require "gemba/headless"
     # 10 stereo frames of max-amplitude int16
     pcm = ([32767, 32767] * 10).pack('s*')
     total = 10
-    result, remaining = Gemba::Player.apply_fade_ramp(pcm, total, total)
+    result, remaining = Gemba::EmulatorFrame.apply_fade_ramp(pcm, total, total)
     samples = result.unpack('s*')
 
     # First stereo pair: gain = 1 - 10/10 = 0.0 → should be 0
@@ -464,17 +529,17 @@ class TestMGBAPlayer < Minitest::Test
   end
 
   def test_fade_ramp_returns_remaining_when_pcm_shorter_than_fade
-    require "gemba/player"
+    require "gemba/headless"
     # Only 2 stereo frames but fade wants 10
     pcm = ([20000, 20000] * 2).pack('s*')
-    _result, remaining = Gemba::Player.apply_fade_ramp(pcm, 10, 10)
+    _result, remaining = Gemba::EmulatorFrame.apply_fade_ramp(pcm, 10, 10)
     assert_equal 8, remaining, "should have 8 fade samples remaining"
   end
 
   def test_fade_ramp_noop_when_remaining_zero
-    require "gemba/player"
+    require "gemba/headless"
     pcm = ([10000, -10000] * 4).pack('s*')
-    result, remaining = Gemba::Player.apply_fade_ramp(pcm, 0, 10)
+    result, remaining = Gemba::EmulatorFrame.apply_fade_ramp(pcm, 0, 10)
     assert_equal pcm, result, "should not modify samples when remaining is 0"
     assert_equal 0, remaining
   end
@@ -491,11 +556,11 @@ class TestMGBAPlayer < Minitest::Test
       sw_top = Gemba::SettingsWindow::TOP
       sp_top = Gemba::SaveStatePicker::TOP
 
-      player = Gemba::Player.new("#{TEST_ROM}")
+      player = Gemba::AppController.new("#{TEST_ROM}")
       app = player.app
 
       poll_until_ready(player) do
-        vp = player.viewport
+        vp = player.frame.viewport
         frame = vp.frame.path
 
         # 1. Open Settings via menu (Settings > Video = index 0)
@@ -589,7 +654,7 @@ class TestMGBAPlayer < Minitest::Test
       require "gemba"
       require "support/player_helpers"
 
-      player = Gemba::Player.new
+      player = Gemba::AppController.new
       app = player.app
 
       # Stub tk_messageBox so it never blocks
@@ -601,7 +666,7 @@ class TestMGBAPlayer < Minitest::Test
         app.update
 
         app.after(50) do
-          core = player.core
+          core = player.frame.core
           if core && !core.destroyed?
             $stdout.puts "TITLE=\#{core.title}"
           else
@@ -629,7 +694,7 @@ class TestMGBAPlayer < Minitest::Test
       require "gemba"
       require "support/player_helpers"
 
-      player = Gemba::Player.new
+      player = Gemba::AppController.new
       app = player.app
 
       # Capture tk_messageBox calls instead of blocking
@@ -670,7 +735,7 @@ class TestMGBAPlayer < Minitest::Test
       require "gemba"
       require "support/player_helpers"
 
-      player = Gemba::Player.new
+      player = Gemba::AppController.new
       app = player.app
 
       # Capture tk_messageBox calls instead of blocking
@@ -718,13 +783,13 @@ class TestMGBAPlayer < Minitest::Test
       rec_dir = Dir.mktmpdir("gemba-rec-test")
 
       begin
-        player = Gemba::Player.new("#{TEST_ROM}")
+        player = Gemba::AppController.new("#{TEST_ROM}")
         app = player.app
         config = player.config
         config.recordings_dir = rec_dir
 
         poll_until_ready(player) do
-          vp = player.viewport
+          vp = player.frame.viewport
           frame = vp.frame.path
 
           # Press F10 → start recording
@@ -733,7 +798,7 @@ class TestMGBAPlayer < Minitest::Test
 
           # Let a few frames render with the recording indicator (red dot)
           app.after(50) do
-            unless player.recording?
+            unless player.frame.recording?
               puts "FAIL: recording never started"
               player.running = false
               next
@@ -776,12 +841,58 @@ class TestMGBAPlayer < Minitest::Test
     assert_includes stdout, "PASS", "Expected .grec file to be created\n#{output.join("\n")}"
   end
 
+  # -- Frame stack show/hide ---------------------------------------------------
+
+  # Loads a ROM, verifies the emulator viewport is visible (packed),
+  # then hides it and confirms it's gone. Catches missing show/hide on frames.
+  def test_emulator_frame_show_hide_round_trip
+    code = <<~RUBY
+      require "gemba"
+      require "support/player_helpers"
+
+      player = Gemba::AppController.new("#{TEST_ROM}")
+      app = player.app
+
+      poll_until_ready(player) do
+        vp_path = player.frame.viewport.frame.path
+
+        # Viewport should be visible after ROM load
+        info = app.tcl_eval("pack info \#{vp_path}") rescue ""
+        abort "FAIL: viewport not packed after load" if info.empty?
+
+        # Hide the frame, viewport should disappear
+        player.frame.hide
+        info_after = app.tcl_eval("pack info \#{vp_path}") rescue ""
+        abort "FAIL: viewport still packed after hide" unless info_after.empty?
+
+        # Show it again
+        player.frame.show
+        info_restored = app.tcl_eval("pack info \#{vp_path}") rescue ""
+        abort "FAIL: viewport not packed after show" if info_restored.empty?
+
+        puts "PASS"
+        player.running = false
+      end
+
+      player.run
+    RUBY
+
+    success, stdout, stderr, _status = tk_subprocess(code)
+
+    output = []
+    output << "STDOUT:\n#{stdout}" unless stdout.empty?
+    output << "STDERR:\n#{stderr}" unless stderr.empty?
+
+    assert success, "Frame show/hide round-trip failed\n#{output.join("\n")}"
+    assert_includes stdout, "PASS"
+  end
+
   # -- Pause CPU optimization (thread_timer_ms) --------------------------------
 
   def test_event_loop_constants
-    require "gemba/player"
-    assert_equal 1,  Gemba::Player::EVENT_LOOP_FAST_MS, "fast loop should be 1ms"
-    assert_equal 50, Gemba::Player::EVENT_LOOP_IDLE_MS, "idle loop should be 50ms"
+    require "gemba/headless"
+    assert_equal 1,  Gemba::AppController::EVENT_LOOP_FAST_MS, "fast loop should be 1ms"
+    assert_equal 50, Gemba::AppController::EVENT_LOOP_IDLE_MS, "idle loop should be 50ms"
   end
 
   # E2E: verify thread_timer_ms switches between idle (50ms) and fast (1ms)
@@ -793,13 +904,13 @@ class TestMGBAPlayer < Minitest::Test
       require "gemba"
       require "support/player_helpers"
 
-      player = Gemba::Player.new("#{TEST_ROM}")
+      player = Gemba::AppController.new("#{TEST_ROM}")
       app = player.app
 
       poll_until_ready(player) do
         # Wait for focus so focus_poll_tick won't interfere with pause/unpause
         poll_until_focused(player) do
-        vp = player.viewport
+        vp = player.frame.viewport
         frame = vp.frame.path
 
         # Before pause: should be fast (1ms) since ROM is running
@@ -830,8 +941,8 @@ class TestMGBAPlayer < Minitest::Test
             unless ms_resumed == 1
               xvfb_screenshot("pause_resume_fail")
               $stderr.puts "FAIL: expected thread_timer_ms=1 after resume, got \#{ms_resumed}"
-              $stderr.puts "input_focus?=\#{player.viewport.renderer.input_focus?}"
-              $stderr.puts "paused=\#{player.instance_variable_get(:@paused)}"
+              $stderr.puts "input_focus?=\#{player.frame.viewport.renderer.input_focus?}"
+              $stderr.puts "paused=\#{player.frame.paused?}"
               exit 1
             end
 
@@ -866,11 +977,11 @@ class TestMGBAPlayer < Minitest::Test
       require "gemba"
       require "support/player_helpers"
 
-      player = Gemba::Player.new("#{TEST_ROM}")
+      player = Gemba::AppController.new("#{TEST_ROM}")
       app = player.app
 
       poll_until_ready(player) do
-        renderer = player.viewport.renderer
+        renderer = player.frame.viewport.renderer
 
         # Ensure the window has focus before testing focus *loss*
         poll_until_focused(player) do
@@ -903,8 +1014,8 @@ class TestMGBAPlayer < Minitest::Test
           # production (Tk's mainloop pumps Cocoa) but is untested in CI.
           renderer.show_window
           renderer.raise_window
-          app.command(:event, 'generate', player.viewport.frame.path, '<KeyPress>', keysym: 'p')
-          app.command(:event, 'generate', player.viewport.frame.path, '<KeyRelease>', keysym: 'p')
+          app.command(:event, 'generate', player.frame.viewport.frame.path, '<KeyPress>', keysym: 'p')
+          app.command(:event, 'generate', player.frame.viewport.frame.path, '<KeyRelease>', keysym: 'p')
 
           app.after(100) do
             ms_regained = app.interp.thread_timer_ms
@@ -941,14 +1052,14 @@ class TestMGBAPlayer < Minitest::Test
       require "gemba"
       require "support/player_helpers"
 
-      player = Gemba::Player.new("#{TEST_ROM}")
+      player = Gemba::AppController.new("#{TEST_ROM}")
       app = player.app
 
       poll_until_ready(player) do
         # Give focus poll a chance to fire (polls every 200ms)
         app.after(400) do
           ms = app.interp.thread_timer_ms
-          paused = player.instance_variable_get(:@paused)
+          paused = player.frame.paused?
           if paused
             $stderr.puts "FAIL: ROM started paused (thread_timer_ms=\#{ms})"
             exit 1
@@ -968,6 +1079,105 @@ class TestMGBAPlayer < Minitest::Test
     output << "STDERR:\n#{stderr}" unless stderr.empty?
 
     assert success, "ROM started paused\n#{output.join("\n")}"
+    assert_includes stdout, "PASS", "Expected PASS in output\n#{output.join("\n")}"
+  end
+
+  def test_question_hotkey_shows_help_window
+    code = <<~RUBY
+      require "gemba"
+
+      player = Gemba::AppController.new
+      app = player.app
+
+      app.after(100) do
+        app.tcl_eval("focus -force .")
+        app.update
+        app.tcl_eval("event generate . <KeyPress-question>")
+        app.update
+        state = app.tcl_eval("wm state .help_window")
+        puts state == 'normal' ? "PASS" : "FAIL: help window not visible (state=\#{state})"
+        player.running = false
+      end
+
+      player.run
+    RUBY
+
+    success, stdout, stderr, _status = tk_subprocess(code)
+
+    output = []
+    output << "STDOUT:\n#{stdout}" unless stdout.empty?
+    output << "STDERR:\n#{stderr}" unless stderr.empty?
+
+    assert success, "? hotkey should show help window\n#{output.join("\n")}"
+    assert_includes stdout, "PASS", "Expected PASS in output\n#{output.join("\n")}"
+  end
+
+  def test_question_hotkey_toggles_help_window
+    code = <<~RUBY
+      require "gemba"
+
+      player = Gemba::AppController.new
+      app = player.app
+
+      app.after(100) do
+        app.tcl_eval("focus -force .")
+        app.update
+        # First press — show
+        app.tcl_eval("event generate . <KeyPress-question>")
+        app.update
+        # Second press — hide
+        app.tcl_eval("event generate . <KeyPress-question>")
+        app.update
+        state = app.tcl_eval("wm state .help_window")
+        puts state == 'withdrawn' ? "PASS" : "FAIL: help window still visible after second ? press (state=\#{state})"
+        player.running = false
+      end
+
+      player.run
+    RUBY
+
+    success, stdout, stderr, _status = tk_subprocess(code)
+
+    output = []
+    output << "STDOUT:\n#{stdout}" unless stdout.empty?
+    output << "STDERR:\n#{stderr}" unless stderr.empty?
+
+    assert success, "second ? press should hide help window\n#{output.join("\n")}"
+    assert_includes stdout, "PASS", "Expected PASS in output\n#{output.join("\n")}"
+  end
+
+  def test_help_window_hidden_in_fullscreen
+    code = <<~RUBY
+      require "gemba"
+
+      player = Gemba::AppController.new
+      app = player.app
+
+      app.after(100) do
+        app.tcl_eval("focus -force .")
+        app.update
+        # Go fullscreen via bus
+        Gemba.bus.emit(:request_fullscreen)
+        app.update
+        # Press ? — should be suppressed
+        app.tcl_eval("event generate . <KeyPress-question>")
+        app.update
+        exists = app.tcl_eval("winfo exists .help_window")
+        state = exists == '1' ? app.tcl_eval("wm state .help_window") : 'withdrawn'
+        puts state != 'normal' ? "PASS" : "FAIL: help window visible in fullscreen"
+        player.running = false
+      end
+
+      player.run
+    RUBY
+
+    success, stdout, stderr, _status = tk_subprocess(code)
+
+    output = []
+    output << "STDOUT:\n#{stdout}" unless stdout.empty?
+    output << "STDERR:\n#{stderr}" unless stderr.empty?
+
+    assert success, "? hotkey should be suppressed in fullscreen\n#{output.join("\n")}"
     assert_includes stdout, "PASS", "Expected PASS in output\n#{output.join("\n")}"
   end
 end

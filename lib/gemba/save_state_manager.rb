@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require 'fileutils'
-require_relative 'locale'
 
 module Gemba
   # Manages save state persistence: save, load, screenshot capture,
@@ -22,13 +21,11 @@ module Gemba
   class SaveStateManager
     include Locale::Translatable
 
-    GBA_W = 240
-    GBA_H = 160
-
-    def initialize(core:, config:, app:)
+    def initialize(core:, config:, app:, platform:)
       @core = core
       @config = config
       @app = app
+      @platform = platform
       @last_save_time = 0
       @state_dir = nil
       @quick_save_slot = config.quick_save_slot
@@ -143,8 +140,8 @@ module Gemba
       photo_name = "__gemba_ss_#{object_id}"
 
       @app.command(:image, :create, :photo, photo_name,
-                   width: GBA_W, height: GBA_H)
-      @app.interp.photo_put_block(photo_name, pixels, GBA_W, GBA_H, format: :argb)
+                   width: @platform.width, height: @platform.height)
+      @app.interp.photo_put_block(photo_name, pixels, @platform.width, @platform.height, format: :argb)
       @app.command(photo_name, :write, path, format: :png)
       @app.command(:image, :delete, photo_name)
     rescue StandardError => e

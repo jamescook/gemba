@@ -6,14 +6,14 @@ module Gemba
   # Resolves ROM paths for the player. Handles both bare ROM files
   # and .zip archives containing a single ROM at the zip root.
   #
-  # @example Load a bare ROM
-  #   path = RomLoader.resolve("/path/to/game.gba")
+  # @example Resolve a bare ROM
+  #   path = RomResolver.resolve("/path/to/game.gba")
   #   # => "/path/to/game.gba"
   #
-  # @example Load from a zip
-  #   path = RomLoader.resolve("/path/to/game.zip")
+  # @example Resolve from a zip
+  #   path = RomResolver.resolve("/path/to/game.zip")
   #   # => "/Users/you/.config/gemba/tmp/game.gba"
-  class RomLoader
+  class RomResolver
     ROM_EXTENSIONS = %w[.gba .gb .gbc].freeze
     ZIP_EXTENSIONS = %w[.zip].freeze
     SUPPORTED_EXTENSIONS = (ROM_EXTENSIONS + ZIP_EXTENSIONS).freeze
@@ -85,7 +85,7 @@ module Gemba
         dir = tmp_dir
         FileUtils.mkdir_p(dir)
         out_path = File.join(dir, File.basename(rom_entry.name))
-        File.binwrite(out_path, rom_entry.get_input_stream.read)
+        rom_entry.get_input_stream { |s| File.binwrite(out_path, s.read) }
         out_path
       end
     rescue NoRomInZip, MultipleRomsInZip
@@ -97,4 +97,5 @@ module Gemba
     end
     private_class_method :extract_from_zip
   end
+
 end

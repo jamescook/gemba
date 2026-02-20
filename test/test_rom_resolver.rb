@@ -5,7 +5,7 @@ require "gemba"
 require "tmpdir"
 require "zip"
 
-class TestRomLoader < Minitest::Test
+class TestRomResolver < Minitest::Test
   TEST_ROM = File.expand_path("fixtures/test.gba", __dir__)
 
   def setup
@@ -14,30 +14,30 @@ class TestRomLoader < Minitest::Test
 
   def teardown
     FileUtils.rm_rf(@tmpdir) if @tmpdir && File.directory?(@tmpdir)
-    Gemba::RomLoader.cleanup_temp
+    Gemba::RomResolver.cleanup_temp
   end
 
   # -- resolve passthrough --
 
   def test_resolve_gba_returns_path_unchanged
-    assert_equal TEST_ROM, Gemba::RomLoader.resolve(TEST_ROM)
+    assert_equal TEST_ROM, Gemba::RomResolver.resolve(TEST_ROM)
   end
 
   def test_resolve_gb_returns_path_unchanged
     path = "/some/game.gb"
-    assert_equal path, Gemba::RomLoader.resolve(path)
+    assert_equal path, Gemba::RomResolver.resolve(path)
   end
 
   def test_resolve_gbc_returns_path_unchanged
     path = "/some/game.gbc"
-    assert_equal path, Gemba::RomLoader.resolve(path)
+    assert_equal path, Gemba::RomResolver.resolve(path)
   end
 
   # -- resolve from zip --
 
   def test_resolve_zip_extracts_rom
     zip_path = create_zip("game.zip", "game.gba" => File.binread(TEST_ROM))
-    result = Gemba::RomLoader.resolve(zip_path)
+    result = Gemba::RomResolver.resolve(zip_path)
 
     assert File.exist?(result), "extracted ROM should exist"
     assert_equal ".gba", File.extname(result).downcase
@@ -46,7 +46,7 @@ class TestRomLoader < Minitest::Test
 
   def test_resolve_zip_loads_in_core
     zip_path = create_zip("game.zip", "game.gba" => File.binread(TEST_ROM))
-    rom_path = Gemba::RomLoader.resolve(zip_path)
+    rom_path = Gemba::RomResolver.resolve(zip_path)
 
     core = Gemba::Core.new(rom_path)
     assert_equal "GEMBATEST", core.title
@@ -59,8 +59,8 @@ class TestRomLoader < Minitest::Test
   def test_resolve_zip_no_rom_raises
     zip_path = create_zip("empty.zip", "readme.txt" => "hello")
 
-    err = assert_raises(Gemba::RomLoader::NoRomInZip) do
-      Gemba::RomLoader.resolve(zip_path)
+    err = assert_raises(Gemba::RomResolver::NoRomInZip) do
+      Gemba::RomResolver.resolve(zip_path)
     end
     assert_includes err.message, "empty.zip"
   end
@@ -71,15 +71,15 @@ class TestRomLoader < Minitest::Test
       "game1.gba" => rom_data,
       "game2.gba" => rom_data)
 
-    err = assert_raises(Gemba::RomLoader::MultipleRomsInZip) do
-      Gemba::RomLoader.resolve(zip_path)
+    err = assert_raises(Gemba::RomResolver::MultipleRomsInZip) do
+      Gemba::RomResolver.resolve(zip_path)
     end
     assert_includes err.message, "multi.zip"
   end
 
   def test_resolve_unsupported_extension_raises
-    assert_raises(Gemba::RomLoader::UnsupportedFormat) do
-      Gemba::RomLoader.resolve("/some/file.rar")
+    assert_raises(Gemba::RomResolver::UnsupportedFormat) do
+      Gemba::RomResolver.resolve("/some/file.rar")
     end
   end
 
@@ -87,8 +87,8 @@ class TestRomLoader < Minitest::Test
     corrupt = File.join(@tmpdir, "corrupt.zip")
     File.binwrite(corrupt, "this is not a zip file")
 
-    assert_raises(Gemba::RomLoader::ZipReadError) do
-      Gemba::RomLoader.resolve(corrupt)
+    assert_raises(Gemba::RomResolver::ZipReadError) do
+      Gemba::RomResolver.resolve(corrupt)
     end
   end
 
@@ -101,32 +101,32 @@ class TestRomLoader < Minitest::Test
       zos.write(File.binread(TEST_ROM))
     end
 
-    assert_raises(Gemba::RomLoader::NoRomInZip) do
-      Gemba::RomLoader.resolve(zip_path)
+    assert_raises(Gemba::RomResolver::NoRomInZip) do
+      Gemba::RomResolver.resolve(zip_path)
     end
   end
 
   # -- constants --
 
   def test_rom_extensions
-    assert_includes Gemba::RomLoader::ROM_EXTENSIONS, ".gba"
-    assert_includes Gemba::RomLoader::ROM_EXTENSIONS, ".gb"
-    assert_includes Gemba::RomLoader::ROM_EXTENSIONS, ".gbc"
+    assert_includes Gemba::RomResolver::ROM_EXTENSIONS, ".gba"
+    assert_includes Gemba::RomResolver::ROM_EXTENSIONS, ".gb"
+    assert_includes Gemba::RomResolver::ROM_EXTENSIONS, ".gbc"
   end
 
   def test_supported_extensions_includes_zip
-    assert_includes Gemba::RomLoader::SUPPORTED_EXTENSIONS, ".zip"
+    assert_includes Gemba::RomResolver::SUPPORTED_EXTENSIONS, ".zip"
   end
 
   # -- cleanup --
 
   def test_cleanup_temp_removes_directory
     zip_path = create_zip("game.zip", "game.gba" => File.binread(TEST_ROM))
-    Gemba::RomLoader.resolve(zip_path)
-    assert File.directory?(Gemba::RomLoader.tmp_dir)
+    Gemba::RomResolver.resolve(zip_path)
+    assert File.directory?(Gemba::RomResolver.tmp_dir)
 
-    Gemba::RomLoader.cleanup_temp
-    refute File.directory?(Gemba::RomLoader.tmp_dir)
+    Gemba::RomResolver.cleanup_temp
+    refute File.directory?(Gemba::RomResolver.tmp_dir)
   end
 
   private

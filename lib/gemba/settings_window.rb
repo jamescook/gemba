@@ -1,17 +1,5 @@
 # frozen_string_literal: true
 
-require_relative "child_window"
-require_relative "event_bus"
-require_relative "hotkey_map"
-require_relative "locale"
-require_relative "tip_service"
-require_relative "settings/paths"
-require_relative "settings/audio_tab"
-require_relative "settings/video_tab"
-require_relative "settings/recording_tab"
-require_relative "settings/save_states_tab"
-require_relative "settings/gamepad_tab"
-require_relative "settings/hotkeys_tab"
 
 module Gemba
   # Settings window for the mGBA Player.
@@ -84,6 +72,15 @@ module Gemba
     SS_BACKUP_CHECK = Settings::SaveStatesTab::BACKUP_CHECK
     SS_OPEN_DIR_BTN = Settings::SaveStatesTab::OPEN_DIR_BTN
 
+    # System tab widget paths (re-exported from Settings::SystemTab)
+    SYSTEM_TAB      = Settings::SystemTab::FRAME
+    BIOS_ENTRY      = Settings::SystemTab::BIOS_ENTRY
+    BIOS_STATUS     = Settings::SystemTab::BIOS_STATUS
+    SKIP_BIOS_CHECK = Settings::SystemTab::SKIP_BIOS_CHECK
+
+    VAR_BIOS_PATH = Settings::SystemTab::VAR_BIOS_PATH
+    VAR_SKIP_BIOS = Settings::SystemTab::VAR_SKIP_BIOS
+
     # Bottom bar
     SAVE_BTN = "#{TOP}.save_btn"
 
@@ -124,7 +121,8 @@ module Gemba
       @tip_dismiss_ms = tip_dismiss_ms
       @per_game_enabled = false
 
-      build_toplevel(translate('menu.settings'), geometry: '700x560') { setup_ui }
+      build_toplevel(translate('menu.settings'), geometry: '780x600') { setup_ui }
+      subscribe_to_bus
     end
 
     # Delegates to GamepadTab
@@ -160,10 +158,11 @@ module Gemba
       'settings.hotkeys'     => HK_TAB,
       'settings.recording'   => REC_TAB,
       'settings.save_states' => SS_TAB,
+      'settings.system'      => SYSTEM_TAB,
     }.freeze
 
     # Tabs that show the per-game settings checkbox
-    PER_GAME_TABS = Set.new(["#{NB}.video", "#{NB}.audio", SS_TAB]).freeze
+    PER_GAME_TABS = Set.new(["#{NB}.video", "#{NB}.audio", SS_TAB, SYSTEM_TAB]).freeze
 
     def hide
       @tips&.hide
@@ -173,6 +172,19 @@ module Gemba
     # Enable the Save button (called when any setting changes)
     def mark_dirty
       @app.command(SAVE_BTN, 'configure', state: :normal)
+    end
+
+    # Subscribe to bus events this object cares about.
+    def subscribe_to_bus
+      Gemba.bus.on(:rom_loaded) do |**|
+        set_per_game_available(true)
+        set_per_game_active(Gemba.user_config.per_game_settings?)
+      end
+      Gemba.bus.on(:config_loaded) do |config:|
+        [@video_tab, @audio_tab, @recording_tab, @save_states_tab, @system_tab].each do |tab|
+          tab.load_from_config(config)
+        end
+      end
     end
 
     # Enable/disable the per-game checkbox (called when ROM loads/unloads).
@@ -266,6 +278,8 @@ module Gemba
       @recording_tab.build
       @save_states_tab = Settings::SaveStatesTab.new(@app, tips: @tips, mark_dirty: method(:mark_dirty))
       @save_states_tab.build
+      @system_tab = Settings::SystemTab.new(@app, tips: @tips, mark_dirty: method(:mark_dirty))
+      @system_tab.build
 
       # Show/hide per-game bar based on active tab
       @app.command(:bind, NB, '<<NotebookTabChanged>>', proc { update_per_game_bar })

@@ -6,6 +6,38 @@ All notable changes to gemba will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- Game Boy and Game Boy Color ROM support (160×144 resolution, correct aspect ratio)
+- Input recording and replay — record button inputs to `.gir` files and replay them deterministically
+- Video/audio capture to `.grec` files (F10 hotkey)
+- Input replay player with dedicated window (open via menu or Cmd/Ctrl+O)
+- Open ROM hotkey (Ctrl+O / Cmd+O), context-sensitive when replay player is active
+- Settings tabs for save states, recording, and hotkey customization
+- Rewind support
+- ROM Info window showing title, game code, publisher, platform, resolution
+- Session logging
+- CLI subcommands for decoding `.grec` and `.gir` files
+- ROM Patcher — apply IPS, BPS, and UPS patch files via GUI (View > Patch ROM…) or CLI (`gemba patch`)
+- ZIP ROM support in patcher — drag in a zipped ROM and the output is a plain `.gba`
+- Mouse cursor auto-hides after 2 seconds of inactivity while a game is playing; restores on movement or pause
+- `?` hotkey toggles a floating hotkey reference panel beside the emulator window; emulation auto-pauses while it is open
+- Help window auto-pauses emulation while open
+- BIOS loading — configure a GBA BIOS file via Settings > System; gemba validates the file size (16 384 bytes), identifies Official GBA BIOS and NDS GBA Mode BIOS by checksum, and copies it to the gemba data directory; "Skip BIOS intro" option available for supported files
+
+### Changed
+
+- `.grec` header FPS field now varies by platform (was always GBA; existing files decode fine)
+- Clearer UI labels: video/audio capture ("Capture") vs input recording ("Record Inputs")
+- Hotkeys for pause, screenshot, and open ROM now work without a ROM loaded
+
+### Fixed
+
+- Games no longer start paused on Linux/Windows when window doesn't have focus at startup
+- Opening the Logs Directory menu item no longer crashes (platform_open was not loaded by Zeitwerk)
+
 ## [0.1.1] — 2026-02-17
 
 ### Changed

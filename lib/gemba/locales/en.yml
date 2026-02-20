@@ -5,9 +5,11 @@ menu:
   quit: "Quit"
   settings: "Settings"
   view: "View"
+  game_library: "Game Library"
   fullscreen: "Fullscreen"
   rom_info: "ROM Info…"
   open_logs_dir: "Open Logs Directory"
+  patch_rom: "Patch ROM…"
   emulation: "Emulation"
   pause: "Pause"
   resume: "Resume"
@@ -43,6 +45,8 @@ toast:
 dialog:
   game_running_title: "Game Running"
   game_running_msg: "Another game is running. Switch to {name}?"
+  return_to_library_title: "Return to Game Library"
+  return_to_library_msg: "Return to the Game Library? Unsaved progress will be lost."
   drop_error_title: "Drop Error"
   drop_single_file_only: "Please drop a single ROM file."
   drop_unsupported_type: "Unsupported file type: {ext}"
@@ -118,6 +122,15 @@ settings:
   tip_per_game: "Save separate video, audio, and save state settings for each ROM."
   tip_turbo_speed: "Fast-forward speed when holding the turbo hotkey."
   tip_toast_duration: "How long on-screen notifications stay visible."
+  system: "System"
+  bios_header: "GBA BIOS"
+  bios_path: "BIOS file:"
+  bios_browse: "Browse…"
+  bios_clear: "Clear"
+  bios_not_set: "Not set — using built-in HLE (recommended for most games)"
+  bios_not_found: "File not found"
+  skip_bios: "Skip boot animation"
+  tip_skip_bios: "Jump straight to the game, skipping the Game Boy Advance logo screen.\nOnly applies when a real BIOS file is loaded."
   recording: "Recording"
   recording_compression: "Compression:"
   tip_recording_compression: "Zlib level for .grec files.\n1 = fastest (default), 6+ has diminishing returns."
@@ -142,6 +155,13 @@ picker:
   slot: "Slot {n}"
   close: "Close"
 
+game_picker:
+  menu:
+    play: "Play"
+    quick_load: "Quick Load"
+    set_boxart: "Set Boxart"
+    remove: "Remove from Library"
+
 rom_info:
   title: "ROM Info"
   field_title: "Title:"
@@ -161,6 +181,23 @@ replay:
   replay_player: "Input Replay"
   ended: "Replay complete ({frames} frames)"
   empty_hint: "Open Input Recording (Cmd+O)"
+
+patcher:
+  title: "Patch ROM"
+  rom_label: "ROM file:"
+  patch_label: "Patch file:"
+  outdir_label: "Output dir:"
+  browse: "Browse…"
+  apply: "Apply Patch"
+  working: "Applying patch…"
+  done: "Done →"
+  err_missing_fields: "Please fill in all fields."
+  err_rom_not_found: "ROM file not found."
+  err_patch_not_found: "Patch file not found."
+  err_failed: "Patch failed:"
+  overwrite_title: "File Exists"
+  overwrite_msg: "{path} already exists. Overwrite it?"
+  thread_mode_warn: "Note: Progress may appear stuck on Ruby < 4"
 
 player:
   open_rom_hint: "File > Open ROM…"

@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require_relative "paths"
 
 module Gemba
   module Settings
@@ -18,6 +17,12 @@ module Gemba
       def initialize(app, tips:, mark_dirty:)
         @app = app
         @mark_dirty = mark_dirty
+      end
+
+      def load_from_config(config)
+        @app.set_variable(VAR_VOLUME, config.volume.to_s)
+        @app.command(@vol_val_label, 'configure', text: "#{config.volume}%")
+        @app.set_variable(VAR_MUTE, config.muted? ? '1' : '0')
       end
 
       def build

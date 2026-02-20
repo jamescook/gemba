@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require_relative "logging"
 
 module Gemba
   # Publish/subscribe event bus for decoupled communication.
@@ -46,24 +45,4 @@ module Gemba
     end
   end
 
-  # Module-level bus accessor. Auto-creates a default bus on first access
-  # so tests and standalone classes don't need explicit setup.
-  # Player replaces it with a fresh bus at startup.
-  class << self
-    def bus
-      @bus ||= EventBus.new
-    end
-
-    attr_writer :bus
-  end
-
-  # Include in any class that emits events via Gemba.bus.
-  # No constructor changes needed — just include and call emit.
-  module BusEmitter
-    private
-
-    def emit(event, *args, **kwargs)
-      Gemba.bus.emit(event, *args, **kwargs)
-    end
-  end
 end

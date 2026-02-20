@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require_relative "paths"
 
 module Gemba
   module Settings
@@ -18,6 +17,10 @@ module Gemba
         @app = app
         @tips = tips
         @mark_dirty = mark_dirty
+      end
+
+      def load_from_config(config)
+        @app.set_variable(VAR_COMPRESSION, config.recording_compression.to_s)
       end
 
       def build

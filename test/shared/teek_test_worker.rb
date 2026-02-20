@@ -67,7 +67,7 @@ class Teek::TestWorker
     end
 
     # Default timeout for test execution (can be overridden via TK_TEST_TIMEOUT env var)
-    DEFAULT_TIMEOUT = 60
+    DEFAULT_TIMEOUT = 10
 
     def run_test(code, pipe_capture: false, timeout: nil, source_file: nil, source_line: nil)
       start unless running?
@@ -170,6 +170,22 @@ class Teek::TestWorker
         sleep 0.02
       end
       result
+    end
+
+    # Suppress tk_popup for the duration of the block so right-click bindings
+    # can build and configure menus without posting them.  This avoids the
+    # platform grab that would block app.update on macOS and Windows.
+    #
+    # Uses Tcl `catch` so setup and teardown are idempotent — safe even if a
+    # previous test left _orig_tk_popup stranded due to an error.
+    def override_tk_popup
+      @app.tcl_eval("rename tk_popup _orig_tk_popup; proc tk_popup {args} {}")
+      yield
+    ensure
+      # Delete the no-op proc first (rename to {} = delete in Tcl), then
+      # restore the real tk_popup.  Both wrapped in catch so a double-ensure
+      # or other edge case never raises.
+      @app.tcl_eval("catch {rename tk_popup {}}; catch {rename _orig_tk_popup tk_popup}")
     end
   end
 

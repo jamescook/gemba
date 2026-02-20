@@ -1,11 +1,10 @@
 # frozen_string_literal: true
 
 require 'optparse'
-require_relative 'version'
 
 module Gemba
   class CLI
-    SUBCOMMANDS = %w[play record decode replay config version].freeze
+    SUBCOMMANDS = %w[play record decode replay config version patch].freeze
 
     # Entry point: dispatch to subcommand or default to play.
     # @param argv [Array<String>]
@@ -34,6 +33,7 @@ module Gemba
           record    Record video+audio to .grec (headless)
           decode    Encode .grec to video via ffmpeg (--stats for info)
           replay    Replay a .gir input recording
+          patch     Apply an IPS/BPS/UPS patch to a ROM
           config    Show or reset configuration
           version   Show version
 
@@ -80,6 +80,10 @@ module Gemba
           options[:turbo_speed] = v.clamp(0, 4)
         end
 
+        o.on("--bios PATH", "Path to GBA BIOS file (overrides saved setting)") do |v|
+          options[:bios] = File.expand_path(v)
+        end
+
         o.on("--locale LANG", "Language (en, ja, auto)") do |v|
           options[:locale] = v
         end
@@ -105,6 +109,7 @@ module Gemba
       config.show_fps = true if options[:show_fps]
       config.turbo_speed = options[:turbo_speed] if options[:turbo_speed]
       config.locale = options[:locale] if options[:locale]
+      config.bios_path = options[:bios] if options[:bios]
     end
 
     def self.run_play(argv, dry_run: false)
@@ -129,7 +134,7 @@ module Gemba
       apply(Gemba.user_config, options)
       Gemba.load_locale if options[:locale]
 
-      Player.new(result[:rom], sound: result[:sound], fullscreen: result[:fullscreen]).run
+      Gemba::AppController.new(result[:rom], sound: result[:sound], fullscreen: result[:fullscreen]).run
     end
 
     # --- record subcommand ---
@@ -502,9 +507,9 @@ module Gemba
         config = Gemba.user_config
         puts "  Scale: #{config.scale}"
         puts "  Volume: #{config.volume}"
-        puts "  Muted: #{config.muted}"
+        puts "  Muted: #{config.muted?}"
         puts "  Locale: #{config.locale}"
-        puts "  Show FPS: #{config.show_fps}"
+        puts "  Show FPS: #{config.show_fps?}"
         puts "  Turbo speed: #{config.turbo_speed}"
       end
     end
@@ -516,6 +521,74 @@ module Gemba
       return result if dry_run
 
       puts "gemba #{Gemba::VERSION}"
+    end
+
+    # --- patch subcommand ---
+
+    def self.parse_patch(argv)
+      options = {}
+
+      parser = OptionParser.new do |o|
+        o.banner = "Usage: gemba patch [options] ROM_FILE PATCH_FILE"
+        o.separator ""
+        o.separator "Apply an IPS, BPS, or UPS patch to a ROM file."
+        o.separator ""
+        o.separator "The output file is written to --output or, by default, next to the ROM."
+        o.separator "If the output path already exists, -(2), -(3) etc. are appended."
+        o.separator ""
+
+        o.on("-o", "--output PATH", "Output ROM path") do |v|
+          options[:output] = File.expand_path(v)
+        end
+
+        o.on("-h", "--help", "Show this help") do
+          options[:help] = true
+        end
+      end
+
+      parser.parse!(argv)
+      options[:rom]   = File.expand_path(argv[0]) if argv[0]
+      options[:patch] = File.expand_path(argv[1]) if argv[1]
+      options[:parser] = parser
+      options
+    end
+
+    def self.run_patch(argv, dry_run: false)
+      options = parse_patch(argv)
+
+      if options[:help]
+        puts options[:parser] unless dry_run
+        return { command: :patch, help: true }
+      end
+
+      unless options[:rom] && options[:patch]
+        $stderr.puts "gemba patch: ROM_FILE and PATCH_FILE are required"
+        $stderr.puts options[:parser]
+        return { command: :patch, error: :missing_args }
+      end
+
+      rom_path   = options[:rom]
+      patch_path = options[:patch]
+      out_path   = if options[:output]
+                     options[:output]
+                   else
+                     ext  = File.extname(rom_path)
+                     base = rom_path.chomp(ext)
+                     "#{base}-patched#{ext}"
+                   end
+
+      result = { command: :patch, rom: rom_path, patch: patch_path, out: out_path }
+      return result if dry_run
+
+      require_relative "rom_patcher"
+      require_relative "rom_patcher/ips"
+      require_relative "rom_patcher/bps"
+      require_relative "rom_patcher/ups"
+
+      safe_out = RomPatcher.safe_out_path(out_path)
+      puts "Patching #{File.basename(rom_path)} with #{File.basename(patch_path)}…"
+      RomPatcher.patch(rom_path: rom_path, patch_path: patch_path, out_path: safe_out)
+      puts "Written: #{safe_out}"
     end
 
     # --- helpers ---

@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require_relative "paths"
 
 module Gemba
   module Settings
@@ -20,6 +19,11 @@ module Gemba
         @app = app
         @tips = tips
         @mark_dirty = mark_dirty
+      end
+
+      def load_from_config(config)
+        @app.set_variable(VAR_QUICK_SLOT, config.quick_save_slot.to_s)
+        @app.set_variable(VAR_BACKUP,     config.save_state_backup? ? '1' : '0')
       end
 
       def build
