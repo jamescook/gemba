@@ -200,17 +200,15 @@ class TestGamePickerFrame < Minitest::Test
         Gemba.user_config.states_dir = tmpdir
         picker = Gemba::GamePickerFrame.new(app: app, rom_library: lib)
         picker.show
-        # Mouse events require the root window to be mapped. The TestWorker
-        # calls app.hide after each test, so we must re-show before event generate.
         app.show
         app.update
 
-        app.tcl_eval("event generate .game_picker.card0 <Button-3> -x 10 -y 10")
-        # Schedule unpost as an idle callback before calling update — ensures the
-        # menu is dismissed within the same update pass, before any platform menu
-        # grab can block (observed on Windows).
-        app.tcl_eval("after idle {catch {.game_picker.card0.ctx unpost}}")
-        app.update
+        # Suppress tk_popup so the right-click binding configures menu entries
+        # without posting the menu (no platform grab → no blocking app.update).
+        override_tk_popup do
+          app.tcl_eval("event generate .game_picker.card0 <Button-3> -x 10 -y 10")
+          app.update
+        end
 
         # index 1 = Quick Load
         state = app.tcl_eval(".game_picker.card0.ctx entrycget 1 -state")
@@ -247,12 +245,10 @@ class TestGamePickerFrame < Minitest::Test
         app.show
         app.update
 
-        app.tcl_eval("event generate .game_picker.card0 <Button-3> -x 10 -y 10")
-        # Schedule unpost as an idle callback before calling update — ensures the
-        # menu is dismissed within the same update pass, before any platform menu
-        # grab can block (observed on Windows).
-        app.tcl_eval("after idle {catch {.game_picker.card0.ctx unpost}}")
-        app.update
+        override_tk_popup do
+          app.tcl_eval("event generate .game_picker.card0 <Button-3> -x 10 -y 10")
+          app.update
+        end
 
         # index 1 = Quick Load
         state = app.tcl_eval(".game_picker.card0.ctx entrycget 1 -state")
@@ -293,8 +289,12 @@ class TestGamePickerFrame < Minitest::Test
         app.show
         app.update
 
-        app.tcl_eval("event generate .game_picker.card0 <Button-3> -x 10 -y 10")
-        app.update
+        override_tk_popup do
+          app.tcl_eval("event generate .game_picker.card0 <Button-3> -x 10 -y 10")
+          app.update
+        end
+
+        # Menu was built but not shown — invoke the Quick Load entry directly.
         # index 1 = Quick Load
         app.tcl_eval(".game_picker.card0.ctx invoke 1")
         app.update
