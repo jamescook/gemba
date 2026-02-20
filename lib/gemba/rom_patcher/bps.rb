@@ -40,10 +40,22 @@ module Gemba
     #                        │  word  │  delta(v) │  by signed delta, copy
     #                        └────────┴───────────┘
     #
-    # BPS varint encoding (additive-shift, differs from UPS):
+    # BPS varint encoding (7-bit groups, additive-shift, differs from UPS):
+    #   Each byte holds 7 data bits (b & 0x7f = 0b01111111) and one flag bit
+    #   (b & 0x80).  Flag=1 means last byte; flag=0 means more follow.
+    #   Unlike UPS (bitwise OR + left-shift), BPS uses multiplication and adds
+    #   an extra `shift` after each non-terminal byte so that 0x00 is never a
+    #   valid single-byte encoding — this lets the format distinguish "no data"
+    #   from an actual zero value.
     #   value = 0, shift = 1
     #   per byte:  value += (b & 0x7f) * shift
     #              if bit7 set → done;  else shift <<= 7; value += shift
+    #
+    #   Example: value 300 decoded from bytes [0x2C, 0x81]
+    #   raw byte  │  & 0x7f  │  shift  │  value after        │  bit7  │  action
+    #   ──────────┼──────────┼─────────┼─────────────────────┼────────┼───────────────────────────
+    #   0x2C      │    44    │    1    │  0 + 44×1    =  44  │   0    │  shift<<=7 (→128); value+=128 (→172)
+    #   0x81      │     1    │  128    │  172 + 1×128 = 300  │   1    │  break
     class BPS
       # @param rom   [String] binary ROM data
       # @param patch [String] binary BPS patch data

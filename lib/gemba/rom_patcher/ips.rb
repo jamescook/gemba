@@ -62,10 +62,10 @@ module Gemba
                    (offset_bytes.getbyte(1) << 8)  |
                     offset_bytes.getbyte(2)
 
-          size = read!(io, 2).unpack1("n")
+          size = read!(io, 2).unpack1("n")  # "n" = 16-bit unsigned big-endian
 
           data = if size == 0
-                   count = read!(io, 2).unpack1("n")
+                   count = read!(io, 2).unpack1("n")  # "n" = 16-bit unsigned big-endian
                    value = read!(io, 1)
                    value * count
                  else

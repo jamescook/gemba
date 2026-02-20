@@ -33,10 +33,18 @@ module Gemba
     #          result:  [AA (BB^11) (CC^22) DD EE FF]
     #                        ↑ changed  ↑ changed
     #
-    # UPS varint encoding (simple bitshift, differs from BPS):
+    # UPS varint encoding (7-bit groups, LSB first):
+    #   Each byte holds 7 data bits (b & 0x7f = 0b01111111) and one flag bit
+    #   (b & 0x80).  Flag=1 means this is the last byte; flag=0 means more follow.
     #   value = 0, shift = 0
     #   per byte:  value |= (b & 0x7f) << shift
     #              if bit7 set → done;  else shift += 7
+    #
+    #   Example: value 300 decoded from bytes [0x2C, 0x82]
+    #   raw byte  │  & 0x7f  │  shift  │  value after          │  bit7  │  action
+    #   ──────────┼──────────┼─────────┼───────────────────────┼────────┼──────────
+    #   0x2C      │   0x2C   │   0     │  0x2C        (44)     │   0    │  shift += 7
+    #   0x82      │   0x02   │   7     │  0x2C│0x100  (300)    │   1    │  break
     class UPS
       # @param rom   [String] binary ROM data
       # @param patch [String] binary UPS patch data
