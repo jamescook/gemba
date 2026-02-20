@@ -1150,6 +1150,21 @@ Init_gemba_ext(void)
     rb_define_const(mGemba, "KEY_R",      INT2NUM(1 << GEMBA_KEY_R));
     rb_define_const(mGemba, "KEY_L",      INT2NUM(1 << GEMBA_KEY_L));
 
+    /* GBA button name → bitmask hash (shared by KeyboardMap and GamepadMap) */
+    VALUE btn_bits = rb_hash_new();
+    rb_hash_aset(btn_bits, ID2SYM(rb_intern("a")),      INT2NUM(1 << GEMBA_KEY_A));
+    rb_hash_aset(btn_bits, ID2SYM(rb_intern("b")),      INT2NUM(1 << GEMBA_KEY_B));
+    rb_hash_aset(btn_bits, ID2SYM(rb_intern("l")),      INT2NUM(1 << GEMBA_KEY_L));
+    rb_hash_aset(btn_bits, ID2SYM(rb_intern("r")),      INT2NUM(1 << GEMBA_KEY_R));
+    rb_hash_aset(btn_bits, ID2SYM(rb_intern("up")),     INT2NUM(1 << GEMBA_KEY_UP));
+    rb_hash_aset(btn_bits, ID2SYM(rb_intern("down")),   INT2NUM(1 << GEMBA_KEY_DOWN));
+    rb_hash_aset(btn_bits, ID2SYM(rb_intern("left")),   INT2NUM(1 << GEMBA_KEY_LEFT));
+    rb_hash_aset(btn_bits, ID2SYM(rb_intern("right")),  INT2NUM(1 << GEMBA_KEY_RIGHT));
+    rb_hash_aset(btn_bits, ID2SYM(rb_intern("start")),  INT2NUM(1 << GEMBA_KEY_START));
+    rb_hash_aset(btn_bits, ID2SYM(rb_intern("select")), INT2NUM(1 << GEMBA_KEY_SELECT));
+    OBJ_FREEZE(btn_bits);
+    rb_define_const(mGemba, "GBA_BTN_BITS", btn_bits);
+
     /* Toast background generator */
     rb_define_module_function(mGemba, "toast_background", mgba_toast_background, 3);
 

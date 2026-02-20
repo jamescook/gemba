@@ -1,15 +1,6 @@
 # frozen_string_literal: true
 
 module Gemba
-  # GBA button label → bitmask (shared by KeyboardMap and GamepadMap)
-  GBA_BTN_BITS = {
-    a: KEY_A, b: KEY_B,
-    l: KEY_L, r: KEY_R,
-    up: KEY_UP, down: KEY_DOWN,
-    left: KEY_LEFT, right: KEY_RIGHT,
-    start: KEY_START, select: KEY_SELECT,
-  }.freeze
-
   # Manages keyboard keysym → GBA bitmask mappings.
   #
   # Shares the same interface as {GamepadMap} so that Player can
