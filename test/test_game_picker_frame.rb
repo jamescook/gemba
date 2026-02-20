@@ -182,4 +182,123 @@ class TestGamePickerFrame < Minitest::Test
       app.command(:destroy, '.game_picker') rescue nil
     end
   end
+
+  # -- Quick Load context menu ------------------------------------------------
+  # Menu entry indices: 0=Play, 1=Quick Load, 2=Set Boxart, 3=separator, 4=Remove
+
+  def test_quick_load_disabled_when_no_save_state
+    assert_tk_app("quick load menu entry is disabled when no .ss file exists") do
+      require "gemba/headless"
+      require "tmpdir"
+
+      Dir.mktmpdir("picker_qs_test") do |tmpdir|
+        rom_id = "AGB-TEST-DEADBEEF"
+        rom = { 'title' => 'Test Game', 'platform' => 'gba',
+                'rom_id' => rom_id, 'game_code' => 'AGB-TEST', 'path' => '/games/test.gba' }
+        lib = Struct.new(:roms) { def all = roms }.new([rom])
+
+        Gemba.user_config.states_dir = tmpdir
+        picker = Gemba::GamePickerFrame.new(app: app, rom_library: lib)
+        picker.show
+        # Mouse events require the root window to be mapped. The TestWorker
+        # calls app.hide after each test, so we must re-show before event generate.
+        app.show
+        app.update
+
+        app.tcl_eval("event generate .game_picker.card0 <Button-3> -x 10 -y 10")
+        app.update
+        app.tcl_eval(".game_picker.card0.ctx unpost") rescue nil
+
+        # index 1 = Quick Load
+        state = app.tcl_eval(".game_picker.card0.ctx entrycget 1 -state")
+        assert_equal 'disabled', state
+
+        picker.cleanup
+        app.command(:destroy, '.game_picker') rescue nil
+      end
+    end
+  end
+
+  def test_quick_load_enabled_when_save_state_exists
+    assert_tk_app("quick load menu entry is enabled when .ss file exists") do
+      require "gemba/headless"
+      require "tmpdir"
+      require "fileutils"
+
+      fixture = File.expand_path("test/fixtures/test_quicksave.ss")
+
+      Dir.mktmpdir("picker_qs_test") do |tmpdir|
+        rom_id    = "AGB-TEST-DEADBEEF"
+        slot      = Gemba.user_config.quick_save_slot
+        state_dir = File.join(tmpdir, rom_id)
+        FileUtils.mkdir_p(state_dir)
+        FileUtils.cp(fixture, File.join(state_dir, "state#{slot}.ss"))
+
+        rom = { 'title' => 'Test Game', 'platform' => 'gba',
+                'rom_id' => rom_id, 'game_code' => 'AGB-TEST', 'path' => '/games/test.gba' }
+        lib = Struct.new(:roms) { def all = roms }.new([rom])
+
+        Gemba.user_config.states_dir = tmpdir
+        picker = Gemba::GamePickerFrame.new(app: app, rom_library: lib)
+        picker.show
+        app.show
+        app.update
+
+        app.tcl_eval("event generate .game_picker.card0 <Button-3> -x 10 -y 10")
+        app.update
+        app.tcl_eval(".game_picker.card0.ctx unpost") rescue nil
+
+        # index 1 = Quick Load
+        state = app.tcl_eval(".game_picker.card0.ctx entrycget 1 -state")
+        assert_equal 'normal', state
+
+        picker.cleanup
+        app.command(:destroy, '.game_picker') rescue nil
+      end
+    end
+  end
+
+  def test_quick_load_emits_rom_quick_load_event
+    assert_tk_app("clicking quick load emits :rom_quick_load with path and slot") do
+      require "gemba/headless"
+      require "tmpdir"
+      require "fileutils"
+
+      fixture = File.expand_path("test/fixtures/test_quicksave.ss")
+
+      Dir.mktmpdir("picker_qs_test") do |tmpdir|
+        rom_id    = "AGB-TEST-DEADBEEF"
+        slot      = Gemba.user_config.quick_save_slot
+        state_dir = File.join(tmpdir, rom_id)
+        FileUtils.mkdir_p(state_dir)
+        FileUtils.cp(fixture, File.join(state_dir, "state#{slot}.ss"))
+
+        rom_path = '/games/test.gba'
+        rom = { 'title' => 'Test Game', 'platform' => 'gba',
+                'rom_id' => rom_id, 'game_code' => 'AGB-TEST', 'path' => rom_path }
+        lib = Struct.new(:roms) { def all = roms }.new([rom])
+
+        received = nil
+        Gemba.bus.on(:rom_quick_load) { |**kwargs| received = kwargs }
+
+        Gemba.user_config.states_dir = tmpdir
+        picker = Gemba::GamePickerFrame.new(app: app, rom_library: lib)
+        picker.show
+        app.show
+        app.update
+
+        app.tcl_eval("event generate .game_picker.card0 <Button-3> -x 10 -y 10")
+        app.update
+        # index 1 = Quick Load
+        app.tcl_eval(".game_picker.card0.ctx invoke 1")
+        app.update
+
+        assert_equal rom_path, received[:path]
+        assert_equal slot,     received[:slot]
+
+        picker.cleanup
+        app.command(:destroy, '.game_picker') rescue nil
+      end
+    end
+  end
 end

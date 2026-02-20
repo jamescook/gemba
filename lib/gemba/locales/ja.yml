@@ -157,6 +157,7 @@ picker:
 game_picker:
   menu:
     play: "プレイ"
+    quick_load: "クイックロード"
     set_boxart: "カスタム画像を設定"
     remove: "ライブラリから削除"
 

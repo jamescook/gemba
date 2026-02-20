@@ -194,6 +194,12 @@ module Gemba
       @app.command(menu, :add, :command,
         label: translate('game_picker.menu.play'),
         command: proc { emit(:rom_selected, rom_info.path) })
+      qs_slot = quick_save_slot
+      qs_state = quick_save_exists?(rom_info, qs_slot)
+      @app.command(menu, :add, :command,
+        label: translate('game_picker.menu.quick_load'),
+        state: qs_state ? :normal : :disabled,
+        command: proc { emit(:rom_quick_load, path: rom_info.path, slot: qs_slot) })
       @app.command(menu, :add, :command,
         label: translate('game_picker.menu.set_boxart'),
         command: proc { pick_custom_boxart(card, rom_info) })
@@ -202,6 +208,16 @@ module Gemba
         label: translate('game_picker.menu.remove'),
         command: proc { remove_rom(rom_info) })
       @app.tcl_eval("tk_popup #{menu} [winfo pointerx .] [winfo pointery .]")
+    end
+
+    def quick_save_slot
+      Gemba.user_config.quick_save_slot
+    end
+
+    def quick_save_exists?(rom_info, slot)
+      return false unless rom_info.rom_id
+      state_file = File.join(Gemba.user_config.states_dir, rom_info.rom_id, "state#{slot}.ss")
+      File.exist?(state_file)
     end
 
     def remove_rom(rom_info)

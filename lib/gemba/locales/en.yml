@@ -157,6 +157,7 @@ picker:
 game_picker:
   menu:
     play: "Play"
+    quick_load: "Quick Load"
     set_boxart: "Set Boxart"
     remove: "Remove from Library"
 

@@ -334,6 +334,23 @@ module TeekTestHelper
   # The test code has access to `app` (a Teek::App instance) and minitest assertions.
   # Do NOT create your own TkRoot or call root.destroy - worker manages this.
   #
+  # == event generate gotcha: mouse button events ==
+  #
+  # The TestWorker calls `app.hide` (wm withdraw .) after every test.
+  # `event generate <Button-N>` silently does nothing when the root window is
+  # withdrawn because widgets are not mapped/viewable without a visible ancestor.
+  # Always call `app.show` + `app.update` before generating mouse button events:
+  #
+  #   picker.show
+  #   app.show    # ← required: deiconify root so widgets are viewable
+  #   app.update  # ← let Tk map all windows
+  #   app.tcl_eval("event generate .widget <Button-3> -x 10 -y 10")
+  #   app.update
+  #
+  # Key events additionally require focus:
+  #   app.tcl_eval("focus -force .widget")
+  #   app.update
+  #
   # Example:
   #   def test_something
   #     assert_tk_app("should work") do

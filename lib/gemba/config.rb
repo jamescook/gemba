@@ -67,8 +67,6 @@ module Gemba
       'turbo_speed'       => 'settings.turbo_speed',
       'quick_save_slot'   => 'settings.quick_save_slot',
       'save_state_backup' => 'settings.keep_backup',
-      'bios_path'         => 'settings.bios_path',
-      'skip_bios'         => 'settings.skip_bios',
     }.freeze
 
     PER_GAME_KEYS = PER_GAME_SETTINGS.keys.to_set.freeze

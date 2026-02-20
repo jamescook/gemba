@@ -181,6 +181,7 @@ module Gemba
       bus.on(:request_save_states)     { show_state_picker }
       bus.on(:request_open_rom)        { handle_open_rom }
       bus.on(:rom_selected)            { |path| load_rom(path) }
+      bus.on(:rom_quick_load)          { |path:, slot:| load_rom(path); frame&.receive(:load_state, slot: slot) }
       bus.on(:request_show_fps_toggle) do
         frame&.receive(:toggle_show_fps)
         show = frame&.show_fps? || false
