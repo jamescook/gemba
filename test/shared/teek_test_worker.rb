@@ -67,7 +67,7 @@ class Teek::TestWorker
     end
 
     # Default timeout for test execution (can be overridden via TK_TEST_TIMEOUT env var)
-    DEFAULT_TIMEOUT = 60
+    DEFAULT_TIMEOUT = 10
 
     def run_test(code, pipe_capture: false, timeout: nil, source_file: nil, source_line: nil)
       start unless running?

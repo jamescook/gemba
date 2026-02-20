@@ -206,8 +206,11 @@ class TestGamePickerFrame < Minitest::Test
         app.update
 
         app.tcl_eval("event generate .game_picker.card0 <Button-3> -x 10 -y 10")
+        # Schedule unpost as an idle callback before calling update — ensures the
+        # menu is dismissed within the same update pass, before any platform menu
+        # grab can block (observed on Windows).
+        app.tcl_eval("after idle {catch {.game_picker.card0.ctx unpost}}")
         app.update
-        app.tcl_eval(".game_picker.card0.ctx unpost") rescue nil
 
         # index 1 = Quick Load
         state = app.tcl_eval(".game_picker.card0.ctx entrycget 1 -state")
@@ -245,8 +248,11 @@ class TestGamePickerFrame < Minitest::Test
         app.update
 
         app.tcl_eval("event generate .game_picker.card0 <Button-3> -x 10 -y 10")
+        # Schedule unpost as an idle callback before calling update — ensures the
+        # menu is dismissed within the same update pass, before any platform menu
+        # grab can block (observed on Windows).
+        app.tcl_eval("after idle {catch {.game_picker.card0.ctx unpost}}")
         app.update
-        app.tcl_eval(".game_picker.card0.ctx unpost") rescue nil
 
         # index 1 = Quick Load
         state = app.tcl_eval(".game_picker.card0.ctx entrycget 1 -state")

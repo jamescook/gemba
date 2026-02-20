@@ -85,7 +85,7 @@ module Gemba
         dir = tmp_dir
         FileUtils.mkdir_p(dir)
         out_path = File.join(dir, File.basename(rom_entry.name))
-        File.binwrite(out_path, rom_entry.get_input_stream.read)
+        rom_entry.get_input_stream { |s| File.binwrite(out_path, s.read) }
         out_path
       end
     rescue NoRomInZip, MultipleRomsInZip
