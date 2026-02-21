@@ -18,7 +18,9 @@ jobs:
     name: test (ruby ${{ github.event.inputs.ruby_version }}, Windows)
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
+      with:
+        submodules: true
 
     - name: Set up Ruby
       uses: ruby/setup-ruby@v1

@@ -52,6 +52,12 @@ module Gemba
       'log_level'            => 'info',
       'bios_path'            => nil,
       'skip_bios'            => false,
+      'ra_enabled'           => false,
+      'ra_username'          => '',
+      'ra_token'             => '',
+      'ra_hardcore'          => false,
+      'ra_unofficial'        => false,
+      'ra_rich_presence'     => false,
     }.freeze
 
     # Settings that can be overridden per ROM. Maps config key → locale key.
@@ -67,6 +73,7 @@ module Gemba
       'turbo_speed'       => 'settings.turbo_speed',
       'quick_save_slot'   => 'settings.quick_save_slot',
       'save_state_backup' => 'settings.keep_backup',
+      'ra_rich_presence'  => 'settings.ra_rich_presence',
     }.freeze
 
     PER_GAME_KEYS = PER_GAME_SETTINGS.keys.to_set.freeze
@@ -130,6 +137,14 @@ module Gemba
       @path = path || self.class.default_path
       @data = load_file
       subscribe_to_bus if subscribe
+    end
+
+    # Re-wire bus subscriptions onto the current Gemba.bus.
+    # Called by AppController after it creates a fresh EventBus, because the
+    # Config may have been instantiated earlier (e.g. by the CLI) and subscribed
+    # to whatever bus existed at that time (possibly nil).
+    def resubscribe
+      subscribe_to_bus
     end
 
     # @return [String] path to the config file
@@ -431,6 +446,56 @@ module Gemba
       global['log_level'] = val.to_s
     end
 
+    # -- RetroAchievements ----------------------------------------------------
+
+    def ra_enabled?
+      global['ra_enabled']
+    end
+
+    def ra_enabled=(val)
+      global['ra_enabled'] = val ? true : false
+    end
+
+    def ra_username
+      global['ra_username'] || ''
+    end
+
+    def ra_username=(val)
+      global['ra_username'] = val.to_s
+    end
+
+    def ra_token
+      global['ra_token'] || ''
+    end
+
+    def ra_token=(val)
+      global['ra_token'] = val.to_s
+    end
+
+    def ra_hardcore?
+      global['ra_hardcore']
+    end
+
+    def ra_hardcore=(val)
+      global['ra_hardcore'] = val ? true : false
+    end
+
+    def ra_unofficial?
+      global['ra_unofficial']
+    end
+
+    def ra_unofficial=(val)
+      global['ra_unofficial'] = val ? true : false
+    end
+
+    def ra_rich_presence?
+      global['ra_rich_presence']
+    end
+
+    def ra_rich_presence=(val)
+      global['ra_rich_presence'] = val ? true : false
+    end
+
     # @return [String] directory for .grec recording files
     def recordings_dir
       global['recordings_dir'] || self.class.default_recordings_dir
@@ -606,6 +671,11 @@ module Gemba
     # @return [String] default directory for cached box art images
     def self.boxart_dir
       File.join(config_dir, 'boxart')
+    end
+
+    # @return [String] directory for cached RA achievement lists (one JSON per rom_id)
+    def self.achievements_cache_dir
+      File.join(config_dir, 'achievements')
     end
 
     # @return [String] default directory for patched ROMs

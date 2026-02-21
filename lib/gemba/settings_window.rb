@@ -125,6 +125,9 @@ module Gemba
       subscribe_to_bus
     end
 
+    # Exposes SystemTab for AppController save_config
+    def system_tab = @system_tab
+
     # Delegates to GamepadTab
     def listening_for = @gamepad_tab.listening_for
     def keyboard_mode? = @gamepad_tab.keyboard_mode?

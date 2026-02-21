@@ -25,10 +25,10 @@ module Gemba
     PICKER_ASPECT_H = 4
 
     # Default and minimum picker window dimensions (must satisfy PICKER_ASPECT ratio)
-    PICKER_DEFAULT_W = 640
-    PICKER_DEFAULT_H = 854   # 640 * 4/3, rounded up
-    PICKER_MIN_W     = 480
-    PICKER_MIN_H     = 640
+    PICKER_DEFAULT_W = 768
+    PICKER_DEFAULT_H = 1024  # 768 * 4/3
+    PICKER_MIN_W     = 576
+    PICKER_MIN_H     = 768
 
     def initialize(app:, rom_library:, boxart_fetcher: nil, rom_overrides: nil)
       @app      = app
@@ -96,7 +96,12 @@ module Gemba
         title_lbl = "#{cell}.title"
         @app.command(:label, title_lbl, text: '', anchor: :center,
           bg: '#2a2a2a', fg: '#cccccc',
-          font: '{TkDefaultFont} 10')
+          font: '{TkDefaultFont} 10',
+          justify: :center, wraplength: IMG_SIZE)
+        @app.command(:bind, title_lbl, '<Configure>', proc {
+          w = @app.tcl_eval("winfo width #{title_lbl}").to_i
+          @app.command(title_lbl, :configure, wraplength: w - 8) if w > 8
+        })
         @app.command(:pack, title_lbl, fill: :x, pady: [4, 2])
 
         plat_lbl = "#{cell}.plat"

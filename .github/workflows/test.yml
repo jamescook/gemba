@@ -7,11 +7,15 @@ on:
       - '**.md'
       - 'docs/**'
       - 'docs_site/**'
+      - '.github/workflows/windows-test.yml'
+      - '.github/workflows/smoke.yml'
   pull_request:
     paths-ignore:
       - '**.md'
       - 'docs/**'
       - 'docs_site/**'
+      - '.github/workflows/windows-test.yml'
+      - '.github/workflows/smoke.yml'
   schedule:
     # Run weekly to keep Docker cache fresh (expires after 7 days of no access)
     - cron: '0 4 * * 0'  # Sundays at 4am UTC
@@ -28,7 +32,10 @@ jobs:
       matrix:
         ruby: ['4.0']
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
+      with:
+        submodules: true
+
 
     - name: Set up Docker Buildx
       id: buildx
@@ -106,7 +113,10 @@ jobs:
       matrix:
         ruby: ['4.0']
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
+      with:
+        submodules: true
+
 
     - name: Set up Docker Buildx
       id: buildx

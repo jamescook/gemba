@@ -3,46 +3,337 @@
     "title": "Gemba",
     "type": "module",
     "url": "/api/Gemba/",
-    "methods": "load_locale user_config user_config=",
+    "methods": "load_locale log open_directory",
     "method_docs": {
       "load_locale": "Load translations based on the config locale setting.",
-      "user_config": "Lazily loaded user config — shared across the application.",
-      "user_config=": "Override the user config (useful for tests)."
+      "log": "Log a message at the given level.",
+      "open_directory": "Open a directory in the platform's file manager."
     },
-    "content": "Gemba Load translations based on the config locale setting. Lazily loaded user config — shared across the application. Override the user config (useful for tests)."
+    "content": "Gemba Define the Gemba module before loader.setup so Zeitwerk can register autoloads directly on it (e.g. Gemba.autoload(:ChildWindow, ...)). Without this, Gemba doesn't exist yet and Zeitwerk proxies through lib/gemba.rb — which is never loaded in the headless path. Load translations based on the config locale setting. Log a message at the given level. Open a directory in the platform's file manager."
   },
   "1": {
+    "title": "Gemba::Achievements",
+    "type": "module",
+    "url": "/api/Gemba/Achievements/",
+    "methods": "backend_for",
+    "method_docs": {
+      "backend_for": "Build the appropriate backend based on config.\nReturns NullBackend if RA is disabled.\nRequires app: (Teek app) for Retro"
+    },
+    "content": "Gemba Achievements Build the appropriate backend based on config. Returns NullBackend if RA is disabled. Requires app: (Teek app) for RetroAchievements::Backend's BackgroundWork HTTP calls."
+  },
+  "2": {
+    "title": "Gemba::Achievements::Achievement",
+    "type": "class",
+    "url": "/api/Gemba/Achievements/Achievement/",
+    "methods": "earn earned?",
+    "method_docs": {
+      "earn": "Return a copy marked as earned right now."
+    },
+    "content": "Gemba Achievements Achievement Represents a single achievement (earned or unearned). Return a copy marked as earned right now."
+  },
+  "3": {
+    "title": "Gemba::Achievements::Backend",
+    "type": "module",
+    "url": "/api/Gemba/Achievements/Backend/",
+    "methods": "achievement_list authenticated? do_frame earned_count enabled? fetch_for_display include_unofficial= load_game login_with_password login_with_token logout on_achievements_changed on_auth_change on_rich_presence_changed on_unlock reset_runtime rich_presence_enabled= rich_presence_message sync_unlocks token_test total_count unload_game",
+    "method_docs": {
+      "do_frame": "Called once per emulated frame. Evaluate achievement conditions and\nfire on_unlock callbacks for any newly earned achiev",
+      "fetch_for_display": "Fetch the full achievement list for a given ROM (by RomInfo) purely for\ndisplay — does not affect live game state. Calls",
+      "include_unofficial=": "Set whether unofficial (Flags=5) achievements are included in\ndisplay syncs and live evaluation. No-op for backends that",
+      "load_game": "Called when a new ROM is loaded. Backend should reset per-game state\nand re-identify the game.",
+      "login_with_password": "Initiate login with username + password (first-time auth).\nOn success the on_auth_change callback fires with :ok and the",
+      "login_with_token": "Resume a session using a previously stored API token.\nCalled automatically at startup when credentials are already saved",
+      "logout": "Clear authentication state and stored session.",
+      "on_achievements_changed": "Register a callback invoked when the achievement list changes in bulk\n(e.g. after a game loads or sync_unlocks completes",
+      "on_auth_change": "Register a callback invoked when authentication state changes.\nFired with `status` (:ok or :error) and an optional `erro",
+      "on_rich_presence_changed": "Register a callback fired when the Rich Presence string changes.\nCalled with the new message string.",
+      "on_unlock": "Register a callback invoked when an achievement is unlocked.\nMultiple callbacks can be registered; all are called in ord",
+      "reset_runtime": "Called when a save state is loaded.  Memory jumped to an arbitrary saved\nstate; all achievements must restart their prim",
+      "rich_presence_enabled=": "Enable or disable Rich Presence evaluation for the current game.\nPushed from AppController when per-game config is resol",
+      "rich_presence_message": "Current Rich Presence display string for the active game, or nil if\nnot loaded / not supported. Updated by do_frame in r",
+      "sync_unlocks": "Fetch already-earned achievements from the server and merge them into\nthe local earned state so the UI reflects prior pr",
+      "token_test": "Verify the stored token is still valid. Result fires on_auth_change.\nUsed by the \"Verify Token\" button in settings.",
+      "unload_game": "Called when the ROM is unloaded / emulator stops."
+    },
+    "content": "Gemba Achievements Backend Abstract interface for achievement backends. All methods have no-op defaults so backends only need to override what they support. Concrete backends: NullBackend, FakeBackend, and the future RetroAchievements backend. Thread safety: do_frame is called from the emulation thread (Tk after-loop). on_unlock and on_auth_change callbacks fire on the same thread. Authentication lifecycle (decoupled from the real network): 1. call login(username:, token:) — may be async 2. on_a"
+  },
+  "4": {
+    "title": "Gemba::Achievements::Cache",
+    "type": "module",
+    "url": "/api/Gemba/Achievements/Cache/",
+    "methods": "read write",
+    "method_docs": {},
+    "content": "Gemba Achievements Cache Persistent per-ROM achievement cache. Stores the full achievement list (definitions + earned status) for each ROM as a JSON file under Config.achievements_cache_dir/<rom_id>.json. Written after every successful sync; read on demand by the window when a game is selected that isn't currently loaded in the emulator. Format: { \"synced_at\": \"<iso8601>\", \"achievements\": [ { \"id\":, \"title\":, \"description\":, \"points\":, \"earned_at\": \"<iso8601>|null\" }, … ] }"
+  },
+  "5": {
+    "title": "Gemba::Achievements::CredentialsPresenter",
+    "type": "class",
+    "url": "/api/Gemba/Achievements/CredentialsPresenter/",
+    "methods": "clear_transient dispose enabled= enabled? feedback fields_state initialize logged_in? login_button_state logout_button_state reset_button_state show_transient verify_button_state",
+    "method_docs": {
+      "dispose": "Remove bus subscription. Call before discarding the presenter.",
+      "enabled=": "-- UI mutations ---------------------------------------------------------",
+      "feedback": "Feedback descriptor. key drives locale lookup in SystemTab.\n:empty          → blank label\n:not_logged_in  → \"Not logged ",
+      "fields_state": "-- Widget state queries -------------------------------------------------",
+      "show_transient": "Transient feedback (e.g. \"Connection OK ✓\") that disappears after a delay.\nCaller is responsible for scheduling clear_tr"
+    },
+    "content": "Gemba Achievements CredentialsPresenter Presents credential state for the RetroAchievements settings UI. Read-only view of state — never writes to disk or config. Initialized from persisted config. Mutated by: - UI interactions (checkbox, keystrokes) via setters - Backend auth results via :ra_auth_result bus events Emits :credentials_changed on the bus whenever state changes. SystemTab listens and calls apply_presenter_state to refresh widgets. Call dispose when discarding the presenter to remov"
+  },
+  "6": {
+    "title": "Gemba::Achievements::FakeBackend",
+    "type": "class",
+    "url": "/api/Gemba/Achievements/FakeBackend/",
+    "methods": "achievement_list add_achievement authenticated? do_frame enabled? fetch_for_display initialize load_game login_with_password login_with_token logout reset_earned rich_presence_message set_rich_presence stub_fetch_for_display token_test unload_game",
+    "method_docs": {
+      "add_achievement": "Define an achievement. The block receives a read_mem callable\nand must return truthy when the unlock condition is met.",
+      "do_frame": "Evaluate all unearned achievements against current memory state.\nFires on_unlock callbacks for newly met conditions (ris",
+      "login_with_password": "Resolves immediately. Succeeds if credentials are non-empty and match\nthe configured valid pair (or any non-empty creds ",
+      "reset_earned": "Clear earned state (for test reuse).",
+      "set_rich_presence": "Set a Rich Presence message for testing.\n\nPass a static string to return a fixed message:\n  backend.set_rich_presence(\"P",
+      "stub_fetch_for_display": "Configure what fetch_for_display returns. Pass an Array (returned for\nevery rom_info) or a block that receives rom_info "
+    },
+    "content": "Gemba Achievements FakeBackend Pure-Ruby achievement backend for development and testing. Achievements are defined programmatically with a condition block that receives a memory-read helper. No HTTP, no hashing, no server. Authentication behaviour: - By default any non-empty credentials succeed immediately. - Pass `valid_username:` and `valid_token:` to restrict: only that exact pair succeeds; anything else fails. Useful in tests that verify the \"bad credentials\" error path. Used in two ways: 1."
+  },
+  "7": {
+    "title": "Gemba::Achievements::NullBackend",
+    "type": "class",
+    "url": "/api/Gemba/Achievements/NullBackend/",
+    "methods": "",
+    "method_docs": {},
+    "content": "Gemba Achievements NullBackend No-op backend used when RetroAchievements is disabled. All methods are inherited no-ops from Backend."
+  },
+  "8": {
+    "title": "Gemba::Achievements::OfflineBackend",
+    "type": "class",
+    "url": "/api/Gemba/Achievements/OfflineBackend/",
+    "methods": "achievement_list authenticated? do_frame enabled? initialize load_game login_with_password login_with_token logout rich_presence_message store store_rich_presence token_test unload_game",
+    "method_docs": {
+      "achievement_list": "-- Achievement list -----------------------------------------------------",
+      "do_frame": "-- Per-frame evaluation (memory-condition achievements) -----------------",
+      "load_game": "-- Game lifecycle -------------------------------------------------------",
+      "login_with_password": "-- Authentication (no-op — offline backend is always authenticated) ------",
+      "store": "Merge achievement definitions for a ROM into the in-memory DB.\nIntended for use by RcheevosBackend to seed the offline c",
+      "store_rich_presence": "Store a static Rich Presence message for a ROM.\nIntended for use by RcheevosBackend when caching patch data offline."
+    },
+    "content": "Gemba Achievements OfflineBackend Achievement backend backed by a local database — no HTTP, no rcheevos. Auth is a no-op: always authenticated. The DB maps ROM checksum → array of achievement definition Hashes: { id:, title:, description:, points:, trigger: :on_load | :memory, condition: ->(mem) { bool } # :memory trigger only } :on_load achievements fire immediately in load_game. :memory achievements are evaluated each frame in do_frame (rising edge). Long-term this DB can be populated by Rchee"
+  },
+  "9": {
+    "title": "Gemba::Achievements::RetroAchievements",
+    "type": "module",
+    "url": "/api/Gemba/Achievements/RetroAchievements/",
+    "methods": "",
+    "method_docs": {},
+    "content": "Gemba Achievements RetroAchievements"
+  },
+  "10": {
+    "title": "Gemba::Achievements::RetroAchievements::Backend",
+    "type": "class",
+    "url": "/api/Gemba/Achievements/RetroAchievements/Backend/",
+    "methods": "achievement_list authenticated? do_frame enabled? fetch_for_display initialize load_game login_with_password login_with_token logout reset_runtime sync_unlocks token_test unload_game",
+    "method_docs": {
+      "achievement_list": "-- Achievement list -----------------------------------------------------",
+      "fetch_for_display": "Fetch the full achievement list for any ROM by its RomInfo, purely for\ndisplay. Does not touch the live game state (@ach",
+      "load_game": "-- Game lifecycle -------------------------------------------------------",
+      "login_with_password": "-- Authentication -------------------------------------------------------",
+      "reset_runtime": "Called after a save state is loaded.  Memory just jumped to an arbitrary\nsaved state, so every achievement must go back "
+    },
+    "content": "Gemba Achievements RetroAchievements Backend Achievement backend that talks to retroachievements.org. All requests are HTTP POSTs to /dorequest.php. The 'r' parameter tells the server what you want — it's RA's own naming, not ours: r=login2 authenticate (password or token) r=gameid \"here's a ROM MD5 hash — what game ID is it?\" r=patch \"give me the achievement definitions for this game\" (called 'patch' because RA's original concept was that achievements are a 'patch' bolted on top of a ROM — extr"
+  },
+  "11": {
+    "title": "Gemba::Achievements::RetroAchievements::CliSyncRequester",
+    "type": "class",
+    "url": "/api/Gemba/Achievements/RetroAchievements/CliSyncRequester/",
+    "methods": "call",
+    "method_docs": {
+      "call": "Called by ra_request with the same signature as the DEFAULT_REQUESTER\nlambda. Ignores the BackgroundWork block (which us"
+    },
+    "content": "Gemba Achievements RetroAchievements CliSyncRequester Synchronous HTTP requester for CLI use. Implements the same interface as FakeRequester and the DEFAULT_REQUESTER lambda in Backend — call() returns a Result that fires on_progress synchronously — but makes a real blocking Net::HTTP POST instead of delegating to Teek::BackgroundWork. This means CLI commands get their result back in-line with no event loop. Called by ra_request with the same signature as the DEFAULT_REQUESTER lambda. Ignores th"
+  },
+  "12": {
+    "title": "Gemba::Achievements::RetroAchievements::CliSyncRequester::Result",
+    "type": "class",
+    "url": "/api/Gemba/Achievements/RetroAchievements/CliSyncRequester/Result/",
+    "methods": "initialize on_done on_progress",
+    "method_docs": {},
+    "content": "Gemba Achievements RetroAchievements CliSyncRequester Result Mirrors FakeRequester::Result so the calling code (ra_request) is identical regardless of whether it's running in CLI or GUI mode."
+  },
+  "13": {
+    "title": "Gemba::Achievements::RetroAchievements::PingWorker",
+    "type": "class",
+    "url": "/api/Gemba/Achievements/RetroAchievements/PingWorker/",
+    "methods": "call",
+    "method_docs": {},
+    "content": "Gemba Achievements RetroAchievements PingWorker Background worker for the RA session ping heartbeat. Defined as a named class (not a closure) so it is Ractor-safe on Ruby 4+. All state is passed through the data hash; no captured variables."
+  },
+  "14": {
+    "title": "Gemba::AchievementsWindow",
+    "type": "class",
+    "url": "/api/Gemba/AchievementsWindow/",
+    "methods": "hide initialize refresh show show_modal update_game withdraw",
+    "method_docs": {
+      "refresh": "Called by AppController when on_achievements_changed fires.",
+      "show_modal": "ModalStack protocol (non-modal — no grab)",
+      "update_game": "Called by AppController when a ROM loads or the backend is swapped.\nUpdates internal state and refreshes the window if i"
+    },
+    "content": "Gemba AchievementsWindow Displays achievements for the currently loaded GBA game. Non-modal window accessible from View > Achievements. Shows a treeview of all achievements with name, points, and earned date. A Sync button pulls the latest earned state from the RA server. Only the currently loaded game has live data; other GBA games in the library show empty. Called by AppController when on_achievements_changed fires. ModalStack protocol (non-modal — no grab) Called by AppController when a ROM l"
+  },
+  "15": {
+    "title": "Gemba::AppController",
+    "type": "class",
+    "url": "/api/Gemba/AppController/",
+    "methods": "current_view disable_confirmations! frame initialize ready? run",
+    "method_docs": {
+      "frame": "Current active frame (for tests and external access)"
+    },
+    "content": "Gemba AppController Application controller — the brain of the app. Owns menus, hotkeys, modals, config, rom library, input maps, frame lifecycle, and mode tracking. MainWindow is a pure Tk shell that this controller drives. This is what CLI instantiates. Current active frame (for tests and external access)"
+  },
+  "16": {
+    "title": "Gemba::Bios",
+    "type": "class",
+    "url": "/api/Gemba/Bios/",
+    "methods": "from_config_name checksum ds_mode? exists? filename initialize known? label official? size status_text valid?",
+    "method_docs": {
+      "from_config_name": "Build a Bios from a bare filename stored in config."
+    },
+    "content": "Gemba Bios Immutable value object representing a GBA BIOS file. The stored config value is just the filename; this object resolves it to a full path and computes metadata on demand (memoized). Build a Bios from a bare filename stored in config."
+  },
+  "17": {
+    "title": "Gemba::BoxartFetcher",
+    "type": "class",
+    "url": "/api/Gemba/BoxartFetcher/",
+    "methods": "cached? cached_path fetch initialize",
+    "method_docs": {
+      "fetch": "Fetch box art for a game code. If cached, yields the path immediately.\nOtherwise kicks off an async download and yields "
+    },
+    "content": "Gemba BoxartFetcher Fetches and caches box art images for ROMs. Delegates URL resolution to a pluggable backend (anything responding to +#url_for(game_code)+). Downloads happen off the main thread via +Teek::BackgroundWork+ so the UI stays responsive. Cache layout: {cache_dir}/{game_code}/boxart.png Usage: fetcher = BoxartFetcher.new(app: app, cache_dir: Config.boxart_dir, backend: backend) fetcher.fetch(\"AGB-BPEE\") { |path| update_card_image(path) } Fetch box art for a game code. If cached, yie"
+  },
+  "18": {
+    "title": "Gemba::BoxartFetcher::LibretroBackend",
+    "type": "class",
+    "url": "/api/Gemba/BoxartFetcher/LibretroBackend/",
+    "methods": "url_for",
+    "method_docs": {},
+    "content": "Gemba BoxartFetcher LibretroBackend Resolves box art URLs from the LibRetro thumbnails CDN. URL pattern: https://thumbnails.libretro.com/{system}/Named_Boxarts/{encoded_name}.png Requires game_code → canonical name mapping via GameIndex."
+  },
+  "19": {
+    "title": "Gemba::BoxartFetcher::NullBackend",
+    "type": "class",
+    "url": "/api/Gemba/BoxartFetcher/NullBackend/",
+    "methods": "url_for",
+    "method_docs": {},
+    "content": "Gemba BoxartFetcher NullBackend No-op backend that never resolves URLs. Used in tests and offline mode."
+  },
+  "20": {
+    "title": "Gemba::BusEmitter",
+    "type": "module",
+    "url": "/api/Gemba/BusEmitter/",
+    "methods": "",
+    "method_docs": {},
+    "content": "Gemba BusEmitter Include in any class that emits events via Gemba.bus. No constructor changes needed — just include and call emit."
+  },
+  "21": {
     "title": "Gemba::CLI",
     "type": "class",
     "url": "/api/Gemba/CLI/",
-    "methods": "apply parse parse_decode parse_record run",
+    "methods": "main_help run",
     "method_docs": {
-      "apply": "Apply parsed CLI options to the user config (session-only overrides).",
-      "parse": "Parse player (default) command options.",
-      "parse_decode": "--- decode subcommand ---",
-      "parse_record": "--- record subcommand ---",
-      "run": "Entry point: dispatch to subcommand or player."
+      "main_help": "Main help text listing all subcommands.",
+      "run": "Entry point: dispatch to subcommand or default to play."
     },
-    "content": "Gemba CLI Apply parsed CLI options to the user config (session-only overrides). Parse player (default) command options. --- decode subcommand --- --- record subcommand --- Entry point: dispatch to subcommand or player."
+    "content": "Gemba CLI Main help text listing all subcommands. Entry point: dispatch to subcommand or default to play."
   },
-  "2": {
+  "22": {
+    "title": "Gemba::CLI::Commands",
+    "type": "module",
+    "url": "/api/Gemba/CLI/Commands/",
+    "methods": "",
+    "method_docs": {},
+    "content": "Gemba CLI Commands"
+  },
+  "23": {
+    "title": "Gemba::CLI::Commands::ConfigCmd",
+    "type": "class",
+    "url": "/api/Gemba/CLI/Commands/ConfigCmd/",
+    "methods": "call initialize parse",
+    "method_docs": {},
+    "content": "Gemba CLI Commands ConfigCmd"
+  },
+  "24": {
+    "title": "Gemba::CLI::Commands::Decode",
+    "type": "class",
+    "url": "/api/Gemba/CLI/Commands/Decode/",
+    "methods": "call initialize parse",
+    "method_docs": {},
+    "content": "Gemba CLI Commands Decode"
+  },
+  "25": {
+    "title": "Gemba::CLI::Commands::Patch",
+    "type": "class",
+    "url": "/api/Gemba/CLI/Commands/Patch/",
+    "methods": "call initialize parse",
+    "method_docs": {},
+    "content": "Gemba CLI Commands Patch"
+  },
+  "26": {
+    "title": "Gemba::CLI::Commands::Play",
+    "type": "class",
+    "url": "/api/Gemba/CLI/Commands/Play/",
+    "methods": "apply call initialize parse",
+    "method_docs": {},
+    "content": "Gemba CLI Commands Play"
+  },
+  "27": {
+    "title": "Gemba::CLI::Commands::Record",
+    "type": "class",
+    "url": "/api/Gemba/CLI/Commands/Record/",
+    "methods": "call initialize parse",
+    "method_docs": {},
+    "content": "Gemba CLI Commands Record"
+  },
+  "28": {
+    "title": "Gemba::CLI::Commands::Replay",
+    "type": "class",
+    "url": "/api/Gemba/CLI/Commands/Replay/",
+    "methods": "call initialize parse",
+    "method_docs": {},
+    "content": "Gemba CLI Commands Replay"
+  },
+  "29": {
+    "title": "Gemba::CLI::Commands::RetroAchievements",
+    "type": "class",
+    "url": "/api/Gemba/CLI/Commands/RetroAchievements/",
+    "methods": "call initialize parse",
+    "method_docs": {},
+    "content": "Gemba CLI Commands RetroAchievements"
+  },
+  "30": {
+    "title": "Gemba::CLI::Commands::Version",
+    "type": "class",
+    "url": "/api/Gemba/CLI/Commands/Version/",
+    "methods": "call initialize",
+    "method_docs": {},
+    "content": "Gemba CLI Commands Version"
+  },
+  "31": {
     "title": "Gemba::ChildWindow",
     "type": "module",
     "url": "/api/Gemba/ChildWindow/",
-    "methods": "build_toplevel hide_window position_near_parent show_window",
+    "methods": "build_toplevel hide_window position_near_parent show_modal show_window withdraw",
     "method_docs": {
       "build_toplevel": "Create and configure a toplevel window with standard boilerplate.\nHides the window at the end — call show_window to reve",
       "hide_window": "Withdraw the window, release grab if modal, fire on_close callback.",
       "position_near_parent": "Position this window to the right of the main application window.",
-      "show_window": "Reveal the window, optionally grabbing focus (modal)."
+      "show_modal": "Show the window for ModalStack (deiconify, grab, position).\nOverride in subclasses to accept additional keyword argument",
+      "show_window": "Reveal the window, optionally grabbing focus (modal).",
+      "withdraw": "Withdraw the window for ModalStack (release grab, withdraw — NO callback)."
     },
     "content": "Gemba ChildWindow Shared helpers for child windows (Settings, Save State Picker, ROM Info). Including classes must define a TOP constant and an @app instance variable. Modal windows (grab focus) use show_window/hide_window. Non-modal windows (like ROM Info) use show_window(modal: false)/hide_window(modal: false). Create and configure a toplevel window with standard boilerplate. Hides the window at the end — call show_window to reveal it. Withdraw the window, release grab if modal, fire on_close "
   },
-  "3": {
+  "32": {
     "title": "Gemba::Config",
     "type": "class",
     "url": "/api/Gemba/Config/",
-    "methods": "config_dir default_path default_recordings_dir default_saves_dir default_screenshots_dir default_states_dir game_config_path reset! rom_id activate_game add_recent_rom clear_recent_roms color_correction= color_correction? deactivate_game dead_zone disable_per_game enable_per_game frame_blending= frame_blending? gamepad hotkeys initialize integer_scale= integer_scale? keep_aspect_ratio= keep_aspect_ratio? locale locale= mappings muted= muted? per_game_settings= per_game_settings? pixel_filter pixel_filter= quick_save_slot quick_save_slot= recent_roms recording_compression recording_compression= recordings_dir recordings_dir= reload! remove_recent_rom reset_gamepad reset_hotkeys rewind_enabled= rewind_enabled? rewind_seconds rewind_seconds= save! save_state_backup= save_state_backup? save_state_debounce save_state_debounce= saves_dir saves_dir= scale scale= set_dead_zone set_hotkey set_mapping show_fps= show_fps? states_dir states_dir= tip_dismiss_ms tip_dismiss_ms= toast_duration toast_duration= turbo_speed turbo_speed= turbo_volume_pct turbo_volume_pct= volume volume=",
+    "methods": "achievements_cache_dir bios_dir boxart_dir config_dir default_logs_dir default_patches_dir default_path default_recordings_dir default_saves_dir default_screenshots_dir default_states_dir game_config_path reset! rom_id rom_overrides_path activate_game add_recent_rom bios_path bios_path= clear_recent_roms color_correction= color_correction? deactivate_game dead_zone disable_per_game enable_per_game frame_blending= frame_blending? gamepad hotkeys initialize integer_scale= integer_scale? keep_aspect_ratio= keep_aspect_ratio? locale locale= log_level log_level= mappings muted= muted? pause_on_focus_loss= pause_on_focus_loss? per_game_settings= per_game_settings? pixel_filter pixel_filter= quick_save_slot quick_save_slot= ra_enabled= ra_enabled? ra_hardcore= ra_hardcore? ra_rich_presence= ra_rich_presence? ra_token ra_token= ra_unofficial= ra_unofficial? ra_username ra_username= recent_roms recording_compression recording_compression= recordings_dir recordings_dir= reload! remove_recent_rom reset_gamepad reset_hotkeys resubscribe rewind_enabled= rewind_enabled? rewind_seconds rewind_seconds= save! save_state_backup= save_state_backup? save_state_debounce save_state_debounce= saves_dir saves_dir= scale scale= set_dead_zone set_hotkey set_mapping show_fps= show_fps? skip_bios= skip_bios? states_dir states_dir= tip_dismiss_ms tip_dismiss_ms= toast_duration toast_duration= turbo_speed turbo_speed= turbo_volume_pct turbo_volume_pct= volume volume=",
     "method_docs": {
       "default_path": "-- Platform paths ----------------------------------------------------",
       "reset!": "Delete the settings file at the given path (or the default).",
@@ -52,13 +343,15 @@
       "deactivate_game": "Deactivate per-game settings (e.g. when ROM is unloaded).",
       "disable_per_game": "Disable per-game settings. Reverts to global values.\nDoes NOT delete the game-specific file on disk.",
       "enable_per_game": "Enable per-game settings for the currently loaded ROM.\nCopies current global values to game file on first enable.",
+      "ra_enabled?": "-- RetroAchievements ----------------------------------------------------",
       "remove_recent_rom": "Remove a specific ROM path from the recent list.",
+      "resubscribe": "Re-wire bus subscriptions onto the current Gemba.bus.\nCalled by AppController after it creates a fresh EventBus, because",
       "save!": "-- Persistence -------------------------------------------------------",
       "scale": "-- Global settings ---------------------------------------------------"
     },
     "content": "Gemba Config Persists mGBA Player settings to a JSON file in the platform-appropriate config directory. Config file location: macOS: ~/Library/Application Support/gemba/settings.json Linux: $XDG_CONFIG_HOME/gemba/settings.json (~/.config/gemba/) Windows: %APPDATA%/gemba/settings.json Gamepad mappings are keyed by SDL GUID (identifies controller model/type), so different controller types keep separate configs. Per-game settings: when enabled, a subset of settings (video, audio, save state) can be"
   },
-  "4": {
+  "33": {
     "title": "Gemba::Config::PerGameProxy",
     "type": "class",
     "url": "/api/Gemba/Config/PerGameProxy/",
@@ -66,7 +359,7 @@
     "method_docs": {},
     "content": "Gemba Config PerGameProxy Transparent proxy that routes per-game keys to a game-specific hash and everything else to the base (global) hash. Config getters/setters call global['key'] — this intercepts those calls so no other code needs to know whether per-game settings are active."
   },
-  "5": {
+  "34": {
     "title": "Gemba::Core",
     "type": "class",
     "url": "/api/Gemba/Core/",
@@ -93,7 +386,84 @@
     },
     "content": "Gemba Core GBA emulator core wrapping libmgba's mCore API. Core loads a GBA ROM, emulates one frame at a time, and provides access to the video and audio output buffers. Pair with {Teek::SDL2::Renderer} for display and {Teek::SDL2::AudioStream} for sound. Drain the audio output for the most recent frame(s). Returns interleaved stereo signed 16-bit PCM samples (L R L R ...). The number of samples varies per frame (~548 at 32768 Hz). CRC32 checksum of the loaded ROM. Shut down the emulator core an"
   },
-  "6": {
+  "35": {
+    "title": "Gemba::EmulatorFrame",
+    "type": "class",
+    "url": "/api/Gemba/EmulatorFrame/",
+    "methods": "apply_fade_ramp apply_aspect_ratio apply_backup apply_color_correction apply_frame_blending apply_integer_scale apply_mute apply_pause_on_focus_loss apply_pixel_filter apply_quick_slot apply_recording_compression apply_rewind_toggle apply_show_fps apply_toast_duration apply_turbo_speed apply_volume aspect_ratio cleanup dismiss_toast do_rewind fast_forward? hide init_sdl2 initialize input_recording? load_core load_state muted? paused? quick_load quick_save receive recording? refresh_from_config rom_loaded? save_state sdl2_ready? show show_fps? show_toast start_animate start_input_recording start_recording stop_input_recording stop_recording take_screenshot toggle_fast_forward toggle_input_recording toggle_pause toggle_recording write_config",
+    "method_docs": {
+      "apply_fade_ramp": "Apply a linear fade-in ramp to int16 stereo PCM data.\nPure function: takes remaining/total counters, returns [pcm, new_r",
+      "apply_volume": "-- Config appliers --------------------------------------------------------",
+      "cleanup": "-- Cleanup ----------------------------------------------------------------",
+      "init_sdl2": "Create the SDL2 viewport, audio stream, fonts, and input bindings.\nMust be called once before load_core.",
+      "load_core": "Load (or reload) a ROM core. Creates Core + SaveStateManager.",
+      "receive": "Single entry point for AppController → EmulatorFrame communication.\nAppController calls @frame.receive(:event_name, **ar",
+      "refresh_from_config": "Sync all config-derived state from a config object after per-game switch.",
+      "save_state": "-- Save states (delegated to SaveStateManager) ----------------------------",
+      "sdl2_ready?": "emulator drives its own geometry via apply_scale",
+      "show": "FrameStack protocol",
+      "show_toast": "-- Toast helpers (called by AppController via receive) ----------------------",
+      "start_animate": "Start the emulation animate loop. Call once after first load_core.",
+      "take_screenshot": "-- Screenshot -------------------------------------------------------------",
+      "toggle_input_recording": "-- Input recording --------------------------------------------------------",
+      "toggle_pause": "-- Emulation control ------------------------------------------------------",
+      "toggle_recording": "-- Recording --------------------------------------------------------------",
+      "write_config": "Write all config-derived state back to the config object.\nCalled by AppController before config.save!"
+    },
+    "content": "Gemba EmulatorFrame SDL2 emulation frame — owns the mGBA core, viewport, audio stream, frame loop, and all rendering. Designed to be packed/unpacked inside a host window (AppController) so it can coexist with other \"frames\" like a game picker or replay viewer. Communication: AppController → EmulatorFrame: @frame.receive(:event_name, **args) EmulatorFrame → AppController: EventBus events (pause_changed, request_quit, etc.) Settings → EmulatorFrame: bus events subscribed directly Apply a linear fa"
+  },
+  "36": {
+    "title": "Gemba::EventBus",
+    "type": "class",
+    "url": "/api/Gemba/EventBus/",
+    "methods": "emit initialize off on",
+    "method_docs": {
+      "emit": "Emit a named event to all subscribers.",
+      "off": "Unsubscribe a specific block.",
+      "on": "Subscribe to a named event."
+    },
+    "content": "Gemba EventBus Publish/subscribe event bus for decoupled communication. Emitters fire named events, subscribers listen — no intermediaries. Lives at Gemba.bus (module-level). Player creates it at startup; any class does Gemba.bus.emit / Gemba.bus.on. For tests, replace with Gemba.bus = EventBus.new (or a mock). Emit a named event to all subscribers. Unsubscribe a specific block. Subscribe to a named event."
+  },
+  "37": {
+    "title": "Gemba::FrameStack",
+    "type": "class",
+    "url": "/api/Gemba/FrameStack/",
+    "methods": "active? current current_frame initialize pop push size",
+    "method_docs": {
+      "pop": "Pop the current frame off the stack.\n\nThe popped frame is hidden. If there's a previous frame, it is re-shown.",
+      "push": "Push a frame onto the stack.\n\nThe previous frame (if any) is hidden before the new one is shown."
+    },
+    "content": "Gemba FrameStack Push/pop stack for content frames inside the main window. Mirrors the ModalStack pattern. When a new frame is pushed, the previous frame is hidden and the new one is shown. Popping reverses the transition. Frames must implement the FrameStack protocol: show — pack/display the frame hide — unpack/remove the frame from view cleanup — release resources (SDL2, etc.) Pop the current frame off the stack. The popped frame is hidden. If there's a previous frame, it is re-shown. Push a f"
+  },
+  "38": {
+    "title": "Gemba::FrameStack::Entry",
+    "type": "class",
+    "url": "/api/Gemba/FrameStack/Entry/",
+    "methods": "",
+    "method_docs": {},
+    "content": "Gemba FrameStack Entry"
+  },
+  "39": {
+    "title": "Gemba::GameIndex",
+    "type": "class",
+    "url": "/api/Gemba/GameIndex/",
+    "methods": "lookup lookup_by_md5 reset!",
+    "method_docs": {
+      "lookup": "Look up a canonical game name by serial code.",
+      "lookup_by_md5": "Look up a canonical game name by MD5 hex digest.",
+      "reset!": "Force-reload all indexes (useful after re-baking)."
+    },
+    "content": "Gemba GameIndex Lookup table mapping ROM serial codes to canonical game names. Data is pre-baked from No-Intro DAT files via script/bake_game_index.rb and stored as JSON in lib/gemba/data/{platform}_games.json. Loaded lazily on first lookup per platform. GameIndex.lookup(\"AGB-AXVE\") # => \"Pokemon - Ruby Version (USA)\" GameIndex.lookup(\"CGB-BYTE\") # => nil (unknown) Look up a canonical game name by serial code. Look up a canonical game name by MD5 hex digest. Force-reload all indexes (useful afte"
+  },
+  "40": {
+    "title": "Gemba::GamePickerFrame",
+    "type": "class",
+    "url": "/api/Gemba/GamePickerFrame/",
+    "methods": "aspect_ratio cleanup hide initialize paused? receive rom_loaded? sdl2_ready? show",
+    "method_docs": {},
+    "content": "Gemba GamePickerFrame Startup frame showing a 4×4 grid of ROM cards. Each card displays box art (if available), ROM title, and platform. Clicking a populated card emits :rom_selected on the bus. Right-clicking a populated card shows a context menu (Play / Set Boxart). Pure Tk — no SDL2."
+  },
+  "41": {
     "title": "Gemba::GamepadMap",
     "type": "class",
     "url": "/api/Gemba/GamepadMap/",
@@ -101,23 +471,40 @@
     "method_docs": {},
     "content": "Gemba GamepadMap Manages SDL gamepad button → GBA bitmask mappings. Shares the same interface as {KeyboardMap} so that Player can delegate to either without knowing which device type is active."
   },
-  "7": {
+  "42": {
+    "title": "Gemba::Headless",
+    "type": "module",
+    "url": "/api/Gemba/Headless/",
+    "methods": "",
+    "method_docs": {},
+    "content": "Gemba Headless Marker — signals the headless stack is loaded without Tk/SDL2."
+  },
+  "43": {
     "title": "Gemba::HeadlessPlayer",
     "type": "class",
     "url": "/api/Gemba/HeadlessPlayer/",
-    "methods": "open audio_buffer checksum close closed? game_code height initialize load_state maker_code platform press recording? release_all rewind_count rewind_deinit rewind_init rewind_pop rewind_push rom_size save_state start_recording step stop_recording title video_buffer_argb width",
+    "methods": "open audio_buffer checksum close closed? game_code height initialize load_state maker_code platform press recording? release_all replay rewind_count rewind_deinit rewind_init rewind_pop rewind_push rom_size save_state start_recording step stop_recording title video_buffer_argb width",
     "method_docs": {
       "open": "Open a HeadlessPlayer, yield it, and close when done.",
       "close": "Shut down the core and free resources.",
       "press": "Set currently pressed buttons as a bitmask.\nUse KEY_* constants: `player.press(KEY_A | KEY_START)`",
       "release_all": "Release all buttons.",
+      "replay": "Replay a .gir input recording. Loads the anchor save state, validates\nthe ROM checksum, then feeds each recorded bitmask",
       "start_recording": "Start recording video + audio to a .grec file.",
       "step": "Run one or more frames. Captures to recorder if recording.",
       "stop_recording": "Stop recording and finalize the file."
     },
-    "content": "Gemba HeadlessPlayer Headless mGBA player for scripting and automated testing. Wraps Core with a simple API — no Tk, no SDL2, no event loop. Open a HeadlessPlayer, yield it, and close when done. Shut down the core and free resources. Set currently pressed buttons as a bitmask. Use KEY_* constants: `player.press(KEY_A | KEY_START)` Release all buttons. Start recording video + audio to a .grec file. Run one or more frames. Captures to recorder if recording. Stop recording and finalize the file."
+    "content": "Gemba HeadlessPlayer Headless mGBA player for scripting and automated testing. Wraps Core with a simple API — no Tk, no SDL2, no event loop. Open a HeadlessPlayer, yield it, and close when done. Shut down the core and free resources. Set currently pressed buttons as a bitmask. Use KEY_* constants: `player.press(KEY_A | KEY_START)` Release all buttons. Replay a .gir input recording. Loads the anchor save state, validates the ROM checksum, then feeds each recorded bitmask to the core. Start record"
   },
-  "8": {
+  "44": {
+    "title": "Gemba::HelpWindow",
+    "type": "class",
+    "url": "/api/Gemba/HelpWindow/",
+    "methods": "hide initialize show visible?",
+    "method_docs": {},
+    "content": "Gemba HelpWindow Floating hotkey reference panel toggled by pressing '?'. Non-modal — no grab, no focus steal. Positioned to the right of the main window via ChildWindow#position_near_parent. AppController pauses emulation while the panel is visible and restores play on close."
+  },
+  "45": {
     "title": "Gemba::HotkeyMap",
     "type": "class",
     "url": "/api/Gemba/HotkeyMap/",
@@ -137,7 +524,38 @@
     },
     "content": "Gemba HotkeyMap Maps player actions (quit, pause, etc.) to keyboard hotkeys. A hotkey is either a plain keysym String (\"F5\") or an Array of modifier(s) + key ([\"Control\", \"s\"]). Provides reverse lookup for efficient dispatch in the input loop. Human-readable display name for a hotkey. Extract active modifier names from a Tk event state bitmask. Normalize a hotkey: sort modifiers canonically. Normalize variant Tk keysyms to their canonical form. Handles: ISO_Left_Tab → Tab, Shift+letter uppercase"
   },
-  "9": {
+  "46": {
+    "title": "Gemba::InputRecorder",
+    "type": "class",
+    "url": "/api/Gemba/InputRecorder/",
+    "methods": "anchor_state_path capture initialize recording? start stop",
+    "method_docs": {
+      "capture": "Capture one frame's input bitmask.",
+      "start": "Start recording. Saves an anchor save state and opens the .gir file.",
+      "stop": "Stop recording and close the file."
+    },
+    "content": "Gemba InputRecorder Records per-frame input bitmasks to a .gir (Gemba Input Recording) file. Each GBA frame's pressed-button bitmask is stored as a 3-char hex line. An anchor save state is written alongside so replays start from the exact same emulator state. The header's frame_count is a best-effort hint (correct on clean stop, zero on crash). The replayer counts lines for the authoritative count. Capture one frame's input bitmask. Start recording. Saves an anchor save state and opens the .gir "
+  },
+  "47": {
+    "title": "Gemba::InputReplayer",
+    "type": "class",
+    "url": "/api/Gemba/InputReplayer/",
+    "methods": "anchor_state_path bitmask_at each_bitmask frame_count game_code initialize rom_checksum rom_path validate!",
+    "method_docs": {
+      "each_bitmask": "Iterate over all recorded bitmasks.",
+      "validate!": "Validate that the recording matches the loaded ROM."
+    },
+    "content": "Gemba InputReplayer Replays a .gir (Gemba Input Recording) file by feeding recorded per-frame bitmasks back to the emulator core. The authoritative frame count comes from counting bitmask lines, not the header (which is best-effort and may be zero on crash). Iterate over all recorded bitmasks. Validate that the recording matches the loaded ROM."
+  },
+  "48": {
+    "title": "Gemba::InputReplayer::ChecksumMismatch",
+    "type": "class",
+    "url": "/api/Gemba/InputReplayer/ChecksumMismatch/",
+    "methods": "",
+    "method_docs": {},
+    "content": "Gemba InputReplayer ChecksumMismatch"
+  },
+  "49": {
     "title": "Gemba::KeyboardMap",
     "type": "class",
     "url": "/api/Gemba/KeyboardMap/",
@@ -145,7 +563,7 @@
     "method_docs": {},
     "content": "Gemba KeyboardMap Manages keyboard keysym → GBA bitmask mappings. Shares the same interface as {GamepadMap} so that Player can delegate to either without knowing which device type is active."
   },
-  "10": {
+  "50": {
     "title": "Gemba::Locale",
     "type": "module",
     "url": "/api/Gemba/Locale/",
@@ -156,7 +574,7 @@
     },
     "content": "Gemba Locale Lightweight YAML-backed localization. No external gem dependencies. Load translations for the given language code. Falls back to English if the requested locale file doesn't exist. Look up a translation by dot-separated key, with optional variable interpolation. Returns the key itself if no translation is found."
   },
-  "11": {
+  "51": {
     "title": "Gemba::Locale::Translatable",
     "type": "module",
     "url": "/api/Gemba/Locale/Translatable/",
@@ -164,7 +582,34 @@
     "method_docs": {},
     "content": "Gemba Locale Translatable Mixin for classes that need translation access. Include this to call `translate` / `t` as instance methods."
   },
-  "12": {
+  "52": {
+    "title": "Gemba::MainWindow",
+    "type": "class",
+    "url": "/api/Gemba/MainWindow/",
+    "methods": "fullscreen= initialize mainloop reset_aspect_ratio reset_minsize set_aspect set_geometry set_minsize set_timer_speed set_title",
+    "method_docs": {},
+    "content": "Gemba MainWindow Pure Tk shell — creates the app window and hosts a FrameStack. MainWindow knows nothing about ROMs, emulation, menus, or config. It provides geometry/title/fullscreen primitives that the AppController drives. Its only structural contribution is the FrameStack, which manages show/hide transitions to prevent visual flash (FOUC)."
+  },
+  "53": {
+    "title": "Gemba::ModalStack",
+    "type": "class",
+    "url": "/api/Gemba/ModalStack/",
+    "methods": "active? current initialize pop push size",
+    "method_docs": {
+      "pop": "Pop the current modal off the stack.\n\nIf the stack still has entries, the previous modal is re-shown.\nIf the stack is no",
+      "push": "Push a modal onto the stack.\n\nIf another modal is on top, it is withdrawn (without callback).\nIf the stack was empty, on"
+    },
+    "content": "Gemba ModalStack Push/pop stack for modal child windows. One modal can push another (e.g. Settings → Replay Player) and the previous modal is automatically re-shown on pop. Windows must implement the ModalWindow protocol: show_modal(**args) — reveal the window (deiconify, grab, position) withdraw — hide the window (release grab, withdraw — NO callback) Pop the current modal off the stack. If the stack still has entries, the previous modal is re-shown. If the stack is now empty, on_exit is fired "
+  },
+  "54": {
+    "title": "Gemba::ModalStack::Entry",
+    "type": "class",
+    "url": "/api/Gemba/ModalStack/Entry/",
+    "methods": "",
+    "method_docs": {},
+    "content": "Gemba ModalStack Entry"
+  },
+  "55": {
     "title": "Gemba::OverlayRenderer",
     "type": "class",
     "url": "/api/Gemba/OverlayRenderer/",
@@ -179,17 +624,58 @@
     },
     "content": "Gemba OverlayRenderer Renders inverse-blend HUD overlays (FPS counter, fast-forward indicator) on top of the game viewport. White source pixels invert the destination, so the text is always readable regardless of the game's background color. Transparent regions pass through unchanged. Free all textures. Draw all active overlays. FPS is positioned top-right; FF label is positioned top-left. Both are inset from the game area defined by +dest+. Whether the fast-forward label is currently showing. W"
   },
-  "13": {
-    "title": "Gemba::Player",
+  "56": {
+    "title": "Gemba::PatcherWindow",
     "type": "class",
-    "url": "/api/Gemba/Player/",
-    "methods": "apply_fade_ramp initialize muted? recording? run",
-    "method_docs": {
-      "apply_fade_ramp": "Apply a linear fade-in ramp to int16 stereo PCM data.\nPure function: takes remaining/total counters, returns [pcm, new_r"
-    },
-    "content": "Gemba Player Full-featured GBA player with SDL2 video/audio rendering, keyboard and gamepad input, save states, and recording. Apply a linear fade-in ramp to int16 stereo PCM data. Pure function: takes remaining/total counters, returns [pcm, new_remaining]."
+    "url": "/api/Gemba/PatcherWindow/",
+    "methods": "hide initialize show visible?",
+    "method_docs": {},
+    "content": "Gemba PatcherWindow Floating window for applying IPS/BPS/UPS patches to ROM files. Non-modal — no grab. Shows three file pickers (ROM, patch, output dir) and runs the patch in a background thread so the UI stays responsive."
   },
-  "14": {
+  "57": {
+    "title": "Gemba::PatcherWindow::PatchWorker",
+    "type": "class",
+    "url": "/api/Gemba/PatcherWindow/PatchWorker/",
+    "methods": "call",
+    "method_docs": {},
+    "content": "Gemba PatcherWindow PatchWorker Worker class for Ractor-based patching. Defined as a class so Ractor.shareable_proc never sees nested closures — the lambda and rescue are created at runtime inside the Ractor."
+  },
+  "58": {
+    "title": "Gemba::Platform",
+    "type": "module",
+    "url": "/api/Gemba/Platform/",
+    "methods": "default for",
+    "method_docs": {
+      "default": "Default platform before any ROM is loaded (most common case).",
+      "for": "Build a Platform from a loaded Core."
+    },
+    "content": "Gemba Platform Default platform before any ROM is loaded (most common case). Build a Platform from a loaded Core."
+  },
+  "59": {
+    "title": "Gemba::Platform::GB",
+    "type": "class",
+    "url": "/api/Gemba/Platform/GB/",
+    "methods": "== aspect buttons eql? fps fps_fraction hash height name short_name thumb_size width",
+    "method_docs": {},
+    "content": "Gemba Platform GB"
+  },
+  "60": {
+    "title": "Gemba::Platform::GBA",
+    "type": "class",
+    "url": "/api/Gemba/Platform/GBA/",
+    "methods": "== aspect buttons eql? fps fps_fraction hash height name short_name thumb_size width",
+    "method_docs": {},
+    "content": "Gemba Platform GBA"
+  },
+  "61": {
+    "title": "Gemba::Platform::GBC",
+    "type": "class",
+    "url": "/api/Gemba/Platform/GBC/",
+    "methods": "== aspect buttons eql? fps fps_fraction hash height name short_name thumb_size width",
+    "method_docs": {},
+    "content": "Gemba Platform GBC Same hardware specs as GB (resolution, FPS, buttons). Separate class for distinct name and future color-specific behavior."
+  },
+  "62": {
     "title": "Gemba::Recorder",
     "type": "class",
     "url": "/api/Gemba/Recorder/",
@@ -201,7 +687,7 @@
     },
     "content": "Gemba Recorder Records emulator video + audio to a .grec file. Video is delta-compressed (XOR with previous frame) then zlib level 1. Audio is stored as raw PCM. A background thread handles disk I/O so the frame loop stays fast. Capture one frame of video + audio. Start recording. Writes header and spawns writer thread. Stop recording. Flushes remaining data, writes footer, closes file."
   },
-  "15": {
+  "63": {
     "title": "Gemba::RecorderDecoder",
     "type": "class",
     "url": "/api/Gemba/RecorderDecoder/",
@@ -212,7 +698,7 @@
     },
     "content": "Gemba RecorderDecoder Decodes a .grec file and encodes it to a playable video via ffmpeg. Two-pass approach to avoid writing massive intermediate files: Pass 1: Extract audio to a small tempfile (~10MB/min), count frames, collect per-frame change percentages. Pass 2: Decode video frames one at a time and pipe to ffmpeg's stdin. Only one decoded video frame is in memory at a time, so RAM usage stays constant regardless of recording length. Decode a .grec file and encode to a playable video file. "
   },
-  "16": {
+  "64": {
     "title": "Gemba::RecorderDecoder::FfmpegNotFound",
     "type": "class",
     "url": "/api/Gemba/RecorderDecoder/FfmpegNotFound/",
@@ -220,7 +706,7 @@
     "method_docs": {},
     "content": "Gemba RecorderDecoder FfmpegNotFound"
   },
-  "17": {
+  "65": {
     "title": "Gemba::RecorderDecoder::FormatError",
     "type": "class",
     "url": "/api/Gemba/RecorderDecoder/FormatError/",
@@ -228,69 +714,155 @@
     "method_docs": {},
     "content": "Gemba RecorderDecoder FormatError"
   },
-  "18": {
+  "66": {
+    "title": "Gemba::ReplayPlayer",
+    "type": "class",
+    "url": "/api/Gemba/ReplayPlayer/",
+    "methods": "frame_index hide initialize pause paused? ready? replay_ended? resume run show show_modal withdraw",
+    "method_docs": {
+      "hide": "Hide the child window (child mode only).",
+      "pause": "Pause the replay (no-op if already paused).",
+      "resume": "Resume the replay (no-op if not paused).",
+      "show": "Show the child window (child mode only).",
+      "show_modal": "ModalStack protocol"
+    },
+    "content": "Gemba ReplayPlayer Non-interactive GBA replay viewer with SDL2 video/audio. Opens a window to play back a .gir input recording with full audio and video rendering. No game input is accepted — the bitmasks come from the .gir file. Supports pause, fast-forward, fullscreen, and screenshot hotkeys. Pauses on the last frame when the replay ends. Hide the child window (child mode only). Pause the replay (no-op if already paused). Resume the replay (no-op if not paused). Show the child window (child mo"
+  },
+  "67": {
+    "title": "Gemba::RomInfo",
+    "type": "class",
+    "url": "/api/Gemba/RomInfo/",
+    "methods": "from_rom boxart_path",
+    "method_docs": {
+      "from_rom": "Build a RomInfo from a raw rom_library entry hash.",
+      "boxart_path": "Effective cover image path: custom override wins, then fetched cache, then nil."
+    },
+    "content": "Gemba RomInfo Immutable snapshot of everything known about a single ROM. Aggregates data from multiple sources: - RomLibrary entry (title, path, game_code, platform, rom_id) - GameIndex (has_official_entry — whether libretro knows about it) - BoxartFetcher (cached_boxart_path — auto-fetched cover art) - RomOverrides (custom_boxart_path — user-chosen cover art) Use RomInfo.from_rom to construct from a raw library entry hash. Use #boxart_path to get the effective cover image (custom beats cache). "
+  },
+  "68": {
     "title": "Gemba::RomInfoWindow",
     "type": "class",
     "url": "/api/Gemba/RomInfoWindow/",
-    "methods": "publisher_name hide initialize show",
+    "methods": "publisher_name hide initialize show show_modal withdraw",
     "method_docs": {
       "publisher_name": "Look up a publisher name from a 2-char maker code.",
-      "show": "Show the ROM Info window, populating it with data from the given core."
+      "show": "Show the ROM Info window, populating it with data from the given core.",
+      "show_modal": "ModalStack protocol (non-modal — no grab)"
     },
-    "content": "Gemba RomInfoWindow Displays ROM metadata in a read-only window. Shown via View > ROM Info when a ROM is loaded. Contains a two-column grid of labels: field name on the left, value on the right. Look up a publisher name from a 2-char maker code. Show the ROM Info window, populating it with data from the given core."
+    "content": "Gemba RomInfoWindow Displays ROM metadata in a read-only window. Shown via View > ROM Info when a ROM is loaded. Contains a two-column grid of labels: field name on the left, value on the right. Look up a publisher name from a 2-char maker code. Show the ROM Info window, populating it with data from the given core. ModalStack protocol (non-modal — no grab)"
   },
-  "19": {
-    "title": "Gemba::RomLoader",
+  "69": {
+    "title": "Gemba::RomLibrary",
     "type": "class",
-    "url": "/api/Gemba/RomLoader/",
+    "url": "/api/Gemba/RomLibrary/",
+    "methods": "default_path add all find initialize remove save! size touch",
+    "method_docs": {
+      "add": "Add or update a ROM entry. Upserts by rom_id.",
+      "all": "All known ROMs, sorted by last_played descending (most recent first).",
+      "find": "Find a ROM entry by rom_id.",
+      "remove": "Remove a ROM entry by rom_id.",
+      "save!": "Persist to disk.",
+      "touch": "Update last_played timestamp for a ROM."
+    },
+    "content": "Gemba RomLibrary Persistent catalog of known ROMs. Stored as JSON at Config.config_dir/rom_library.json. Each entry records the ROM's path, title, game code, rom_id, platform, and timestamps. The library is loaded once on boot and updated whenever a ROM is loaded. Add or update a ROM entry. Upserts by rom_id. All known ROMs, sorted by last_played descending (most recent first). Find a ROM entry by rom_id. Remove a ROM entry by rom_id. Persist to disk. Update last_played timestamp for a ROM."
+  },
+  "70": {
+    "title": "Gemba::RomOverrides",
+    "type": "class",
+    "url": "/api/Gemba/RomOverrides/",
+    "methods": "custom_boxart initialize set_custom_boxart",
+    "method_docs": {
+      "set_custom_boxart": "Copies src_path into the gemba boxart cache and records the dest path."
+    },
+    "content": "Gemba RomOverrides Persists per-ROM user overrides to config_dir/rom_overrides.json. Keyed by rom_id (game_code + CRC32 checksum) — the most stable identifier for a ROM across renames or moves. Currently tracks: custom_boxart — absolute path to a user-chosen cover image Custom images are copied into config_dir/boxart/{rom_id}/custom.{ext} so they remain accessible even if the original file is moved or deleted. Copies src_path into the gemba boxart cache and records the dest path."
+  },
+  "71": {
+    "title": "Gemba::RomPatcher",
+    "type": "class",
+    "url": "/api/Gemba/RomPatcher/",
+    "methods": "detect_format patch safe_out_path",
+    "method_docs": {
+      "patch": "Auto-detect format, apply patch, write output file.\n\nProgress budget:\n  0–15%   read ROM\n  15–25%  read patch\n  25–90%  ",
+      "safe_out_path": "Return a path that does not collide with existing files.\nIf +path+ exists, appends -(2), -(3), ... before the extension."
+    },
+    "content": "Gemba RomPatcher Applies IPS, BPS, or UPS patch files to GBA ROM files. Format support: IPS — simplest; no checksums; RLE support BPS — Beat Patch System; delta encoding with CRC32 verification UPS — Universal Patching System; XOR hunks with CRC32 verification Usage: RomPatcher.patch(rom_path: \"game.gba\", patch_path: \"fix.ips\", out_path: \"patched.gba\") # or invoke a format class directly: RomPatcher::IPS.apply(rom_bytes, patch_bytes) # => patched_bytes Auto-detect format, apply patch, write outp"
+  },
+  "72": {
+    "title": "Gemba::RomPatcher::BPS",
+    "type": "class",
+    "url": "/api/Gemba/RomPatcher/BPS/",
+    "methods": "apply",
+    "method_docs": {},
+    "content": "Gemba RomPatcher BPS Applies a BPS (Beat Patch System) patch. File layout: ┌──────────────────────────────────────────────────────┐ │ \"BPS1\" (4 bytes, magic) │ ├──────────────────────────────────────────────────────┤ │ source_size (varint) │ │ target_size (varint) │ │ metadata_size (varint) │ │ metadata (<metadata_size> bytes, skipped) │ ├──────────────────────────────────────────────────────┤ │ actions … (repeated until patch.size - 12) │ ├──────────────────────────────────────────────────────┤"
+  },
+  "73": {
+    "title": "Gemba::RomPatcher::IPS",
+    "type": "class",
+    "url": "/api/Gemba/RomPatcher/IPS/",
+    "methods": "apply",
+    "method_docs": {},
+    "content": "Gemba RomPatcher IPS Applies an IPS (International Patching System) patch. File layout: ┌─────────────────────────────────────────────┐ │ \"PATCH\" (5 bytes, magic) │ ├─────────────────────────────────────────────┤ │ Record 1 │ │ Record 2 │ │ ... │ ├─────────────────────────────────────────────┤ │ \"EOF\" (3 bytes, terminator) │ └─────────────────────────────────────────────┘ Record formats: Normal record: ┌────────────────────┬───────────────────┬─────────────────────┐ │ offset │ size │ data │ │ 3 "
+  },
+  "74": {
+    "title": "Gemba::RomPatcher::UPS",
+    "type": "class",
+    "url": "/api/Gemba/RomPatcher/UPS/",
+    "methods": "apply",
+    "method_docs": {},
+    "content": "Gemba RomPatcher UPS Applies a UPS (Universal Patching System) patch. File layout: ┌──────────────────────────────────────────────────────┐ │ \"UPS1\" (4 bytes, magic) │ ├──────────────────────────────────────────────────────┤ │ source_size (varint) │ │ target_size (varint) │ ├──────────────────────────────────────────────────────┤ │ hunks … (repeated until patch.size - 12) │ ├──────────────────────────────────────────────────────┤ │ src_crc32 4B LE │ tgt_crc32 4B LE │ patch │ ← footer └──────────"
+  },
+  "75": {
+    "title": "Gemba::RomResolver",
+    "type": "class",
+    "url": "/api/Gemba/RomResolver/",
     "methods": "cleanup_temp resolve tmp_dir",
     "method_docs": {
       "cleanup_temp": "Remove previously extracted temp files.",
       "resolve": "Resolve a path to a loadable ROM file.\nFor ROM files, returns the path unchanged.\nFor ZIP files, extracts the single ROM"
     },
-    "content": "Gemba RomLoader Resolves ROM paths for the player. Handles both bare ROM files and .zip archives containing a single ROM at the zip root. Remove previously extracted temp files. Resolve a path to a loadable ROM file. For ROM files, returns the path unchanged. For ZIP files, extracts the single ROM inside to a temp directory."
+    "content": "Gemba RomResolver Resolves ROM paths for the player. Handles both bare ROM files and .zip archives containing a single ROM at the zip root. Remove previously extracted temp files. Resolve a path to a loadable ROM file. For ROM files, returns the path unchanged. For ZIP files, extracts the single ROM inside to a temp directory."
   },
-  "20": {
-    "title": "Gemba::RomLoader::Error",
+  "76": {
+    "title": "Gemba::RomResolver::Error",
     "type": "class",
-    "url": "/api/Gemba/RomLoader/Error/",
+    "url": "/api/Gemba/RomResolver/Error/",
     "methods": "",
     "method_docs": {},
-    "content": "Gemba RomLoader Error"
+    "content": "Gemba RomResolver Error"
   },
-  "21": {
-    "title": "Gemba::RomLoader::MultipleRomsInZip",
+  "77": {
+    "title": "Gemba::RomResolver::MultipleRomsInZip",
     "type": "class",
-    "url": "/api/Gemba/RomLoader/MultipleRomsInZip/",
+    "url": "/api/Gemba/RomResolver/MultipleRomsInZip/",
     "methods": "",
     "method_docs": {},
-    "content": "Gemba RomLoader MultipleRomsInZip"
+    "content": "Gemba RomResolver MultipleRomsInZip"
   },
-  "22": {
-    "title": "Gemba::RomLoader::NoRomInZip",
+  "78": {
+    "title": "Gemba::RomResolver::NoRomInZip",
     "type": "class",
-    "url": "/api/Gemba/RomLoader/NoRomInZip/",
+    "url": "/api/Gemba/RomResolver/NoRomInZip/",
     "methods": "",
     "method_docs": {},
-    "content": "Gemba RomLoader NoRomInZip"
+    "content": "Gemba RomResolver NoRomInZip"
   },
-  "23": {
-    "title": "Gemba::RomLoader::UnsupportedFormat",
+  "79": {
+    "title": "Gemba::RomResolver::UnsupportedFormat",
     "type": "class",
-    "url": "/api/Gemba/RomLoader/UnsupportedFormat/",
+    "url": "/api/Gemba/RomResolver/UnsupportedFormat/",
     "methods": "",
     "method_docs": {},
-    "content": "Gemba RomLoader UnsupportedFormat"
+    "content": "Gemba RomResolver UnsupportedFormat"
   },
-  "24": {
-    "title": "Gemba::RomLoader::ZipReadError",
+  "80": {
+    "title": "Gemba::RomResolver::ZipReadError",
     "type": "class",
-    "url": "/api/Gemba/RomLoader/ZipReadError/",
+    "url": "/api/Gemba/RomResolver/ZipReadError/",
     "methods": "",
     "method_docs": {},
-    "content": "Gemba RomLoader ZipReadError"
+    "content": "Gemba RomResolver ZipReadError"
   },
-  "25": {
+  "81": {
     "title": "Gemba::SaveStateManager",
     "type": "class",
     "url": "/api/Gemba/SaveStateManager/",
@@ -305,31 +877,125 @@
     },
     "content": "Gemba SaveStateManager Manages save state persistence: save, load, screenshot capture, debounce, and backup rotation. All dependencies are injected via the constructor so the class can be tested with lightweight mocks (no real mGBA Core or Tk interpreter). Load the emulator state from the given slot. Load from the quick save slot. Save to the quick save slot. Save a PNG screenshot of the current frame via Tk photo image. Uses @app.command() to drive Tk's image subsystem. Save the emulator state "
   },
-  "26": {
+  "82": {
     "title": "Gemba::SaveStatePicker",
     "type": "class",
     "url": "/api/Gemba/SaveStatePicker/",
-    "methods": "hide initialize show",
-    "method_docs": {},
-    "content": "Gemba SaveStatePicker Grid picker window for save state slots. Displays up to 10 slots in a 2×5 grid. Each cell shows a PNG thumbnail screenshot, the slot number, and the save timestamp — or an \"Empty\" placeholder. Left-click a populated slot to load, click an empty slot to save. The current quick-save slot is highlighted with a distinct border. Uses native Tk photo images for thumbnails (loaded via `image create photo -file`). Pure Tk — no SDL2."
+    "methods": "hide initialize show show_modal withdraw",
+    "method_docs": {
+      "show_modal": "ModalStack protocol"
+    },
+    "content": "Gemba SaveStatePicker Grid picker window for save state slots. Displays up to 10 slots in a 2×5 grid. Each cell shows a PNG thumbnail screenshot, the slot number, and the save timestamp — or an \"Empty\" placeholder. Left-click a populated slot to load, click an empty slot to save. The current quick-save slot is highlighted with a distinct border. Uses native Tk photo images for thumbnails (loaded via `image create photo -file`). Pure Tk — no SDL2. ModalStack protocol"
   },
-  "27": {
+  "83": {
+    "title": "Gemba::SessionLogger",
+    "type": "class",
+    "url": "/api/Gemba/SessionLogger/",
+    "methods": "initialize log log_dir",
+    "method_docs": {
+      "log": "Log a message at the given level. Uses block form to avoid\nallocating the message string when the level is filtered."
+    },
+    "content": "Gemba SessionLogger Session logger that writes to the user config logs/ directory. File and directory are created lazily on first write. Log a message at the given level. Uses block form to avoid allocating the message string when the level is filtered."
+  },
+  "84": {
+    "title": "Gemba::Settings",
+    "type": "module",
+    "url": "/api/Gemba/Settings/",
+    "methods": "",
+    "method_docs": {},
+    "content": "Gemba Settings"
+  },
+  "85": {
+    "title": "Gemba::Settings::AudioTab",
+    "type": "class",
+    "url": "/api/Gemba/Settings/AudioTab/",
+    "methods": "build initialize load_from_config",
+    "method_docs": {},
+    "content": "Gemba Settings AudioTab"
+  },
+  "86": {
+    "title": "Gemba::Settings::GamepadTab",
+    "type": "class",
+    "url": "/api/Gemba/Settings/GamepadTab/",
+    "methods": "build capture_mapping initialize keyboard_mode? refresh_gamepad update_gamepad_list",
+    "method_docs": {
+      "refresh_gamepad": "Refresh the gamepad tab widgets from external state (e.g. after undo)."
+    },
+    "content": "Gemba Settings GamepadTab Refresh the gamepad tab widgets from external state (e.g. after undo)."
+  },
+  "87": {
+    "title": "Gemba::Settings::HotkeysTab",
+    "type": "class",
+    "url": "/api/Gemba/Settings/HotkeysTab/",
+    "methods": "build capture_hk_mapping finalize_hk initialize refresh_hotkeys",
+    "method_docs": {
+      "capture_hk_mapping": "Capture a hotkey during listen mode. Called by the Tk <Key>\nbind script, or directly by tests.",
+      "finalize_hk": "Finalize a captured hotkey (plain key or combo).",
+      "refresh_hotkeys": "Refresh the hotkeys tab widgets from external state (e.g. after undo)."
+    },
+    "content": "Gemba Settings HotkeysTab Capture a hotkey during listen mode. Called by the Tk <Key> bind script, or directly by tests. Finalize a captured hotkey (plain key or combo). Refresh the hotkeys tab widgets from external state (e.g. after undo)."
+  },
+  "88": {
+    "title": "Gemba::Settings::Paths",
+    "type": "module",
+    "url": "/api/Gemba/Settings/Paths/",
+    "methods": "",
+    "method_docs": {},
+    "content": "Gemba Settings Paths Shared Tk widget path roots for all settings tabs."
+  },
+  "89": {
+    "title": "Gemba::Settings::RecordingTab",
+    "type": "class",
+    "url": "/api/Gemba/Settings/RecordingTab/",
+    "methods": "build initialize load_from_config",
+    "method_docs": {},
+    "content": "Gemba Settings RecordingTab"
+  },
+  "90": {
+    "title": "Gemba::Settings::SaveStatesTab",
+    "type": "class",
+    "url": "/api/Gemba/Settings/SaveStatesTab/",
+    "methods": "build initialize load_from_config",
+    "method_docs": {},
+    "content": "Gemba Settings SaveStatesTab"
+  },
+  "91": {
+    "title": "Gemba::Settings::SystemTab",
+    "type": "class",
+    "url": "/api/Gemba/Settings/SystemTab/",
+    "methods": "build initialize load_from_config save_to_config",
+    "method_docs": {
+      "load_from_config": "Called by SettingsWindow via :config_loaded bus event",
+      "save_to_config": "Called by AppController#save_config"
+    },
+    "content": "Gemba Settings SystemTab Called by SettingsWindow via :config_loaded bus event Called by AppController#save_config"
+  },
+  "92": {
+    "title": "Gemba::Settings::VideoTab",
+    "type": "class",
+    "url": "/api/Gemba/Settings/VideoTab/",
+    "methods": "build initialize load_from_config",
+    "method_docs": {},
+    "content": "Gemba Settings VideoTab"
+  },
+  "93": {
     "title": "Gemba::SettingsWindow",
     "type": "class",
     "url": "/api/Gemba/SettingsWindow/",
-    "methods": "capture_hk_mapping capture_mapping finalize_hk hide initialize keyboard_mode? mark_dirty refresh_gamepad refresh_hotkeys set_per_game_active set_per_game_available show update_gamepad_list",
+    "methods": "capture_hk_mapping capture_mapping finalize_hk hide hk_listening_for initialize keyboard_mode? listening_for mark_dirty refresh_gamepad refresh_hotkeys set_per_game_active set_per_game_available show show_modal subscribe_to_bus system_tab update_gamepad_list",
     "method_docs": {
-      "capture_hk_mapping": "Capture a hotkey during listen mode. Called by the Tk <Key>\nbind script, or directly by tests.\n\nModifier keys (Ctrl, Shi",
-      "finalize_hk": "Finalize a captured hotkey (plain key or combo). Also called by\ntests that want to bypass the modifier settle timer.",
+      "hk_listening_for": "Delegates to HotkeysTab",
+      "listening_for": "Delegates to GamepadTab",
       "mark_dirty": "Enable the Save button (called when any setting changes)",
-      "refresh_gamepad": "Refresh the gamepad tab widgets from external state (e.g. after undo).",
-      "refresh_hotkeys": "Refresh the hotkeys tab widgets from external state (e.g. after undo).",
       "set_per_game_active": "Sync the per-game checkbox to the current config state.",
-      "set_per_game_available": "Enable/disable the per-game checkbox (called when ROM loads/unloads)."
+      "set_per_game_available": "Enable/disable the per-game checkbox (called when ROM loads/unloads).",
+      "show_modal": "ModalStack protocol",
+      "subscribe_to_bus": "Subscribe to bus events this object cares about.",
+      "system_tab": "Exposes SystemTab for AppController save_config"
     },
-    "content": "Gemba SettingsWindow Settings window for the mGBA Player. Opens a Toplevel with a ttk::notebook containing Video, Audio, and Gamepad tabs. Closing the window hides it (withdraw) rather than destroying it. Widget paths and Tcl variable names are exposed as constants so tests can interact with the UI the same way a user would (set variable, generate event, assert result). Capture a hotkey during listen mode. Called by the Tk <Key> bind script, or directly by tests. Modifier keys (Ctrl, Shift, Alt)"
+    "content": "Gemba SettingsWindow Settings window for the mGBA Player. Thin coordinator that builds a Toplevel with a ttk::notebook, delegates each tab to its own class under Settings::*, and manages shared concerns (per-game bar, save button, key-conflict dialog). Delegates to HotkeysTab Delegates to GamepadTab Enable the Save button (called when any setting changes) Sync the per-game checkbox to the current config state. Enable/disable the per-game checkbox (called when ROM loads/unloads). ModalStack proto"
   },
-  "28": {
+  "94": {
     "title": "Gemba::TipService",
     "type": "class",
     "url": "/api/Gemba/TipService/",
@@ -341,7 +1007,7 @@
     },
     "content": "Gemba TipService Click-to-show tooltip service for Tk widgets. Labels registered with {#register} get an underlined font (like HTML <abbr>). Clicking them shows a tooltip popup below the label. Only one tooltip is visible at a time; it auto-dismisses after {#dismiss_ms} unless the mouse hovers over the tip or its label. The tooltip is rendered as a frame inside the parent window (not a toplevel), so it draws as a true rectangle on all platforms. Hide the current tooltip. Register a widget for cl"
   },
-  "29": {
+  "95": {
     "title": "Gemba::ToastOverlay",
     "type": "class",
     "url": "/api/Gemba/ToastOverlay/",
@@ -354,7 +1020,7 @@
     },
     "content": "Gemba ToastOverlay Renders timed notification toasts at the bottom of the game viewport. One toast at a time; showing a new one replaces the old. The background is a pre-rendered anti-aliased rounded rectangle (generated in C). All SDL2 objects (renderer, font, textures) are injected or created internally, so the class can be tested with lightweight mocks. Remove the current toast and free textures. Draw the toast centered at the bottom of the game area. Display a toast message. Replaces any exi"
   },
-  "30": {
+  "96": {
     "title": "Gemba::VirtualKeyboard",
     "type": "class",
     "url": "/api/Gemba/VirtualKeyboard/",

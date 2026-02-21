@@ -47,7 +47,7 @@ class TestGamePickerFrame < Minitest::Test
       picker = Gemba::GamePickerFrame.new(app: app, rom_library: lib)
       picker.show
 
-      assert_equal 'Pokemon Ruby', app.command('.game_picker.card0.title', :cget, '-text')
+      assert_equal 'Pokemon - Ruby Version (USA, Europe)', app.command('.game_picker.card0.title', :cget, '-text')
       assert_equal 'GBA',          app.command('.game_picker.card0.plat',  :cget, '-text')
 
       picker.cleanup

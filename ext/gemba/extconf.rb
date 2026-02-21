@@ -181,6 +181,28 @@ unless find_mgba
   MSG
 end
 
-$srcs = ['gemba_ext.c']
+rcheevos_root = File.expand_path('../../vendor/rcheevos', __dir__)
+abort "vendor/rcheevos submodule not initialised — run: git submodule update --init" \
+  unless File.exist?("#{rcheevos_root}/src/rcheevos/runtime.c")
+
+$INCFLAGS << " -I#{rcheevos_root}/include"
+$INCFLAGS << " -I#{rcheevos_root}/src/rcheevos"
+$INCFLAGS << " -I#{rcheevos_root}/src"
+
+# Tell mkmf where to find the rcheevos source files.
+$VPATH << "#{rcheevos_root}/src/rcheevos"
+$VPATH << "#{rcheevos_root}/src"
+$VPATH << "#{rcheevos_root}/src/rhash"
+
+# Core evaluation engine + md5 (needed by runtime.c / runtime_progress.c).
+# Excludes HTTP client, ROM hash, and rapi.
+$srcs = %w[
+  gemba_ext.c
+  alloc.c condition.c condset.c format.c lboard.c memref.c
+  operand.c richpresence.c runtime.c runtime_progress.c
+  trigger.c value.c
+  rc_compat.c rc_util.c
+  md5.c
+]
 
 create_makefile('gemba_ext')

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'fileutils'
+require 'digest'
 
 module Gemba
   # Application controller — the brain of the app.
@@ -39,6 +40,11 @@ module Gemba
 
       @sound = sound
       @config = Gemba.user_config
+      # Config may have been created (and subscribed to the bus) before this
+      # point — e.g. the CLI calls Gemba.user_config before AppController runs.
+      # Re-subscribe now that the real bus is in place so bus events like
+      # :rom_loaded actually reach it (fixes recent ROMs not updating).
+      @config.resubscribe
       @scale = @config.scale
       @fullscreen = fullscreen
       @frame_limit = frames
@@ -87,6 +93,8 @@ module Gemba
       @settings_window.refresh_hotkeys(@hotkeys.labels)
       push_settings_to_ui
 
+      setup_achievement_backend
+
       boxart_backend = BoxartFetcher::LibretroBackend.new
       @boxart_fetcher = BoxartFetcher.new(app: @app, cache_dir: Config.boxart_dir, backend: boxart_backend)
       @rom_overrides  = RomOverrides.new
@@ -133,6 +141,14 @@ module Gemba
     end
 
     private
+
+    def confirm_quit
+      return true unless @rom_path
+      confirm(
+        title:   translate('dialog.quit_title'),
+        message: translate('dialog.quit_msg'),
+      )
+    end
 
     def confirm(title:, message:)
       return true if @disable_confirmations
@@ -181,7 +197,27 @@ module Gemba
       end
       bus.on(:recording_changed)       { update_recording_menu }
       bus.on(:input_recording_changed) { update_input_recording_menu }
-      bus.on(:request_quit)            { self.running = false }
+      bus.on(:request_quit)            { self.running = false if confirm_quit }
+      bus.on(:achievement_unlocked) do |achievement:|
+        frame&.receive(:show_toast, message: "#{achievement.title} (#{achievement.points}pts)")
+      end
+      bus.on(:ra_login) do |username:, password:|
+        achievement_backend.login_with_password(username: username, password: password)
+      end
+      bus.on(:ra_verify) do
+        achievement_backend.token_test
+      end
+      bus.on(:ra_logout) do
+        achievement_backend.logout
+        @config.ra_token    = ''
+        @config.ra_username = ''
+        @config.save!
+      end
+      bus.on(:ra_unofficial_changed) do |value:|
+        @config.ra_unofficial = value
+        @config.save!
+        @achievement_backend.include_unofficial = value
+      end
       bus.on(:request_escape)          { @fullscreen ? toggle_fullscreen : (self.running = false) }
       bus.on(:request_fullscreen)      { toggle_fullscreen }
       bus.on(:request_save_states)     { show_state_picker }
@@ -202,10 +238,16 @@ module Gemba
         refresh_from_config
       end
 
-      bus.on(:rom_loaded) do |title:, path:, saves_dir:, **|
-        @window.set_title("gemba \u2014 #{title}")
+      bus.on(:rom_loaded) do |rom_id:, title:, path:, saves_dir:, game_code: nil, md5: nil, platform: 'gba', **|
+        friendly = GameIndex.lookup(game_code) ||
+                   GameIndex.lookup_by_md5(md5, platform) ||
+                   title
+        @window.set_title("gemba \u2014 #{friendly}")
         @app.command(@view_menu, :entryconfigure, 0, state: :normal)  # Game Library
         @app.command(@view_menu, :entryconfigure, 2, state: :normal)  # ROM Info
+        @current_rom_id = rom_id
+        @achievement_backend.rich_presence_enabled = @config.ra_rich_presence?
+        @achievements_window&.update_game(rom_id: rom_id, backend: @achievement_backend)  # only if open
         [3, 4, 6, 8, 9].each { |i| @app.command(@emu_menu, :entryconfigure, i, state: :normal) }
         rebuild_recent_menu
 
@@ -243,7 +285,7 @@ module Gemba
       @app.command("#{menubar}.file", :add, :separator)
       @app.command("#{menubar}.file", :add, :command,
                    label: translate('menu.quit'), accelerator: 'Cmd+Q',
-                   command: proc { self.running = false })
+                   command: proc { self.running = false if confirm_quit })
 
       @app.command(:bind, '.', '<Command-o>', proc { handle_open_rom })
       @app.command(:bind, '.', '<Command-comma>', proc { show_settings })
@@ -275,6 +317,9 @@ module Gemba
       @app.command(view_menu, :add, :command,
                    label: translate('menu.rom_info'), state: :disabled,
                    command: proc { show_rom_info })
+      @app.command(view_menu, :add, :command,
+                   label: translate('menu.achievements'),
+                   command: proc { show_achievements })
       @app.command(view_menu, :add, :command,
                    label: translate('menu.patch_rom'),
                    command: proc { show_patcher })
@@ -404,6 +449,19 @@ module Gemba
         show_args: { core: frame.core, rom_path: @rom_path, save_path: sav_path })
     end
 
+    def show_achievements
+      achievements_window.update_game(rom_id: @current_rom_id, backend: @achievement_backend)
+      achievements_window.show
+    end
+
+    def achievements_window
+      @achievements_window ||= AchievementsWindow.new(
+        app: @app,
+        rom_library: @rom_library,
+        config: @config,
+      )
+    end
+
     def show_replay_player
       @replay_player ||= ReplayPlayer.new(
         app: @app,
@@ -474,9 +532,15 @@ module Gemba
         apply_frame_aspect(@emulator_frame)
       end
 
-      saves = @config.saves_dir
+      saves     = @config.saves_dir
       bios_path = resolve_bios_path
-      loaded_core = @emulator_frame.load_core(rom_path, saves_dir: saves, bios_path: bios_path, rom_source_path: path)
+      md5       = Digest::MD5.file(rom_path).hexdigest
+
+      # Set backend before load_core so load_game fires on the real backend, not NullBackend
+      @emulator_frame.achievement_backend = @achievement_backend
+
+      loaded_core = @emulator_frame.load_core(rom_path, saves_dir: saves, bios_path: bios_path,
+                                               rom_source_path: path, md5: md5)
       @rom_path = path
 
       new_platform = @emulator_frame.platform
@@ -487,12 +551,13 @@ module Gemba
       rom_id = Config.rom_id(loaded_core.game_code, loaded_core.checksum)
 
       emit(:rom_loaded,
-        rom_id: rom_id,
-        path: path,
-        title: loaded_core.title,
+        rom_id:    rom_id,
+        path:      path,
+        title:     loaded_core.title,
         game_code: loaded_core.game_code,
-        platform: @platform.short_name,
+        platform:  @platform.short_name,
         saves_dir: saves,
+        md5:       md5,
       )
 
       @emulator_frame.start_animate
@@ -608,7 +673,50 @@ module Gemba
       bios_name = @app.get_variable(SettingsWindow::VAR_BIOS_PATH).to_s.strip
       @config.bios_path = bios_name.empty? ? nil : bios_name
       @config.skip_bios = @app.get_variable(SettingsWindow::VAR_SKIP_BIOS) == '1'
+      @settings_window&.system_tab&.save_to_config(@config)
       @config.save!
+      setup_achievement_backend
+    end
+
+    def achievement_backend
+      @achievement_backend ||= Achievements::NullBackend.new
+    end
+
+    def setup_achievement_backend
+      @achievement_backend = Achievements.backend_for(@config, app: @app)
+      @achievement_backend.include_unofficial = @config.ra_unofficial?
+      @achievement_backend.on_achievements_changed do
+        @achievements_window&.refresh(@achievement_backend)  # only if already open
+      end
+      @achievement_backend.on_unlock do |_ach|
+        @achievements_window&.refresh(@achievement_backend)  # only if already open
+      end
+      @achievement_backend.on_rich_presence_changed do |msg|
+        Gemba.bus.emit(:ra_rich_presence_changed, message: msg.to_s)
+      end
+      @achievement_backend.on_auth_change do |status, token_or_error|
+        case status
+        when :ok
+          if token_or_error
+            emit(:ra_auth_result, status: :ok, token: token_or_error.to_s)
+            @config.ra_token = token_or_error.to_s
+            @config.save!
+          else
+            emit(:ra_auth_result, status: :ok)
+          end
+        when :error
+          emit(:ra_auth_result, status: :error, message: token_or_error.to_s)
+        when :logout
+          emit(:ra_auth_result, status: :logout)
+          @config.ra_token = ''
+          @config.save!
+        end
+      end
+      # Resume existing session if token already stored
+      if @config.ra_enabled? && !@config.ra_token.to_s.strip.empty?
+        @achievement_backend.login_with_token(username: @config.ra_username, token: @config.ra_token)
+      end
+      @emulator_frame&.achievement_backend = @achievement_backend
     end
 
     def push_settings_to_ui
@@ -799,17 +907,18 @@ module Gemba
     def setup_global_hotkeys
       # '?' toggles the hotkey reference panel. Bound on 'all' so it fires even
       # when the help window itself has focus after being shown.
-      @app.bind('all', 'KeyPress-question') { toggle_help }
+      @app.bind('all', 'KeyPress-question') { @app.command(:event, 'generate', '.', '<<ToggleHelpWindow>>') }
+      @app.command(:bind, '.', '<<ToggleHelpWindow>>', proc { toggle_help })
 
       @app.bind('.', 'KeyPress', :keysym, '%s') do |k, state_str|
         next if frame&.sdl2_ready? || @modal_stack.active?
 
         if k == 'Escape'
-          self.running = false
+          self.running = false if confirm_quit
         else
           mods = HotkeyMap.modifiers_from_state(state_str.to_i)
           case @hotkeys.action_for(k, modifiers: mods)
-          when :quit     then self.running = false
+          when :quit     then self.running = false if confirm_quit
           when :open_rom then handle_open_rom
           end
         end
