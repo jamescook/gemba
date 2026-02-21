@@ -252,16 +252,16 @@ module Gemba
           command: proc { @mark_dirty.call })
         @app.command(:pack, RA_RICH_PRESENCE_CHECK, side: :left)
 
-        # Hardcore
-        hardcore_row = "#{FRAME}.ra_hardcore_row"
-        @app.command('ttk::frame', hardcore_row)
-        @app.command(:pack, hardcore_row, fill: :x, padx: 10, pady: [0, 4])
-        @app.set_variable(VAR_RA_HARDCORE, '0')
-        @app.command('ttk::checkbutton', RA_HARDCORE_CHECK,
-          text: translate('settings.ra_hardcore'),
-          variable: VAR_RA_HARDCORE,
-          command: proc { @mark_dirty.call })
-        @app.command(:pack, RA_HARDCORE_CHECK, side: :left)
+        # TODO: hardcore mode — not yet wired up, hidden until ready
+        # hardcore_row = "#{FRAME}.ra_hardcore_row"
+        # @app.command('ttk::frame', hardcore_row)
+        # @app.command(:pack, hardcore_row, fill: :x, padx: 10, pady: [0, 4])
+        # @app.set_variable(VAR_RA_HARDCORE, '0')
+        # @app.command('ttk::checkbutton', RA_HARDCORE_CHECK,
+        #   text: translate('settings.ra_hardcore'),
+        #   variable: VAR_RA_HARDCORE,
+        #   command: proc { @mark_dirty.call })
+        # @app.command(:pack, RA_HARDCORE_CHECK, side: :left)
       end
 
       def browse_bios
