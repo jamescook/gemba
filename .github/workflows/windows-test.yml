@@ -19,6 +19,9 @@ jobs:
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v4
+      with:
+        submodules: true
+        shallow-submodules: true
 
     - name: Set up Ruby
       uses: ruby/setup-ruby@v1
