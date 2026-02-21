@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-02-21
+
 ### Added
 
 - RetroAchievements integration — earn achievements while you play; progress tracked and submitted in real time
@@ -70,5 +72,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Pause on focus loss
 - macOS, Linux, and Windows support
 
+[0.2.0]: https://github.com/jamescook/gemba/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/jamescook/gemba/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/jamescook/gemba/releases/tag/v0.1.0
