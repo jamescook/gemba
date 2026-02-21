@@ -440,6 +440,7 @@ module Gemba
       if ok
         Gemba.log(:info) { "save state loaded (slot #{slot}) — resetting achievement runtime" }
         @achievement_backend.reset_runtime
+        render_clean_if_paused
       end
     end
 
@@ -457,6 +458,7 @@ module Gemba
       if ok
         Gemba.log(:info) { "quick save state loaded — resetting achievement runtime" }
         @achievement_backend.reset_runtime
+        render_clean_if_paused
       end
     end
 
@@ -923,6 +925,16 @@ module Gemba
 
     def render_if_paused
       render_frame if @paused && @core && @texture
+    end
+
+    # Like render_if_paused but suppresses frame blending for one frame.
+    # Used after state loads: mGBA's previous-frame buffer is stale, so blending
+    # would show a mix of the pre-load frame and the saved state frame.
+    def render_clean_if_paused
+      return unless @paused && @core && @texture
+      @core.frame_blending = false if @frame_blending
+      render_frame
+      @core.frame_blending = true if @frame_blending
     end
 
     def compute_dest_rect
