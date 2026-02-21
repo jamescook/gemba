@@ -28,7 +28,7 @@ jobs:
       matrix:
         ruby: ['4.0']
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
         shallow-submodules: true
@@ -109,7 +109,7 @@ jobs:
       matrix:
         ruby: ['4.0']
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: true
         shallow-submodules: true
