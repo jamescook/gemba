@@ -10,6 +10,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- RetroAchievements integration — earn achievements while you play; progress tracked and submitted in real time
+- Rich Presence support — reports current game activity to your RetroAchievements profile
+- Achievements window showing earned/unearned status, points, and descriptions for the current game
+- `gemba ra` CLI commands: `login`, `verify`, `logout`, and `achievements` (list a ROM's achievements without launching the emulator)
+- Loading a save state while paused now renders the frame the state was captured at, so you can see exactly where you are before resuming
 - Game Boy and Game Boy Color ROM support (160×144 resolution, correct aspect ratio)
 - Input recording and replay — record button inputs to `.gir` files and replay them deterministically
 - Video/audio capture to `.grec` files (F10 hotkey)
