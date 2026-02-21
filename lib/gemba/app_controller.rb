@@ -1010,6 +1010,7 @@ module Gemba
       @emulator_frame&.cleanup
       @game_picker&.cleanup
       RomResolver.cleanup_temp
+      @achievement_backend&.shutdown
     end
   end
 end

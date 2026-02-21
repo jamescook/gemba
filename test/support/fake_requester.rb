@@ -37,22 +37,32 @@ class FakeRequester
   attr_reader :requests
 
   def initialize
-    @stubs    = {}   # r_string => [json_or_nil, ok_bool]
+    @stubs    = {}   # r_string => Array<[json_or_nil, ok_bool]>
     @requests = []   # all params hashes, in call order
   end
 
   # Register a canned response for a given r= value.
+  # Overwrites any previous stub — the response is reused for every call
+  # until replaced. Use stub_queue for ordered sequential responses.
   def stub(r:, body: nil, ok: true)
-    @stubs[r.to_s] = [body, ok]
+    @stubs[r.to_s] = [[body, ok]]
+  end
+
+  # Enqueue an additional response for a given r= value.
+  # Each queued entry is consumed once; the last entry is reused once exhausted.
+  def stub_queue(r:, body: nil, ok: true)
+    (@stubs[r.to_s] ||= []) << [body, ok]
   end
 
   # Called by ra_request with the same signature as Teek::BackgroundWork.new.
   # Ignores the block (which contains real Net::HTTP code) and returns a
   # Result that fires on_progress synchronously with the canned response.
-  def call(_app, params, mode: nil, **_opts, &_block)
+  def call(_app, params, mode: nil, worker: nil, **_opts, &_block)
     @requests << params.dup
     r      = (params[:r] || params["r"]).to_s
-    result = @stubs.fetch(r, [nil, false])
+    queue  = @stubs.fetch(r, [[nil, false]])
+    result = queue.size > 1 ? queue.shift : queue.first
+    result = [result[1] ? true : false, params[:a].to_s] if worker
     Result.new(result)
   end
 

@@ -123,6 +123,7 @@ module TeekTestHelper
     env['VISUAL'] = '1' if ENV['VISUAL']
     env['COVERAGE'] = '1' if ENV['COVERAGE']
     env['GEMBA_BGERROR_LOG'] = bgerror_path
+    env['GEMBA_CONFIG_DIR'] = Dir.mktmpdir('gemba-test-config')
 
     # -rbundler/setup activates Bundler in the subprocess so path: gems
     # (e.g. teek, teek-sdl2 from sibling repos) are on the load path.

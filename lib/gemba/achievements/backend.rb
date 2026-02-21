@@ -138,6 +138,10 @@ module Gemba
       # completion.
       def sync_unlocks; end
 
+      # Called on app exit. Backends with pending network state should flush
+      # or log anything that couldn't be delivered.
+      def shutdown; end
+
       # Fetch the full achievement list for a given ROM (by RomInfo) purely for
       # display — does not affect live game state. Calls the block with
       # Array<Achievement> on success, or nil on failure/unsupported.

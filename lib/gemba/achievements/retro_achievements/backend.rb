@@ -49,12 +49,15 @@ module Gemba
 
         RA_HOST      = "retroachievements.org"
         RA_PATH      = "/dorequest.php"
-        PING_BG_MODE = (RUBY_VERSION >= "4.0" ? :ractor : :thread).freeze
+        PING_BG_MODE         = (RUBY_VERSION >= "4.0" ? :ractor : :thread).freeze
+        UNLOCK_RETRY_BG_MODE = (RUBY_VERSION >= "4.0" ? :ractor : :thread).freeze
 
         # Frames between Rich Presence evaluations (~4 s at 60 fps).
         RP_EVAL_INTERVAL  = 240
         # Seconds between session ping heartbeats.
         PING_INTERVAL_SEC = 120
+        # Seconds between unlock retry sweeps.
+        UNLOCK_RETRY_INTERVAL_SEC = 30
 
         # Default requester: delegates to Teek::BackgroundWork.
         # Extracted so tests can inject a synchronous fake with the same interface.
@@ -76,12 +79,15 @@ module Gemba
           @rich_presence_message = nil
           @rp_eval_frame         = 0
           @ping_last_at          = nil
-          @ra_runtime       = runtime || Gemba::RARuntime.new
+          @ra_runtime          = runtime || Gemba::RARuntime.new
+          @unlock_queue        = []
+          @unlock_retry_last_at = nil
         end
 
         attr_writer :include_unofficial
         attr_writer :rich_presence_enabled
         attr_reader :rich_presence_message
+        attr_reader :unlock_queue
 
         # -- Authentication -------------------------------------------------------
 
@@ -111,7 +117,7 @@ module Gemba
               fire_auth_change(:ok, nil)
             else
               @authenticated = false
-              msg = json&.dig("Error") || "Token invalid"
+              msg = json ? (json.dig("Error") || "Token invalid") : "Could not connect to RetroAchievements"
               Gemba.log(:warn) { "RA: token verification failed for #{username}: #{msg}" }
               fire_auth_change(:error, msg)
             end
@@ -124,7 +130,8 @@ module Gemba
               fire_auth_change(:ok, nil)
             else
               @authenticated = false
-              fire_auth_change(:error, json&.dig("Error") || "Token invalid")
+              msg = json ? (json.dig("Error") || "Token invalid") : "Could not connect to RetroAchievements"
+              fire_auth_change(:error, msg)
             end
           end
         end
@@ -218,6 +225,14 @@ module Gemba
             submit_unlock(id)
           end
 
+          if @unlock_queue.any?
+            now = Time.now
+            if @unlock_retry_last_at.nil? || now - @unlock_retry_last_at >= UNLOCK_RETRY_INTERVAL_SEC
+              @unlock_retry_last_at = now
+              drain_unlock_queue
+            end
+          end
+
           return unless @rich_presence_enabled
 
           @rp_eval_frame = (@rp_eval_frame + 1) % RP_EVAL_INTERVAL
@@ -299,6 +314,41 @@ module Gemba
               end
             end
           end
+        end
+
+        def drain_unlock_queue
+          Gemba.log(:info) { "RA: retrying #{@unlock_queue.size} queued unlock(s)" }
+          @unlock_queue.dup.each do |entry|
+            data = {
+              r: "awardachievement", u: @username, t: @token,
+              a: entry[:id], h: entry[:hardcore] ? 1 : 0,
+            }
+            data = Ractor.make_shareable(data) if UNLOCK_RETRY_BG_MODE == :ractor
+            @requester.call(@app, data, mode: UNLOCK_RETRY_BG_MODE, worker: UnlockRetryWorker)
+              .on_progress do |result|
+                ok, id = result
+                if ok
+                  Gemba.log(:info) { "RA: retry succeeded for achievement #{id}" }
+                  @unlock_queue.delete_if { |e| e[:id] == id }
+                else
+                  Gemba.log(:warn) { "RA: retry failed for achievement #{id}" }
+                end
+              end
+          end
+        end
+
+        # Submit an unlock to RA. On failure, queues for background retry.
+        def submit_unlock(achievement_id, hardcore: false)
+          do_unlock_request(achievement_id, hardcore: hardcore) do |ok|
+            enqueue_for_retry(achievement_id, hardcore: hardcore) unless ok
+          end
+        end
+
+        # Call on app exit — logs any unconfirmed unlocks that never drained.
+        def shutdown
+          return if @unlock_queue.empty?
+          ids = @unlock_queue.map { |e| e[:id] }.join(", ")
+          Gemba.log(:warn) { "RA: #{@unlock_queue.size} unlock(s) never confirmed — dropped on exit: #{ids}" }
         end
 
         private
@@ -407,16 +457,22 @@ module Gemba
             .on_progress { |ok| Gemba.log(ok ? :info : :warn) { "RA: ping g=#{game_id} ok=#{ok}" } }
         end
 
-        # Best-effort unlock submission — fires and forgets, result only logged.
-        def submit_unlock(achievement_id, hardcore: false)
+        # Fire the awardachievement HTTP request and yield ok (true/false) to block.
+        def do_unlock_request(achievement_id, hardcore:, &on_complete)
           ra_request(r: "awardachievement", u: @username, t: @token,
                      a: achievement_id, h: hardcore ? 1 : 0) do |json, ok|
-            if ok && json&.dig("Success")
-              Gemba.log(:info) { "RA: submitted unlock for achievement #{achievement_id}" }
-            else
-              Gemba.log(:warn) { "RA: unlock submission failed for #{achievement_id}: #{json&.dig("Error")}" }
-            end
+            success = ok && json&.dig("Success")
+            Gemba.log(success ? :info : :warn) {
+              success ? "RA: submitted unlock for achievement #{achievement_id}" \
+                      : "RA: unlock submission failed for #{achievement_id}: #{json&.dig("Error")}"
+            }
+            on_complete.call(success)
           end
+        end
+
+        def enqueue_for_retry(achievement_id, hardcore:)
+          @unlock_queue << { id: achievement_id, hardcore: hardcore }
+          Gemba.log(:info) { "RA: queued achievement #{achievement_id} for retry" }
         end
 
         # POST to dorequest.php via @requester (BackgroundWork in production,
