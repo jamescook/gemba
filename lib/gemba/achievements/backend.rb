@@ -6,7 +6,7 @@ module Gemba
     #
     # All methods have no-op defaults so backends only need to override
     # what they support. Concrete backends: NullBackend, FakeBackend,
-    # and the future RcheevosBackend.
+    # and the future RetroAchievements backend.
     #
     # Thread safety: do_frame is called from the emulation thread (Tk
     # after-loop). on_unlock and on_auth_change callbacks fire on the

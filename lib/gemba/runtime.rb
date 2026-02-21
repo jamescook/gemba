@@ -65,6 +65,7 @@ loader.inflector.inflect(
 loader.ignore(__FILE__)  # bootstrap file — not a constant
 loader.ignore(File.expand_path("../../gemba.rb", __FILE__))  # entry point, not a constant
 loader.ignore(File.expand_path("../platform_open.rb", __FILE__))  # module method, not a constant
+loader.ignore(File.expand_path("../version.rb", __FILE__))  # defines VERSION (all-caps), not Zeitwerk-compatible
 loader.setup
 
 # Initialize locale on require
