@@ -141,6 +141,7 @@ settings:
   ra_credentials: "アカウント"
   ra_username_placeholder: "ユーザー名："
   ra_token_placeholder: "パスワード："
+  ra_rich_presence: "リッチプレゼンス（ゲームごと）"
   ra_hardcore: "ハードコアモード（セーブステートと巻き戻し無効）"
   tip_ra_password: "パスワードはAPIトークン取得のみに使用され、保存されません。"
   ra_login: "ログイン"

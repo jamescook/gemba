@@ -86,7 +86,7 @@ class TestAchievementsWindowBusEvents < Minitest::Test
         app.update
 
         top    = Gemba::AchievementsWindow::TOP
-        status = app.command("#{top}.status", :cget, '-text').to_s
+        status = app.command("#{top}.status_bar.status", :cget, '-text').to_s
         assert_equal Gemba::Locale.translate('achievements.sync_failed'), status
       ensure
         app.command(:destroy, Gemba::AchievementsWindow::TOP) rescue nil

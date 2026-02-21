@@ -205,7 +205,7 @@ module Gemba
         achievement_backend.login_with_password(username: username, password: password)
       end
       bus.on(:ra_verify) do
-        achievement_backend.ping
+        achievement_backend.token_test
       end
       bus.on(:ra_logout) do
         achievement_backend.logout
@@ -246,6 +246,7 @@ module Gemba
         @app.command(@view_menu, :entryconfigure, 0, state: :normal)  # Game Library
         @app.command(@view_menu, :entryconfigure, 2, state: :normal)  # ROM Info
         @current_rom_id = rom_id
+        @achievement_backend.rich_presence_enabled = @config.ra_rich_presence?
         @achievements_window&.update_game(rom_id: rom_id, backend: @achievement_backend)  # only if open
         [3, 4, 6, 8, 9].each { |i| @app.command(@emu_menu, :entryconfigure, i, state: :normal) }
         rebuild_recent_menu
@@ -689,6 +690,9 @@ module Gemba
       end
       @achievement_backend.on_unlock do |_ach|
         @achievements_window&.refresh(@achievement_backend)  # only if already open
+      end
+      @achievement_backend.on_rich_presence_changed do |msg|
+        Gemba.bus.emit(:ra_rich_presence_changed, message: msg.to_s)
       end
       @achievement_backend.on_auth_change do |status, token_or_error|
         case status

@@ -1302,6 +1302,42 @@ ra_runtime_rb_count(VALUE self)
     return INT2NUM(get_ra_wrapper(self)->count);
 }
 
+/*
+ * RARuntime#activate_richpresence(script) → true | false
+ * Load a Rich Presence script into the runtime.
+ * Returns true on success, false if the script failed to parse.
+ */
+static VALUE
+ra_runtime_rb_activate_richpresence(VALUE self, VALUE rb_script)
+{
+    ra_wrapper_t *w = get_ra_wrapper(self);
+    const char   *script = StringValueCStr(rb_script);
+    int           rc;
+
+    rc = rc_runtime_activate_richpresence(&w->rc, script, NULL, 0);
+    return rc == RC_OK ? Qtrue : Qfalse;
+}
+
+/*
+ * RARuntime#get_richpresence(core) → String | nil
+ * Evaluate the active Rich Presence script against current memory and
+ * return the display string, or nil if no script is loaded / empty result.
+ */
+static VALUE
+ra_runtime_rb_get_richpresence(VALUE self, VALUE rb_core)
+{
+    ra_wrapper_t    *w = get_ra_wrapper(self);
+    struct mgba_core *mc;
+    char             buf[512];
+    int              len;
+
+    TypedData_Get_Struct(rb_core, struct mgba_core, &mgba_core_type, mc);
+    len = rc_runtime_get_richpresence(&w->rc, buf, sizeof(buf), ra_peek, mc->core, NULL);
+    if (len <= 0)
+        return Qnil;
+    return rb_str_new(buf, len);
+}
+
 /* --------------------------------------------------------- */
 /* Init                                                      */
 /* --------------------------------------------------------- */
@@ -1431,12 +1467,14 @@ Init_gemba_ext(void)
     /* Gemba::RARuntime — RA condition evaluator */
     cRARuntime = rb_define_class_under(mGemba, "RARuntime", rb_cObject);
     rb_define_alloc_func(cRARuntime, ra_runtime_alloc);
-    rb_define_method(cRARuntime, "activate",   ra_runtime_rb_activate,   2);
-    rb_define_method(cRARuntime, "deactivate", ra_runtime_rb_deactivate, 1);
-    rb_define_method(cRARuntime, "reset_all",  ra_runtime_rb_reset_all,  0);
-    rb_define_method(cRARuntime, "clear",      ra_runtime_rb_clear,      0);
-    rb_define_method(cRARuntime, "do_frame",   ra_runtime_rb_do_frame,   1);
-    rb_define_method(cRARuntime, "count",      ra_runtime_rb_count,      0);
+    rb_define_method(cRARuntime, "activate",              ra_runtime_rb_activate,              2);
+    rb_define_method(cRARuntime, "deactivate",            ra_runtime_rb_deactivate,            1);
+    rb_define_method(cRARuntime, "reset_all",             ra_runtime_rb_reset_all,             0);
+    rb_define_method(cRARuntime, "clear",                 ra_runtime_rb_clear,                 0);
+    rb_define_method(cRARuntime, "do_frame",              ra_runtime_rb_do_frame,              1);
+    rb_define_method(cRARuntime, "count",                 ra_runtime_rb_count,                 0);
+    rb_define_method(cRARuntime, "activate_richpresence", ra_runtime_rb_activate_richpresence, 1);
+    rb_define_method(cRARuntime, "get_richpresence",      ra_runtime_rb_get_richpresence,      1);
 
     /* Toast background generator */
     rb_define_module_function(mGemba, "toast_background", mgba_toast_background, 3);

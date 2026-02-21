@@ -121,7 +121,7 @@ module Gemba
           else
             # Ping success — show transient then let SystemTab schedule clear
             @feedback_override = { key: :test_ok }
-            emit(:ra_ping_ok)
+            emit(:ra_token_test_ok)
           end
         when :error
           @feedback_override = { key: :error, message: message.to_s }

@@ -43,6 +43,8 @@ module Gemba
         @valid_username = valid_username
         @valid_token = valid_token
         @authenticated = false
+        @rich_presence_message = nil
+        @rich_presence_block   = nil
       end
 
       # -- Authentication -------------------------------------------------------
@@ -84,7 +86,7 @@ module Gemba
         fire_auth_change(:logout)
       end
 
-      def ping
+      def token_test
         if @authenticated
           fire_auth_change(:ok, nil)
         else
@@ -116,6 +118,7 @@ module Gemba
 
       # Evaluate all unearned achievements against current memory state.
       # Fires on_unlock callbacks for newly met conditions (rising edge).
+      # Also evaluates the rich presence block if one is set.
       #
       # @param core [Gemba::Core]
       def do_frame(core)
@@ -131,9 +134,13 @@ module Gemba
           end
           @prev_state[id] = current
         end
+
+        @rich_presence_message = @rich_presence_block.call if @rich_presence_block
       end
 
       def load_game(_core, rom_path = nil, md5 = nil)
+        @rich_presence_message = nil
+        @rich_presence_block   = nil
         reset_earned
       end
 
@@ -156,6 +163,24 @@ module Gemba
       def reset_earned
         @earned = {}
         @prev_state = @prev_state.transform_values { false }
+      end
+
+      # Set a Rich Presence message for testing.
+      #
+      # Pass a static string to return a fixed message:
+      #   backend.set_rich_presence("Playing World 1-1")
+      #
+      # Pass a block for dynamic messages evaluated each do_frame:
+      #   backend.set_rich_presence { "Frame #{frame_count}" }
+      #
+      # Call with no arguments to clear.
+      def set_rich_presence(string = nil, &block)
+        @rich_presence_block   = block || (string ? -> { string } : nil)
+        @rich_presence_message = string unless block
+      end
+
+      def rich_presence_message
+        @rich_presence_message
       end
 
       # Configure what fetch_for_display returns. Pass an Array (returned for

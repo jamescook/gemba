@@ -57,6 +57,7 @@ module Gemba
       'ra_token'             => '',
       'ra_hardcore'          => false,
       'ra_unofficial'        => false,
+      'ra_rich_presence'     => false,
     }.freeze
 
     # Settings that can be overridden per ROM. Maps config key → locale key.
@@ -72,6 +73,7 @@ module Gemba
       'turbo_speed'       => 'settings.turbo_speed',
       'quick_save_slot'   => 'settings.quick_save_slot',
       'save_state_backup' => 'settings.keep_backup',
+      'ra_rich_presence'  => 'settings.ra_rich_presence',
     }.freeze
 
     PER_GAME_KEYS = PER_GAME_SETTINGS.keys.to_set.freeze
@@ -484,6 +486,14 @@ module Gemba
 
     def ra_unofficial=(val)
       global['ra_unofficial'] = val ? true : false
+    end
+
+    def ra_rich_presence?
+      global['ra_rich_presence']
+    end
+
+    def ra_rich_presence=(val)
+      global['ra_rich_presence'] = val ? true : false
     end
 
     # @return [String] directory for .grec recording files

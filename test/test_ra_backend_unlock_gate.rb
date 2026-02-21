@@ -5,7 +5,7 @@ require "gemba/headless"
 require "gemba/achievements"
 require_relative "support/fake_core"
 
-# Tests that RetroAchievementsBackend never awards achievements before the
+# Tests that RetroAchievements::Backend never awards achievements before the
 # server's earned list is known.
 #
 # The bug scenario:
@@ -21,7 +21,7 @@ require_relative "support/fake_core"
 # underlying runtime would report.
 class TestRABackendUnlockGate < Minitest::Test
   def setup
-    @backend  = Gemba::Achievements::RetroAchievementsBackend.new(app: nil)
+    @backend  = Gemba::Achievements::RetroAchievements::Backend.new(app: nil)
     @unlocked = []
     @backend.on_unlock { |ach| @unlocked << ach }
     @core = FakeCore.new

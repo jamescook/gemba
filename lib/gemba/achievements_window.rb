@@ -46,6 +46,7 @@ module Gemba
       select_game(rom_id)
       populate_tree
       update_title
+      update_rich_presence
     end
 
     # Called by AppController when on_achievements_changed fires.
@@ -55,6 +56,7 @@ module Gemba
       return unless @built
 
       populate_tree
+      update_rich_presence
     end
 
     def show
@@ -140,6 +142,11 @@ module Gemba
       Gemba.bus.on(:ra_auth_result) do |status:, **|
         refresh_auth_state
       end
+
+      Gemba.bus.on(:ra_rich_presence_changed) do |message:, **|
+        next unless @rp_lbl
+        @app.command(@rp_lbl, :configure, text: message)
+      end
     end
 
     def refresh_auth_state
@@ -219,11 +226,22 @@ module Gemba
     end
 
     def build_status
-      @status_lbl = "#{TOP}.status"
+      bar = "#{TOP}.status_bar"
+      @app.command('ttk::frame', bar)
+      @app.command(:pack, bar, fill: :x)
+
+      @status_lbl = "#{bar}.status"
       @app.command('ttk::label', @status_lbl,
                    text: translate('achievements.none'),
                    anchor: :w, padding: [8, 2, 8, 6])
-      @app.command(:pack, @status_lbl, fill: :x)
+      @app.command(:pack, @status_lbl, side: :left)
+
+      @rp_lbl = "#{bar}.rich_presence"
+      @app.command('ttk::label', @rp_lbl,
+                   text: '',
+                   anchor: :e, padding: [8, 2, 8, 6],
+                   foreground: '#666666')
+      @app.command(:pack, @rp_lbl, side: :right)
     end
 
     def refresh_game_list
@@ -361,6 +379,12 @@ module Gemba
     def set_status(text)
       return unless @status_lbl
       @app.command(@status_lbl, :configure, text: text)
+    end
+
+    def update_rich_presence
+      return unless @rp_lbl
+      msg = @backend&.rich_presence_message.to_s
+      @app.command(@rp_lbl, :configure, text: msg)
     end
 
     def update_title

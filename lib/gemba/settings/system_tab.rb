@@ -23,16 +23,18 @@ module Gemba
       RA_LOGOUT_BTN     = "#{FRAME}.ra_btn_row.logout"
       RA_RESET_BTN      = "#{FRAME}.ra_btn_row.reset"
       RA_FEEDBACK_LABEL = "#{FRAME}.ra_feedback"
-      RA_HARDCORE_CHECK = "#{FRAME}.ra_hardcore_row.check"
+      RA_HARDCORE_CHECK        = "#{FRAME}.ra_hardcore_row.check"
+      RA_RICH_PRESENCE_CHECK   = "#{FRAME}.ra_rich_presence_row.check"
 
-      VAR_BIOS_PATH   = '::gemba_bios_path'
-      VAR_SKIP_BIOS   = '::gemba_skip_bios'
-      VAR_RA_ENABLED  = '::gemba_ra_enabled'
-      VAR_RA_USERNAME = '::gemba_ra_username'
-      VAR_RA_TOKEN    = '::gemba_ra_token'
-      VAR_RA_HARDCORE    = '::gemba_ra_hardcore'
-      VAR_RA_UNOFFICIAL  = '::gemba_ra_unofficial'
-      VAR_RA_PASSWORD    = '::gemba_ra_password'
+      VAR_BIOS_PATH          = '::gemba_bios_path'
+      VAR_SKIP_BIOS          = '::gemba_skip_bios'
+      VAR_RA_ENABLED         = '::gemba_ra_enabled'
+      VAR_RA_USERNAME        = '::gemba_ra_username'
+      VAR_RA_TOKEN           = '::gemba_ra_token'
+      VAR_RA_HARDCORE        = '::gemba_ra_hardcore'
+      VAR_RA_UNOFFICIAL      = '::gemba_ra_unofficial'
+      VAR_RA_PASSWORD        = '::gemba_ra_password'
+      VAR_RA_RICH_PRESENCE   = '::gemba_ra_rich_presence'
 
       RA_UNOFFICIAL_CHECK = "#{FRAME}.ra_unofficial_row.check"
 
@@ -63,25 +65,27 @@ module Gemba
           @app.command(BIOS_STATUS, :configure, text: translate('settings.bios_not_set'))
         end
 
-        @app.set_variable(VAR_RA_ENABLED,     config.ra_enabled?     ? '1' : '0')
-        @app.set_variable(VAR_RA_USERNAME,    config.ra_username.to_s)
-        @app.set_variable(VAR_RA_HARDCORE,    config.ra_hardcore?    ? '1' : '0')
-        @app.set_variable(VAR_RA_UNOFFICIAL,  config.ra_unofficial?  ? '1' : '0')
+        @app.set_variable(VAR_RA_ENABLED,        config.ra_enabled?        ? '1' : '0')
+        @app.set_variable(VAR_RA_USERNAME,       config.ra_username.to_s)
+        @app.set_variable(VAR_RA_HARDCORE,       config.ra_hardcore?       ? '1' : '0')
+        @app.set_variable(VAR_RA_UNOFFICIAL,     config.ra_unofficial?     ? '1' : '0')
+        @app.set_variable(VAR_RA_RICH_PRESENCE,  config.ra_rich_presence?  ? '1' : '0')
         @app.set_variable(VAR_RA_PASSWORD, '')
 
         @presenter&.dispose
         @presenter = Achievements::CredentialsPresenter.new(config)
         Gemba.bus.on(:credentials_changed) { apply_presenter_state }
-        Gemba.bus.on(:ra_ping_ok) { @app.after(3000) { @presenter&.clear_transient } }
+        Gemba.bus.on(:ra_token_test_ok) { @app.after(3000) { @presenter&.clear_transient } }
         apply_presenter_state
       end
 
       # Called by AppController#save_config
       def save_to_config(config)
-        config.ra_enabled  = @app.get_variable(VAR_RA_ENABLED)  == '1'
-        config.ra_username = @presenter ? @presenter.username : @app.get_variable(VAR_RA_USERNAME).to_s.strip
-        config.ra_token    = @presenter ? @presenter.token    : ''
-        config.ra_hardcore = @app.get_variable(VAR_RA_HARDCORE) == '1'
+        config.ra_enabled        = @app.get_variable(VAR_RA_ENABLED)        == '1'
+        config.ra_username       = @presenter ? @presenter.username : @app.get_variable(VAR_RA_USERNAME).to_s.strip
+        config.ra_token          = @presenter ? @presenter.token    : ''
+        config.ra_hardcore       = @app.get_variable(VAR_RA_HARDCORE)       == '1'
+        config.ra_rich_presence  = @app.get_variable(VAR_RA_RICH_PRESENCE)  == '1'
         # Password is never persisted — ephemeral field only
       end
 
@@ -236,6 +240,17 @@ module Gemba
         # Feedback label — shows auth result, errors, etc.
         @app.command('ttk::label', RA_FEEDBACK_LABEL, text: '')
         @app.command(:pack, RA_FEEDBACK_LABEL, anchor: :w, padx: 14, pady: [4, 6])
+
+        # Rich Presence (per-game)
+        rp_row = "#{FRAME}.ra_rich_presence_row"
+        @app.command('ttk::frame', rp_row)
+        @app.command(:pack, rp_row, fill: :x, padx: 10, pady: [0, 4])
+        @app.set_variable(VAR_RA_RICH_PRESENCE, '0')
+        @app.command('ttk::checkbutton', RA_RICH_PRESENCE_CHECK,
+          text: translate('settings.ra_rich_presence'),
+          variable: VAR_RA_RICH_PRESENCE,
+          command: proc { @mark_dirty.call })
+        @app.command(:pack, RA_RICH_PRESENCE_CHECK, side: :left)
 
         # Hardcore
         hardcore_row = "#{FRAME}.ra_hardcore_row"

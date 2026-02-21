@@ -76,6 +76,27 @@ module Gemba
       # state; all achievements must restart their priming/waiting sequence.
       def reset_runtime; end
 
+      # -- Rich Presence --------------------------------------------------------
+
+      # Current Rich Presence display string for the active game, or nil if
+      # not loaded / not supported. Updated by do_frame in real backends.
+      def rich_presence_message
+        nil
+      end
+
+      # Enable or disable Rich Presence evaluation for the current game.
+      # Pushed from AppController when per-game config is resolved at ROM load.
+      def rich_presence_enabled=(val); end
+
+      # Register a callback fired when the Rich Presence string changes.
+      # Called with the new message string.
+      #
+      # @yield [String] the new rich presence message
+      def on_rich_presence_changed(&block)
+        @rp_callbacks ||= []
+        @rp_callbacks << block
+      end
+
       # -- Achievement list -----------------------------------------------------
 
       # Register a callback invoked when an achievement is unlocked.
@@ -103,8 +124,8 @@ module Gemba
       end
 
       # Verify the stored token is still valid. Result fires on_auth_change.
-      # Used by the "Test" button in settings.
-      def ping; end
+      # Used by the "Verify Token" button in settings.
+      def token_test; end
 
       # @return [Boolean] true if this backend is active / enabled
       def enabled?
@@ -155,6 +176,10 @@ module Gemba
 
       def fire_achievements_changed
         @achievements_changed_callbacks&.each(&:call)
+      end
+
+      def fire_rich_presence_changed(message)
+        @rp_callbacks&.each { |cb| cb.call(message) }
       end
     end
   end

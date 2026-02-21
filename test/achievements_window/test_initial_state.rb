@@ -154,7 +154,7 @@ class TestAchievementsWindowInitialState < Minitest::Test
         app.update
 
         top    = Gemba::AchievementsWindow::TOP
-        status = app.command("#{top}.status", :cget, '-text').to_s
+        status = app.command("#{top}.status_bar.status", :cget, '-text').to_s
         assert_equal Gemba::Locale.translate('achievements.none'), status
       ensure
         app.command(:destroy, Gemba::AchievementsWindow::TOP) rescue nil

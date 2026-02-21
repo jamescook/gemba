@@ -4,7 +4,7 @@ module Gemba
   module Achievements
     # Build the appropriate backend based on config.
     # Returns NullBackend if RA is disabled.
-    # Requires app: (Teek app) for RetroAchievementsBackend's BackgroundWork HTTP calls.
+    # Requires app: (Teek app) for RetroAchievements::Backend's BackgroundWork HTTP calls.
     #
     # @param config [Config]
     # @param app    [Teek::App, nil]
@@ -13,7 +13,7 @@ module Gemba
       return NullBackend.new unless config.ra_enabled?
       return NullBackend.new unless app
 
-      RetroAchievementsBackend.new(app: app)
+      RetroAchievements::Backend.new(app: app)
     end
   end
 end

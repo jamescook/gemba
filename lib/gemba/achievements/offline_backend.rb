@@ -45,6 +45,8 @@ module Gemba
         @achievements = []
         @earned       = {}
         @prev_state   = {}
+        @rp_db                 = {}   # checksum → String
+        @rich_presence_message = nil
       end
 
       # -- Authentication (no-op — offline backend is always authenticated) ------
@@ -66,7 +68,7 @@ module Gemba
 
       def authenticated? = true
 
-      def ping
+      def token_test
         fire_auth_change(:ok, nil)
       end
 
@@ -76,6 +78,7 @@ module Gemba
         @achievements = []
         @earned       = {}
         @prev_state   = {}
+        @rich_presence_message = @rp_db[core.checksum]
 
         (@db[core.checksum] || []).each do |defn|
           ach = Achievement.new(
@@ -97,9 +100,10 @@ module Gemba
       end
 
       def unload_game
-        @achievements = []
-        @earned       = {}
-        @prev_state   = {}
+        @achievements          = []
+        @earned                = {}
+        @prev_state            = {}
+        @rich_presence_message = nil
       end
 
       # -- Per-frame evaluation (memory-condition achievements) -----------------
@@ -136,6 +140,10 @@ module Gemba
 
       def enabled? = true
 
+      def rich_presence_message
+        @rich_presence_message
+      end
+
       # -- DB management --------------------------------------------------------
 
       # Merge achievement definitions for a ROM into the in-memory DB.
@@ -145,6 +153,15 @@ module Gemba
       # @param defs     [Array<Hash>]
       def store(checksum, defs)
         @db = @db.merge(checksum => defs)
+      end
+
+      # Store a static Rich Presence message for a ROM.
+      # Intended for use by RcheevosBackend when caching patch data offline.
+      #
+      # @param checksum [Integer]
+      # @param message  [String]
+      def store_rich_presence(checksum, message)
+        @rp_db = @rp_db.merge(checksum => message.to_s)
       end
     end
   end

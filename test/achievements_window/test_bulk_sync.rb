@@ -106,7 +106,7 @@ class TestAchievementsWindowBulkSync < Minitest::Test
         statuses = []
         backend.stub_fetch_for_display do |_|
           top = Gemba::AchievementsWindow::TOP
-          statuses << app.command("#{top}.status", :cget, '-text').to_s
+          statuses << app.command("#{top}.status_bar.status", :cget, '-text').to_s
           []
         end
 
@@ -205,7 +205,7 @@ class TestAchievementsWindowBulkSync < Minitest::Test
           app.command("#{top}.toolbar.unofficial", 'invoke')
           app.update
 
-          status = app.command("#{top}.status", :cget, '-text').to_s
+          status = app.command("#{top}.status_bar.status", :cget, '-text').to_s
           assert_includes status, '2', "done status should mention 2 games synced"
         ensure
           ENV.delete('GEMBA_CONFIG_DIR')
