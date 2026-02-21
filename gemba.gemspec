@@ -11,7 +11,7 @@ Gem::Specification.new do |spec|
   spec.homepage      = "https://github.com/jamescook/gemba"
   spec.licenses      = ["MIT"]
 
-  spec.files         = Dir.glob("{lib,ext,test,assets,bin}/**/*").select { |f|
+  spec.files         = Dir.glob("{lib,ext,test,assets,bin,vendor/rcheevos}/**/*").select { |f|
                          File.file?(f) && f !~ /\.(bundle|so|o|log)$/ &&
                            !f.include?('.dSYM/') && File.basename(f) != 'Makefile'
                        } + %w[gemba.gemspec THIRD_PARTY_NOTICES]

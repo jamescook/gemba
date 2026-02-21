@@ -9,6 +9,7 @@ expected_version = ARGV[0] || abort("Usage: ruby #{$PROGRAM_NAME} <version> <rom
 rom_path = ARGV[1] || abort("Usage: ruby #{$PROGRAM_NAME} <version> <rom_path>")
 
 require "gemba"
+require "gemba/version"
 
 actual = Gemba::VERSION
 abort "Version mismatch: expected #{expected_version}, got #{actual}" unless actual == expected_version

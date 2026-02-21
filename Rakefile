@@ -47,6 +47,16 @@ task 'test:isolate_config' do
 end
 Rake::Task['test'].enhance(['test:isolate_config'])
 
+# -- Submodules ---------------------------------------------------------------
+
+task :submodules do
+  rcheevos_sentinel = File.expand_path('vendor/rcheevos/src/rcheevos/runtime.c', __dir__)
+  unless File.exist?(rcheevos_sentinel)
+    puts "Initialising git submodules..."
+    sh "git submodule update --init"
+  end
+end
+
 # -- Dependencies (macOS / platforms without libmgba-dev) --------------------
 
 desc "Download and build libmgba from source"
@@ -394,7 +404,7 @@ task 'deps:uninstall' do
 end
 
 desc "Smoke test: build, install, require, load ROM, run 1 frame"
-task 'release:smoke' => :build do
+task 'release:smoke' => [:submodules, :build] do
   require_relative 'lib/gemba/version'
   version = Gemba::VERSION
   gem_file = "gemba-#{version}.gem"
