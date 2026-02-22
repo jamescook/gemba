@@ -200,6 +200,7 @@ module Gemba
       bus.on(:request_quit)            { self.running = false if confirm_quit }
       bus.on(:achievement_unlocked) do |achievement:|
         frame&.receive(:show_toast, message: "#{achievement.title} (#{achievement.points}pts)")
+        frame&.receive(:take_achievement_screenshot, achievement: achievement) if @config.ra_screenshot_on_unlock?
       end
       bus.on(:ra_login) do |username:, password:|
         achievement_backend.login_with_password(username: username, password: password)

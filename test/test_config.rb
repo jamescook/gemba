@@ -746,7 +746,8 @@ class TestMGBAConfig < Minitest::Test
 
   def test_per_game_settings_constant_keys
     expected = %w[scale pixel_filter integer_scale color_correction frame_blending
-                  volume muted turbo_speed quick_save_slot save_state_backup ra_rich_presence]
+                  volume muted turbo_speed quick_save_slot save_state_backup ra_rich_presence
+                  ra_screenshot_on_unlock]
     assert_equal expected.sort, Gemba::Config::PER_GAME_SETTINGS.keys.sort
   end
 

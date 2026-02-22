@@ -142,6 +142,7 @@ settings:
   ra_username_placeholder: "Username:"
   ra_token_placeholder: "Password:"
   ra_rich_presence: "Rich Presence (per-game)"
+  ra_screenshot_on_unlock: "Screenshot on achievement unlock (per-game)"
   ra_hardcore: "Hardcore mode (disables save states and rewind)"
   tip_ra_password: "Your password is only used to fetch an API token and is never saved."
   ra_login: "Login"

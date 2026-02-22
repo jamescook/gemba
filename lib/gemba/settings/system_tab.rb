@@ -25,6 +25,7 @@ module Gemba
       RA_FEEDBACK_LABEL = "#{FRAME}.ra_feedback"
       RA_HARDCORE_CHECK        = "#{FRAME}.ra_hardcore_row.check"
       RA_RICH_PRESENCE_CHECK   = "#{FRAME}.ra_rich_presence_row.check"
+      RA_SCREENSHOT_CHECK      = "#{FRAME}.ra_screenshot_row.check"
 
       VAR_BIOS_PATH          = '::gemba_bios_path'
       VAR_SKIP_BIOS          = '::gemba_skip_bios'
@@ -34,7 +35,8 @@ module Gemba
       VAR_RA_HARDCORE        = '::gemba_ra_hardcore'
       VAR_RA_UNOFFICIAL      = '::gemba_ra_unofficial'
       VAR_RA_PASSWORD        = '::gemba_ra_password'
-      VAR_RA_RICH_PRESENCE   = '::gemba_ra_rich_presence'
+      VAR_RA_RICH_PRESENCE      = '::gemba_ra_rich_presence'
+      VAR_RA_SCREENSHOT         = '::gemba_ra_screenshot_on_unlock'
 
       RA_UNOFFICIAL_CHECK = "#{FRAME}.ra_unofficial_row.check"
 
@@ -69,7 +71,8 @@ module Gemba
         @app.set_variable(VAR_RA_USERNAME,       config.ra_username.to_s)
         @app.set_variable(VAR_RA_HARDCORE,       config.ra_hardcore?       ? '1' : '0')
         @app.set_variable(VAR_RA_UNOFFICIAL,     config.ra_unofficial?     ? '1' : '0')
-        @app.set_variable(VAR_RA_RICH_PRESENCE,  config.ra_rich_presence?  ? '1' : '0')
+        @app.set_variable(VAR_RA_RICH_PRESENCE,   config.ra_rich_presence?        ? '1' : '0')
+        @app.set_variable(VAR_RA_SCREENSHOT,      config.ra_screenshot_on_unlock? ? '1' : '0')
         @app.set_variable(VAR_RA_PASSWORD, '')
 
         @presenter&.dispose
@@ -85,7 +88,8 @@ module Gemba
         config.ra_username       = @presenter ? @presenter.username : @app.get_variable(VAR_RA_USERNAME).to_s.strip
         config.ra_token          = @presenter ? @presenter.token    : ''
         config.ra_hardcore       = @app.get_variable(VAR_RA_HARDCORE)       == '1'
-        config.ra_rich_presence  = @app.get_variable(VAR_RA_RICH_PRESENCE)  == '1'
+        config.ra_rich_presence        = @app.get_variable(VAR_RA_RICH_PRESENCE) == '1'
+        config.ra_screenshot_on_unlock = @app.get_variable(VAR_RA_SCREENSHOT)    == '1'
         # Password is never persisted — ephemeral field only
       end
 
@@ -251,6 +255,17 @@ module Gemba
           variable: VAR_RA_RICH_PRESENCE,
           command: proc { @mark_dirty.call })
         @app.command(:pack, RA_RICH_PRESENCE_CHECK, side: :left)
+
+        # Screenshot on achievement unlock (per-game)
+        ss_row = "#{FRAME}.ra_screenshot_row"
+        @app.command('ttk::frame', ss_row)
+        @app.command(:pack, ss_row, fill: :x, padx: 10, pady: [0, 4])
+        @app.set_variable(VAR_RA_SCREENSHOT, '1')
+        @app.command('ttk::checkbutton', RA_SCREENSHOT_CHECK,
+          text: translate('settings.ra_screenshot_on_unlock'),
+          variable: VAR_RA_SCREENSHOT,
+          command: proc { @mark_dirty.call })
+        @app.command(:pack, RA_SCREENSHOT_CHECK, side: :left)
 
         # TODO: hardcore mode — not yet wired up, hidden until ready
         # hardcore_row = "#{FRAME}.ra_hardcore_row"

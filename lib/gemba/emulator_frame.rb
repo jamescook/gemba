@@ -492,6 +492,30 @@ module Gemba
       @toast&.show(translate('toast.screenshot_failed'))
     end
 
+    def take_achievement_screenshot(achievement)
+      return unless @core && !@core.destroyed?
+
+      dir = Config.default_screenshots_dir
+      FileUtils.mkdir_p(dir)
+
+      stamp = Time.now.strftime('%Y%m%d_%H%M%S')
+      name  = "achievement_#{achievement.id}_#{stamp}.png"
+      path  = File.join(dir, name)
+
+      pixels    = @core.video_buffer_argb
+      photo_name = "__gemba_ach_ss_#{object_id}"
+      out_w = @platform.width * @scale
+      out_h = @platform.height * @scale
+      @app.command(:image, :create, :photo, photo_name, width: out_w, height: out_h)
+      @app.interp.photo_put_zoomed_block(photo_name, pixels, @platform.width, @platform.height,
+                                         zoom_x: @scale, zoom_y: @scale, format: :argb)
+      @app.command(photo_name, :write, path, format: :png)
+      @app.command(:image, :delete, photo_name)
+    rescue StandardError => e
+      Gemba.log(:warn) { "achievement screenshot failed: #{e.message} (#{e.class})" }
+      @app.command(:image, :delete, photo_name) rescue nil
+    end
+
     # -- Recording --------------------------------------------------------------
 
     def toggle_recording

@@ -48,6 +48,7 @@ module Gemba
         include Achievements::Backend
 
         RA_HOST      = "retroachievements.org"
+        RA_USER_AGENT = "gemba/#{Gemba::VERSION} (https://github.com/jamescook/gemba)"
         RA_PATH      = "/dorequest.php"
         PING_BG_MODE         = (RUBY_VERSION >= "4.0" ? :ractor : :thread).freeze
         UNLOCK_RETRY_BG_MODE = (RUBY_VERSION >= "4.0" ? :ractor : :thread).freeze
@@ -484,6 +485,7 @@ module Gemba
             http.use_ssl      = true
             http.read_timeout = 15
             req  = Net::HTTP::Post.new(uri.path)
+            req['User-Agent'] = RA_USER_AGENT
             safe = req_params.reject { |k, _| [:t, :p, "t", "p"].include?(k) }
             Gemba.log(:info) { "RA request: r=#{params[:r]} #{safe.map { |k, v| "#{k}=#{v}" }.join(" ")}" }
             req.set_form_data(req_params.transform_keys(&:to_s).transform_values(&:to_s))

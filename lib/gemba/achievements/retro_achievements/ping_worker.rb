@@ -16,6 +16,7 @@ module Gemba
           http.use_ssl      = true
           http.read_timeout = 10
           req  = Net::HTTP::Post.new(uri.path)
+          req['User-Agent'] = "gemba/#{Gemba::VERSION} (https://github.com/jamescook/gemba)"
           req.set_form_data(data[:params])
           t.yield(http.request(req).is_a?(Net::HTTPSuccess))
         rescue
