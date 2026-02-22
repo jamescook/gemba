@@ -186,6 +186,17 @@ game_picker:
     set_boxart: "カスタム画像を設定"
     remove: "ライブラリから削除"
 
+picker:
+  toolbar:
+    boxart_view: "ボックスアート表示"
+    list_view: "リスト表示"
+
+list_picker:
+  columns:
+    title: "タイトル"
+    last_played: "最終プレイ日"
+  never_played: "未プレイ"
+
 rom_info:
   title: "ROM情報"
   field_title: "タイトル:"

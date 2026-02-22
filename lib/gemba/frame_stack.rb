@@ -48,6 +48,16 @@ module Gemba
       frame.show
     end
 
+    # Replace the current frame in-place without changing the stack depth.
+    #
+    # The existing frame is hidden; the new one is shown under the same name.
+    def replace_current(frame)
+      return unless (entry = @stack.last)
+      entry.frame.hide
+      @stack[-1] = Entry.new(name: entry.name, frame: frame)
+      frame.show
+    end
+
     # Pop the current frame off the stack.
     #
     # The popped frame is hidden. If there's a previous frame, it is re-shown.

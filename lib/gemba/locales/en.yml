@@ -186,6 +186,17 @@ game_picker:
     set_boxart: "Set Boxart"
     remove: "Remove from Library"
 
+picker:
+  toolbar:
+    boxart_view: "Box art view"
+    list_view: "List view"
+
+list_picker:
+  columns:
+    title: "Title"
+    last_played: "Last Played"
+  never_played: "Never"
+
 rom_info:
   title: "ROM Info"
   field_title: "Title:"

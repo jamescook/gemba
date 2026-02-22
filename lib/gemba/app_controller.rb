@@ -100,10 +100,11 @@ module Gemba
       @rom_overrides  = RomOverrides.new
       @game_picker = GamePickerFrame.new(app: @app, rom_library: @rom_library,
                                          boxart_fetcher: @boxart_fetcher, rom_overrides: @rom_overrides)
-      @frame_stack.push(:picker, @game_picker)
-      @window.set_geometry(GamePickerFrame::PICKER_DEFAULT_W, GamePickerFrame::PICKER_DEFAULT_H)
-      @window.set_minsize(GamePickerFrame::PICKER_MIN_W, GamePickerFrame::PICKER_MIN_H)
-      apply_frame_aspect(@game_picker)
+      @list_picker = ListPickerFrame.new(app: @app, rom_library: @rom_library,
+                                         rom_overrides: @rom_overrides)
+      @active_picker = @config.picker_view == 'list' ? @list_picker : @game_picker
+      @frame_stack.push(:picker, @active_picker)
+      apply_picker_window(@active_picker)
 
       @help_auto_paused = false
       @cursor_hidden    = false
@@ -188,6 +189,7 @@ module Gemba
       bus.on(:open_config_dir)     { open_config_dir }
       bus.on(:open_recordings_dir) { open_recordings_dir }
       bus.on(:open_replay_player)  { show_replay_player }
+      bus.on(:picker_view_changed) { |view:| switch_picker_view(view) }
 
       # Frame → controller events
       bus.on(:pause_changed) do |paused|
@@ -421,9 +423,7 @@ module Gemba
       @emulator_frame = nil
       @rom_path = nil
       @window.set_title("gemba")
-      @window.set_geometry(GamePickerFrame::PICKER_DEFAULT_W, GamePickerFrame::PICKER_DEFAULT_H)
-      @window.set_minsize(GamePickerFrame::PICKER_MIN_W, GamePickerFrame::PICKER_MIN_H)
-      apply_frame_aspect(@game_picker)
+      apply_picker_window(@active_picker)
       @app.command(@view_menu, :entryconfigure, 0, state: :disabled)
       set_event_loop_speed(:idle)
     end
@@ -1005,11 +1005,30 @@ module Gemba
       Gemba.open_directory(Config.default_logs_dir)
     end
 
+    def apply_picker_window(picker)
+      w, h     = picker.default_geometry
+      mn_w, mn_h = picker.min_geometry
+      @window.set_geometry(w, h)
+      @window.set_minsize(mn_w, mn_h)
+      apply_frame_aspect(picker)
+    end
+
+    def switch_picker_view(view)
+      return if @config.picker_view == view
+      new_picker = view == 'list' ? @list_picker : @game_picker
+      @frame_stack.replace_current(new_picker)
+      @active_picker = new_picker
+      @config.picker_view = view
+      save_config
+      apply_picker_window(new_picker)
+    end
+
     def cleanup
       return if @cleaned_up
       @cleaned_up = true
       @emulator_frame&.cleanup
       @game_picker&.cleanup
+      @list_picker&.cleanup
       RomResolver.cleanup_temp
       @achievement_backend&.shutdown
     end

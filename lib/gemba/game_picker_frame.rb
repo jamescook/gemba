@@ -30,6 +30,9 @@ module Gemba
     PICKER_MIN_W     = 576
     PICKER_MIN_H     = 768
 
+    def default_geometry = [PICKER_DEFAULT_W, PICKER_DEFAULT_H]
+    def min_geometry     = [PICKER_MIN_W,     PICKER_MIN_H]
+
     def initialize(app:, rom_library:, boxart_fetcher: nil, rom_overrides: nil)
       @app      = app
       @rom_library = rom_library
@@ -43,11 +46,11 @@ module Gemba
     def show
       build_ui unless @built
       refresh
-      @app.command(:pack, @grid, fill: :both, expand: 1)
+      @app.command(:pack, @outer, fill: :both, expand: 1)
     end
 
     def hide
-      @app.command(:pack, :forget, @grid) rescue nil
+      @app.command(:pack, :forget, @outer) rescue nil
     end
 
     def cleanup
@@ -69,8 +72,12 @@ module Gemba
     private
 
     def build_ui
-      @grid = '.game_picker'
-      @app.command('ttk::frame', @grid, padding: 16)
+      @outer = '.game_picker'
+      @app.command('ttk::frame', @outer, padding: 0)
+
+      @cards_frame = "#{@outer}.cards"
+      @app.command('ttk::frame', @cards_frame, padding: 16)
+      @app.command(:pack, @cards_frame, fill: :both, expand: 1)
 
       # Capture the system window background color so hollow cards blend in
       # rather than appearing as stark black rectangles.
@@ -84,8 +91,8 @@ module Gemba
         row = i / COLS
         col = i % COLS
 
-        cell = "#{@grid}.card#{i}"
-        @app.command(:frame, cell, relief: :groove, borderwidth: 2,
+        cell = "#{@cards_frame}.card#{i}"
+        @app.command(:frame, cell, relief: :groove, borderwidth: 1,
           padx: 4, pady: 4, bg: '#2a2a2a')
         @app.command(:grid, cell, row: row, column: col, padx: 6, pady: 6, sticky: :nsew)
 
@@ -114,10 +121,44 @@ module Gemba
       end
 
       # Make columns and rows expand evenly
-      COLS.times { |c| @app.command(:grid, :columnconfigure, @grid, c, weight: 1) }
-      ROWS.times { |r| @app.command(:grid, :rowconfigure, @grid, r, weight: 1) }
+      COLS.times { |c| @app.command(:grid, :columnconfigure, @cards_frame, c, weight: 1) }
+      ROWS.times { |r| @app.command(:grid, :rowconfigure, @cards_frame, r, weight: 1) }
+
+      build_toolbar
 
       @built = true
+    end
+
+    def build_toolbar
+      sep = "#{@outer}.sep"
+      @app.command('ttk::separator', sep, orient: :horizontal)
+      @app.command(:pack, sep, fill: :x)
+
+      toolbar = "#{@outer}.toolbar"
+      @app.command('ttk::frame', toolbar, padding: [4, 2])
+      @app.command(:pack, toolbar, fill: :x)
+
+      gear_btn = "#{toolbar}.gear"
+      gear_menu = "#{toolbar}.gearmenu"
+      @app.command('ttk::button', gear_btn, text: "\u2699", width: 1,
+        command: proc { post_view_menu(gear_menu, gear_btn) })
+      @app.command(:pack, gear_btn, side: :right)
+    end
+
+    def post_view_menu(menu, btn)
+      @app.command(:menu, menu, tearoff: 0) unless @app.tcl_eval("winfo exists #{menu}") == '1'
+      @app.command(menu, :delete, 0, :end)
+      current = Gemba.user_config.picker_view
+      @app.command(menu, :add, :command,
+        label: "#{current == 'grid' ? "\u2713 " : '  '}#{translate('picker.toolbar.boxart_view')}",
+        command: proc { emit(:picker_view_changed, view: 'grid') })
+      @app.command(menu, :add, :command,
+        label: "#{current == 'list' ? "\u2713 " : '  '}#{translate('picker.toolbar.list_view')}",
+        command: proc { emit(:picker_view_changed, view: 'list') })
+      x = @app.tcl_eval("winfo rootx #{btn}").to_i
+      y = @app.tcl_eval("winfo rooty #{btn}").to_i
+      h = @app.tcl_eval("winfo height #{btn}").to_i
+      @app.tcl_eval("tk_popup #{menu} #{x} #{y + h}")
     end
 
     def refresh

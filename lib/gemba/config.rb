@@ -59,6 +59,7 @@ module Gemba
       'ra_unofficial'        => false,
       'ra_rich_presence'          => false,
       'ra_screenshot_on_unlock'   => true,
+      'picker_view'               => 'grid',
     }.freeze
 
     # Settings that can be overridden per ROM. Maps config key → locale key.
@@ -504,6 +505,15 @@ module Gemba
 
     def ra_screenshot_on_unlock=(val)
       global['ra_screenshot_on_unlock'] = val ? true : false
+    end
+
+    # @return [String] preferred picker view ('grid' or 'list')
+    def picker_view
+      global['picker_view'] || 'grid'
+    end
+
+    def picker_view=(val)
+      global['picker_view'] = val.to_s
     end
 
     # @return [String] directory for .grec recording files

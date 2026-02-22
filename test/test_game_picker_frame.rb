@@ -22,13 +22,13 @@ class TestGamePickerFrame < Minitest::Test
       picker.show
 
       16.times do |i|
-        title = app.command(".game_picker.card#{i}.title", :cget, '-text')
+        title = app.command(".game_picker.cards.card#{i}.title", :cget, '-text')
         assert_equal '', title, "Card #{i} title should be empty"
 
-        img = app.command(".game_picker.card#{i}.img", :cget, '-image')
+        img = app.command(".game_picker.cards.card#{i}.img", :cget, '-image')
         assert_equal 'boxart_placeholder', img, "Card #{i} should show placeholder image"
 
-        bg = app.command(".game_picker.card#{i}", :cget, '-bg')
+        bg = app.command(".game_picker.cards.card#{i}", :cget, '-bg')
         refute_equal '#2a2a2a', bg, "Card #{i} should not have populated background"
       end
 
@@ -47,8 +47,8 @@ class TestGamePickerFrame < Minitest::Test
       picker = Gemba::GamePickerFrame.new(app: app, rom_library: lib)
       picker.show
 
-      assert_equal 'Pokemon - Ruby Version (USA, Europe)', app.command('.game_picker.card0.title', :cget, '-text')
-      assert_equal 'GBA',          app.command('.game_picker.card0.plat',  :cget, '-text')
+      assert_equal 'Pokemon - Ruby Version (USA, Europe)', app.command('.game_picker.cards.card0.title', :cget, '-text')
+      assert_equal 'GBA',          app.command('.game_picker.cards.card0.plat',  :cget, '-text')
 
       picker.cleanup
       app.command(:destroy, '.game_picker') rescue nil
@@ -64,7 +64,7 @@ class TestGamePickerFrame < Minitest::Test
       picker = Gemba::GamePickerFrame.new(app: app, rom_library: lib)
       picker.show
 
-      assert_equal 'GBC', app.command('.game_picker.card0.plat', :cget, '-text')
+      assert_equal 'GBC', app.command('.game_picker.cards.card0.plat', :cget, '-text')
 
       picker.cleanup
       app.command(:destroy, '.game_picker') rescue nil
@@ -80,7 +80,7 @@ class TestGamePickerFrame < Minitest::Test
       picker = Gemba::GamePickerFrame.new(app: app, rom_library: lib)
       picker.show
 
-      assert_equal 'MY-ROM', app.command('.game_picker.card0.title', :cget, '-text')
+      assert_equal 'MY-ROM', app.command('.game_picker.cards.card0.title', :cget, '-text')
 
       picker.cleanup
       app.command(:destroy, '.game_picker') rescue nil
@@ -96,8 +96,8 @@ class TestGamePickerFrame < Minitest::Test
       picker = Gemba::GamePickerFrame.new(app: app, rom_library: lib)
       picker.show
 
-      pop_bg    = app.command('.game_picker.card0', :cget, '-bg')
-      hollow_bg = app.command('.game_picker.card1', :cget, '-bg')
+      pop_bg    = app.command('.game_picker.cards.card0', :cget, '-bg')
+      hollow_bg = app.command('.game_picker.cards.card1', :cget, '-bg')
 
       assert_equal '#2a2a2a', pop_bg, "Populated card background"
       refute_equal pop_bg, hollow_bg, "Hollow card should differ from populated"
@@ -119,11 +119,11 @@ class TestGamePickerFrame < Minitest::Test
       picker = Gemba::GamePickerFrame.new(app: app, rom_library: lib)
       picker.show
 
-      assert_equal 'Alpha', app.command('.game_picker.card0.title', :cget, '-text')
-      assert_equal 'GBA',   app.command('.game_picker.card0.plat',  :cget, '-text')
-      assert_equal 'Beta',  app.command('.game_picker.card1.title', :cget, '-text')
-      assert_equal 'GBC',   app.command('.game_picker.card1.plat',  :cget, '-text')
-      assert_equal '',      app.command('.game_picker.card2.title', :cget, '-text')
+      assert_equal 'Alpha', app.command('.game_picker.cards.card0.title', :cget, '-text')
+      assert_equal 'GBA',   app.command('.game_picker.cards.card0.plat',  :cget, '-text')
+      assert_equal 'Beta',  app.command('.game_picker.cards.card1.title', :cget, '-text')
+      assert_equal 'GBC',   app.command('.game_picker.cards.card1.plat',  :cget, '-text')
+      assert_equal '',      app.command('.game_picker.cards.card2.title', :cget, '-text')
 
       picker.cleanup
       app.command(:destroy, '.game_picker') rescue nil
@@ -154,7 +154,7 @@ class TestGamePickerFrame < Minitest::Test
       picker = Gemba::GamePickerFrame.new(app: app, rom_library: lib, boxart_fetcher: fetcher)
       picker.show
 
-      img_name = app.command('.game_picker.card0.img', :cget, '-image')
+      img_name = app.command('.game_picker.cards.card0.img', :cget, '-image')
       assert_equal "boxart_#{game_code}", img_name,
         "Card should display cached boxart image, not the placeholder"
 
@@ -175,7 +175,7 @@ class TestGamePickerFrame < Minitest::Test
       picker = Gemba::GamePickerFrame.new(app: app, rom_library: lib)
       picker.show
 
-      img_name = app.command('.game_picker.card0.img', :cget, '-image')
+      img_name = app.command('.game_picker.cards.card0.img', :cget, '-image')
       assert_equal 'boxart_placeholder', img_name
 
       picker.cleanup
@@ -206,12 +206,12 @@ class TestGamePickerFrame < Minitest::Test
         # Suppress tk_popup so the right-click binding configures menu entries
         # without posting the menu (no platform grab → no blocking app.update).
         override_tk_popup do
-          app.tcl_eval("event generate .game_picker.card0 <Button-3> -x 10 -y 10")
+          app.tcl_eval("event generate .game_picker.cards.card0 <Button-3> -x 10 -y 10")
           app.update
         end
 
         # index 1 = Quick Load
-        state = app.tcl_eval(".game_picker.card0.ctx entrycget 1 -state")
+        state = app.tcl_eval(".game_picker.cards.card0.ctx entrycget 1 -state")
         assert_equal 'disabled', state
 
         picker.cleanup
@@ -246,12 +246,12 @@ class TestGamePickerFrame < Minitest::Test
         app.update
 
         override_tk_popup do
-          app.tcl_eval("event generate .game_picker.card0 <Button-3> -x 10 -y 10")
+          app.tcl_eval("event generate .game_picker.cards.card0 <Button-3> -x 10 -y 10")
           app.update
         end
 
         # index 1 = Quick Load
-        state = app.tcl_eval(".game_picker.card0.ctx entrycget 1 -state")
+        state = app.tcl_eval(".game_picker.cards.card0.ctx entrycget 1 -state")
         assert_equal 'normal', state
 
         picker.cleanup
@@ -290,13 +290,13 @@ class TestGamePickerFrame < Minitest::Test
         app.update
 
         override_tk_popup do
-          app.tcl_eval("event generate .game_picker.card0 <Button-3> -x 10 -y 10")
+          app.tcl_eval("event generate .game_picker.cards.card0 <Button-3> -x 10 -y 10")
           app.update
         end
 
         # Menu was built but not shown — invoke the Quick Load entry directly.
         # index 1 = Quick Load
-        app.tcl_eval(".game_picker.card0.ctx invoke 1")
+        app.tcl_eval(".game_picker.cards.card0.ctx invoke 1")
         app.update
 
         assert_equal rom_path, received[:path]
