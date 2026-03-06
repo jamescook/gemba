@@ -70,7 +70,7 @@ class TestRomPatcher < Minitest::Test
     payload + [src_crc, tgt_crc, patch_crc].pack("VVV")
   end
 
-  # Encode a UPS varint (simple bitshift encoding).
+  # Encode a UPS varint (additive-shift encoding with continuation bias).
   def ups_varint(n)
     out = "".b
     loop do
@@ -81,6 +81,7 @@ class TestRomPatcher < Minitest::Test
         break
       end
       out << x.chr
+      n -= 1
     end
     out
   end

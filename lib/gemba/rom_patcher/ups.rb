@@ -106,9 +106,10 @@ module Gemba
           byte = io.read(1)
           raise "Truncated UPS patch (varint read past end)" if byte.nil?
           b      = byte.getbyte(0)
-          value |= (b & 0x7f) << shift
+          value += (b & 0x7f) << shift
           break if (b & 0x80) != 0
           shift += 7
+          value += 1 << shift
         end
         value
       end
