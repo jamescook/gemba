@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- UPS patcher varint decoding missing continuation bias, causing "target CRC32 mismatch" on patches with large ROMs (e.g. 16 MB+)
+
 ## [0.2.0] — 2026-02-21
 
 ### Added
