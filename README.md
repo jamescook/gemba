@@ -15,6 +15,10 @@ It lives inside this monorepo so a change to Tryst/tryst-sdl that gemba
 needed can land in the same commit as the code that needed it, rather
 than across two repos with a version bump in between.
 
+## Screenshots
+
+![goodboy](assets/goodboy.png)
+
 ## Building
 
 ```
