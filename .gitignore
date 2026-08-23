@@ -1,0 +1,25 @@
+# The root .gitignore anchors its Crystal entries to the repo root
+# (/lib/, /.shards/, /shard.lock), so this shard needs its own copies -
+# same convention every other shard's own .gitignore already uses.
+/lib/
+/.shards/
+/shard.lock
+/docs/
+/bin/
+*.dwarf
+
+# mgba, built fresh by scripts/docker-test.sh/Dockerfile (git clone +
+# cmake) - a full nested git checkout plus its own build tree, ~100MB,
+# entirely regenerable. A nested .git dir here must never be added to
+# this repo's own history.
+/vendor/
+
+# Compiled object files from native/ (built by the Dockerfile's own cc
+# -c step) - the .c source stays tracked, its .o doesn't.
+native/*.o
+
+# Stray top-level binaries from a bare `crystal build src/gemba_app.cr`
+# (no -o) run from this directory - see the root CLAUDE.md's own note
+# on why that command shape is avoided, and .githooks/pre-commit's
+# content-based (not extension-based) executable check for the backstop.
+/gemba_app

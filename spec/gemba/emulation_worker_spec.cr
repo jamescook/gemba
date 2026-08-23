@@ -1,0 +1,228 @@
+require "../spec_helper"
+require "file_utils"
+
+private FILL_ROM        = File.join(__DIR__, "..", "fixtures", "fill.gba")
+private SPACE_BLAST_ROM = File.join(__DIR__, "..", "fixtures", "space_blast.gba")
+
+private def with_tempdir(&)
+  dir = File.tempname("emulation_worker_spec")
+  Dir.mkdir(dir)
+  yield dir
+ensure
+  FileUtils.rm_rf(dir) if dir
+end
+
+describe Gemba::EmulationWorker do
+  it "delivers frame packets at native resolution and stops cleanly" do
+    app = Tryst::App.new(title: "emulation_worker_spec_1")
+    worker = Gemba::EmulationWorker.new(app, FILL_ROM)
+
+    frames = [] of Gemba::EmulationWorker::FramePacket
+    worker.on_frame { |packet| frames << packet }
+
+    app.interp.wait_until(5.seconds) { frames.size >= 5 }
+    frames.size.should be >= 5
+    frames.first[:video].size.should eq 240 * 160
+
+    worker.stop
+    app.interp.wait_until(5.seconds) { worker.done? }
+    worker.done?.should be_true
+    app.destroy
+  end
+
+  it "#pause halts delivery and #resume continues it" do
+    app = Tryst::App.new(title: "emulation_worker_spec_2")
+    worker = Gemba::EmulationWorker.new(app, FILL_ROM)
+
+    count = 0
+    worker.on_frame { count += 1 }
+
+    app.interp.wait_until(5.seconds) { count >= 3 }
+    worker.pause
+    app.interp.wait_until(200.milliseconds) { false }
+    paused_at = count
+    10.times { app.update; sleep 20.milliseconds }
+    (count - paused_at).should be <= 2
+
+    worker.resume
+    app.interp.wait_until(5.seconds) { count > paused_at + 5 }
+    (count > paused_at).should be_true
+
+    worker.stop
+    app.interp.wait_until(5.seconds) { worker.done? }
+    app.destroy
+  end
+
+  # Turbo runs several emulated frames per real-time frame slot, but
+  # mGBA generates audio at its own fixed rate regardless of how fast
+  # it's stepped - queuing every turbo frame's audio would push several
+  # times too much PCM into a fixed-rate stream every real second (an
+  # actual desync, not just faster playback). Video still needs to be
+  # full-rate for turbo to look right on screen.
+  it "#turbo= keeps only a fraction of frames' audio, but every frame's video" do
+    app = Tryst::App.new(title: "emulation_worker_spec_4")
+    worker = Gemba::EmulationWorker.new(app, SPACE_BLAST_ROM)
+
+    frames = [] of Gemba::EmulationWorker::FramePacket
+    worker.on_frame { |packet| frames << packet }
+    app.interp.wait_until(5.seconds) { frames.size >= 3 }
+
+    worker.turbo = true
+    frames.clear
+    app.interp.wait_until(5.seconds) { frames.size >= 20 }
+    worker.turbo = false
+
+    frames.each(&.[:video].size.should(eq(240 * 160)))
+
+    kept = frames.count { |packet| !packet[:audio].empty? }
+    dropped = frames.count(&.[:audio].empty?)
+    kept.should be > 0
+    dropped.should be > 0
+    (kept.to_f / frames.size).should be < 0.5
+
+    worker.stop
+    app.interp.wait_until(5.seconds) { worker.done? }
+    app.destroy
+  end
+
+  # Save/load happens on the worker thread (Core and SaveStateManager
+  # live there exclusively); this exercises the cross-thread round trip.
+  # state_dir_override isolates the test.
+  it "#quick_save/#quick_load round-trip through the worker thread" do
+    with_tempdir do |tmp|
+      app = Tryst::App.new(title: "emulation_worker_spec_5")
+      worker = Gemba::EmulationWorker.new(app, SPACE_BLAST_ROM, state_dir_override: tmp)
+
+      messages = [] of String
+      worker.on_message { |text| messages << text }
+      frames = 0
+      worker.on_frame { frames += 1 }
+
+      app.interp.wait_until(5.seconds) { frames >= 3 }
+      worker.quick_save
+      app.interp.wait_until(5.seconds) { messages.any?(&.starts_with?("save_result:")) }
+      messages.find(&.starts_with?("save_result:")).should eq "save_result:true:1:saved to slot 1"
+
+      worker.quick_load
+      app.interp.wait_until(5.seconds) { messages.any?(&.starts_with?("load_result:")) }
+      messages.find(&.starts_with?("load_result:")).should eq "load_result:true:1:loaded slot 1"
+
+      worker.stop
+      app.interp.wait_until(5.seconds) { worker.done? }
+      app.destroy
+    end
+  end
+
+  it "quick_save_slot passed to the constructor reaches SaveStateManager" do
+    with_tempdir do |tmp|
+      app = Tryst::App.new(title: "emulation_worker_spec_6")
+      worker = Gemba::EmulationWorker.new(app, SPACE_BLAST_ROM, state_dir_override: tmp, quick_save_slot: 3)
+
+      messages = [] of String
+      worker.on_message { |text| messages << text }
+      frames = 0
+      worker.on_frame { frames += 1 }
+
+      app.interp.wait_until(5.seconds) { frames >= 3 }
+      worker.quick_save
+      app.interp.wait_until(5.seconds) { messages.any?(&.starts_with?("save_result:")) }
+      messages.find(&.starts_with?("save_result:")).should eq "save_result:true:3:saved to slot 3"
+
+      worker.stop
+      app.interp.wait_until(5.seconds) { worker.done? }
+      app.destroy
+    end
+  end
+
+  it "#save_slot/#load_slot round-trip an explicit slot, independent of quick_save_slot" do
+    with_tempdir do |tmp|
+      app = Tryst::App.new(title: "emulation_worker_spec_7")
+      worker = Gemba::EmulationWorker.new(app, SPACE_BLAST_ROM, state_dir_override: tmp)
+
+      messages = [] of String
+      worker.on_message { |text| messages << text }
+      frames = 0
+      worker.on_frame { frames += 1 }
+
+      app.interp.wait_until(5.seconds) { frames >= 3 }
+      worker.save_slot(7)
+      app.interp.wait_until(5.seconds) { messages.any?(&.starts_with?("save_result:")) }
+      messages.find(&.starts_with?("save_result:")).should eq "save_result:true:7:saved to slot 7"
+
+      worker.load_slot(7)
+      app.interp.wait_until(5.seconds) { messages.any?(&.starts_with?("load_result:")) }
+      messages.find(&.starts_with?("load_result:")).should eq "load_result:true:7:loaded slot 7"
+
+      worker.stop
+      app.interp.wait_until(5.seconds) { worker.done? }
+      app.destroy
+    end
+  end
+
+  # The correctness property FrameRing exists to guarantee: a packet the
+  # main thread is still holding must never have its buffer contents
+  # change out from under it, even once the worker has produced far more
+  # frames than the ring has slots for. Deliberately never calls
+  # #release_frame for the held packet - the scenario a stalled/slow UI
+  # thread would produce - so this only passes if the ring genuinely
+  # refuses to reuse a slot that's still owned, falling back to a fresh
+  # allocation for later frames instead of tearing this one.
+  it "a delivered packet's video buffer is never mutated by a later frame while still held" do
+    app = Tryst::App.new(title: "emulation_worker_spec_ring_tearing")
+    worker = Gemba::EmulationWorker.new(app, SPACE_BLAST_ROM)
+
+    frames = [] of Gemba::EmulationWorker::FramePacket
+    worker.on_frame { |packet| frames << packet }
+    app.interp.wait_until(5.seconds) { frames.size >= 3 }
+
+    held = frames.first
+    snapshot = held[:video].dup
+
+    # Comfortably more than EmulationWorker::RING_SIZE, to force real
+    # slot-reuse pressure while `held` is still outstanding.
+    app.interp.wait_until(5.seconds) { frames.size >= 40 }
+
+    held[:video].should eq snapshot
+
+    worker.stop
+    app.interp.wait_until(5.seconds) { worker.done? }
+    app.destroy
+  end
+
+  # The intended steady-state path: the consumer releases each frame
+  # right after using it (mirroring EmulatorFrame#on_frame), so the ring
+  # rotates indefinitely rather than permanently falling back to
+  # allocation once RING_SIZE frames have been produced.
+  it "releasing each frame lets delivery continue well past the ring's own size" do
+    app = Tryst::App.new(title: "emulation_worker_spec_ring_rotation")
+    worker = Gemba::EmulationWorker.new(app, SPACE_BLAST_ROM)
+
+    delivered = 0
+    worker.on_frame do |packet|
+      delivered += 1
+      packet[:video].size.should eq 240 * 160
+      worker.release_frame(packet[:frame_num])
+    end
+
+    app.interp.wait_until(5.seconds) { delivered >= 60 }
+    delivered.should be >= 60
+
+    worker.stop
+    app.interp.wait_until(5.seconds) { worker.done? }
+    app.destroy
+  end
+
+  it "reports a bad ROM path through on_error rather than crashing the app" do
+    app = Tryst::App.new(title: "emulation_worker_spec_3")
+    worker = Gemba::EmulationWorker.new(app, "/nonexistent/path.gba")
+
+    error = nil
+    worker.on_error { |text| error = text }
+
+    app.interp.wait_until(5.seconds) { !error.nil? }
+    error.should_not be_nil
+    error.to_s.should contain "ArgumentError"
+
+    app.destroy
+  end
+end

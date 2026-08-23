@@ -1,0 +1,19 @@
+require "tryst"
+require "tryst-sdl"
+require "./gemba/probe"
+require "./gemba/frame_painter"
+require "./gemba/paths"
+require "./gemba/save_state_manager"
+require "./gemba/emulation_worker"
+require "./gemba/video_output"
+require "./gemba/audio_output"
+require "./gemba/key_source"
+require "./gemba/virtual_keyboard"
+require "./gemba/keyboard_map"
+require "./gemba/gamepad_map"
+require "./gemba/hotkey_map"
+require "./gemba/main_window"
+
+module Gemba
+  VERSION = "0.1.0"
+end

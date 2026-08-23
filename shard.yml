@@ -1,0 +1,50 @@
+name: gemba
+version: 0.1.0
+
+authors:
+  - James Cook
+
+crystal: ">= 1.21.0"
+
+license: MIT
+
+description: |
+  GBA emulator frontend for tryst - a Crystal/Tryst port of the ruby
+  gemba app (teek + libmgba). Lives inside this monorepo, mainly so it
+  can exercise Tryst under real application conditions - see this
+  shard's own README.
+
+# Same depth as every other sibling shard - a transitive path:
+# dependency has to match the literal relative-path string its
+# declaring shard used (see tryst-value-slider's own shard.yml for the
+# full `shards install` reasoning).
+dependencies:
+  tryst:
+    path: ../
+  tryst-sdl:
+    path: ../tryst-sdl
+  tryst-switch:
+    path: ../tryst-switch
+  tryst-segmented:
+    path: ../tryst-segmented
+  tryst-value-slider:
+    path: ../tryst-value-slider
+
+# Informational (shards does not install these). tryst-sdl's own
+# shard.yml lists the SDL3 package names this shard also needs (it
+# renders through tryst-sdl). libmgba is a native dependency built
+# separately (see the Dockerfile), not something shards installs either.
+libraries:
+  libSDL3: ">= 3.2.0"
+  libSDL3_mixer: ">= 3.2.0"
+  libSDL3_image: ">= 3.2.0"
+  libSDL3_ttf: ">= 3.2.0"
+
+# Gemba is the one shard in this monorepo meant to be an actual runnable
+# app, not a library other shards depend on - `shards build` (or `crystal
+# build src/gemba_app.cr -o bin/gemba`) produces the real thing, unlike
+# every sibling widget shard's examples/ (typechecked demos, never run
+# via a shard target).
+targets:
+  gemba:
+    main: src/gemba_app.cr
