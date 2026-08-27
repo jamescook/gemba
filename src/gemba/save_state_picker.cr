@@ -80,7 +80,7 @@ module Gemba
       # Double-click, not single - a single click (or just closing the
       # window afterward) must never trigger a save/load.
       {cell, thumb, info, time_lbl}.each do |widget|
-        widget.bind(:double_click) { |_v, _s| on_slot_click(slot) }
+        @app.bind(widget, :double_click) { |_v, _s| on_slot_click(slot) }
       end
 
       Cell.new(cell, thumb, info, time_lbl)
