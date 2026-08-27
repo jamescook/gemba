@@ -32,6 +32,12 @@ describe Gemba::Core do
     core.destroy
   end
 
+  it "defaults the RTC source to wall-clock time" do
+    core = Gemba::Core.new(FILL_ROM)
+    core.rtc_override.should eq LibMgba::MRTCGenericType::WallclockOffset
+    core.destroy
+  end
+
   it "#run_frame advances emulation and #video_buffer reflects it" do
     core = Gemba::Core.new(FILL_ROM)
     core.run_frame

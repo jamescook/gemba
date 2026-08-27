@@ -14,9 +14,10 @@
 # build (see gemba/vendor/) rather than assumed. dirs/inputMap/config/
 # opts/rtc are embedded BY VALUE before the function pointers begin;
 # get any of their sizes wrong and every function pointer after them
-# silently reads from the wrong offset. Their CONTENTS are never read
-# here, only their SIZE matters (hence UInt8[N] rather than modeling
-# their own internals).
+# silently reads from the wrong offset. dirs/inputMap/config/opts are
+# opaque (UInt8[N] placeholders) since only their SIZE matters here;
+# rtc is modeled for real (MRTCGenericSource) since Core#initialize
+# sets its override/value fields directly.
 #
 # core.h also declares supportsFeature/setSync/loadConfig/
 # reloadConfigOption/setVideoGLTex/getPixels/putPixels/
@@ -49,6 +50,41 @@ lib LibMgba
     CRC32 = 0
   end
 
+  # mgba/core/interface.h's enum mRTCGenericType - RTC_CUSTOM_START
+  # (0x1000, the start of a caller-supplied custom range) isn't modeled,
+  # since nothing here ever sets override to a custom value.
+  enum MRTCGenericType : Int32
+    NoOverride      = 0
+    Fixed
+    FakeEpoch
+    WallclockOffset
+  end
+
+  # mgba/core/interface.h's struct mRTCSource - the 4 function pointers
+  # mRTCGenericSourceInit installs, never called through directly by
+  # this shard, so each is a plain Void* placeholder (same convention as
+  # MCore's own unused fields) purely to keep the struct's size/layout
+  # (and therefore mRTCGenericSource's, embedded by value in MCore)
+  # correct.
+  struct MRTCSource
+    sample : Void*
+    unix_time : Void*
+    serialize : Void*
+    deserialize : Void*
+  end
+
+  # mgba/core/interface.h's struct mRTCGenericSource, embedded by value
+  # in MCore's own rtc field. Verified against a real sizeof/offsetof
+  # probe (64 bytes total; d=0, p=32, override=40, value=48, custom=56)
+  # rather than assumed.
+  struct MRTCGenericSource
+    d : MRTCSource
+    p : Void*
+    override : MRTCGenericType
+    value : Int64
+    custom : Void*
+  end
+
   struct MCore
     cpu : Void*
     board : Void*
@@ -74,7 +110,7 @@ lib LibMgba
     input_map : UInt8[24]
     config : UInt8[440]
     opts : UInt8[120]
-    rtc : UInt8[64]
+    rtc : MRTCGenericSource
 
     init : Void* -> Bool
     deinit : Void* -> Void

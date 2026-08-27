@@ -59,6 +59,10 @@ module Gemba
       vp = core.as(Void*)
       raise "mCore init failed" unless core.value.init.call(vp)
 
+      # GBACoreInit defaults rtc.override to RTC_NO_OVERRIDE, breaking
+      # RTC carts. Must set to WallclockOffset.
+      core.value.rtc.override = LibMgba::MRTCGenericType::WallclockOffset
+
       LibMgba.mCoreInitConfig(core, Pointer(LibC::Char).null)
 
       w = uninitialized UInt32
@@ -176,6 +180,11 @@ module Gemba
     def rom_size : UInt64
       raise_if_destroyed!
       @core.value.rom_size.call(cp)
+    end
+
+    def rtc_override : LibMgba::MRTCGenericType
+      raise_if_destroyed!
+      @core.value.rtc.override
     end
 
     def bus_read8(address : UInt32) : UInt8
