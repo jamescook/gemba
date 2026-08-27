@@ -65,9 +65,9 @@ module Gemba
       @app.command(:grid, :columnconfigure, @path, 0, weight: 1)
       @app.command(:grid, :rowconfigure, @path, 0, weight: 1)
 
-      @tree.bind("<Return>") { |_v, _s| load_selected }
-      @tree.bind("<Double-Button-1>") { |_v, _s| load_selected }
-      @tree.bind("<Button-3>", "%x", "%y") { |values, _s| right_click(values[0], values[1]) }
+      @tree.bind(:return) { |_v, _s| load_selected }
+      @tree.bind(:double_click) { |_v, _s| load_selected }
+      @tree.bind(:right_click, subs: ["%x", "%y"]) { |values, _s| right_click(values[0], values[1]) }
 
       refresh
     end

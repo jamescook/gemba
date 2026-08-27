@@ -144,8 +144,8 @@ module Gemba
       card.frame.command(:configure, relief: :groove, bg: CARD_BG)
 
       {card.frame, card.image, card.title, card.platform}.each do |widget|
-        widget.bind("<Button-1>") { |_v, _s| @on_select.call(rom_info.path) }
-        widget.bind("<Button-3>") { |_v, _s| popup_rom_menu("#{card.frame.path}.ctx", rom_info, @on_select, @on_quick_load) }
+        widget.bind(:click) { |_v, _s| @on_select.call(rom_info.path) }
+        widget.bind(:right_click) { |_v, _s| popup_rom_menu("#{card.frame.path}.ctx", rom_info, @on_select, @on_quick_load) }
       end
     end
 
@@ -194,8 +194,8 @@ module Gemba
       card.frame.command(:configure, relief: :ridge, bg: CARD_BG)
 
       {card.frame, card.image, card.title, card.platform}.each do |widget|
-        widget.unbind("<Button-1>")
-        widget.unbind("<Button-3>")
+        widget.unbind(:click)
+        widget.unbind(:right_click)
       end
     end
 
