@@ -1,20 +1,30 @@
 #!/bin/sh
-# Block commit messages that embed a bead/tracker id (e.g. ctk-w16.5).
+# Block commit messages that embed a bead/tracker id (e.g. gemba-w16.5) or a
+# Co-Authored-By trailer. This repo sets core.hooksPath to .githooks, which
+# means the global ~/.git-hooks/commit-msg never runs here - this hook has
+# to do both jobs itself.
 #
 # Beads is internal to the workflow; git history is for humans, and a reader of the
 # log has no access to the tracker — the id is noise, and it leaks the internal
 # process into permanent history. Describe the change instead.
 #
-# Matches the lowercase "ctk-<id>" form the tracker uses (case-sensitive, so prose
-# like "CTK-based" is fine), including a dotted sub-task suffix (ctk-w16.5). Comment
-# lines are ignored. Bypass a genuine false positive with:  git commit --no-verify
+# Matches the lowercase "gemba-<id>" form this repo's own tracker uses
+# (case-sensitive, so ordinary prose isn't flagged), including a dotted
+# sub-task suffix (gemba-w16.5). Comment lines are ignored. Bypass a
+# genuine false positive with: git commit --no-verify
 
 msg_file="$1"
+
+if grep -qi '^co-authored-by:' "$msg_file"; then
+  echo "commit-msg: message contains a 'Co-Authored-By' trailer -- not allowed." >&2
+  echo "Remove it and commit again." >&2
+  exit 1
+fi
 
 # The real message, minus git's comment/scissor lines.
 body=$(grep -vE '^[[:space:]]*#' "$msg_file")
 
-ids=$(printf '%s\n' "$body" | grep -Eo 'ctk-[a-z0-9]+(\.[a-z0-9]+)*' | sort -u | tr '\n' ' ')
+ids=$(printf '%s\n' "$body" | grep -Eo 'gemba-[a-z0-9]{3}(\.[0-9]+)*([^a-zA-Z]|$)' | sort -u | tr '\n' ' ')
 
 if [ -n "$ids" ]; then
   echo "commit-msg: this message names a bead id: ${ids}" >&2

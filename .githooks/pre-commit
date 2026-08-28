@@ -75,3 +75,22 @@ $f: $desc"
     exit 1
   fi
 fi
+
+# --- 4. Refuse bead/tracker ids anywhere in the tree -------------------
+# Beads is internal to the workflow; a bead id in a comment or doc means
+# nothing to a reader and leaks the internal process into permanent
+# history. Checks the STAGED content (git grep --cached), not the
+# working tree, so this can't be fooled by fixing a file without
+# re-staging it. Scans the whole repo (pathspec excludes only
+# .githooks/.claude/.beads, which legitimately need to talk about the
+# pattern itself or hold the tracker's own real data) rather than a
+# fixed list of source dirs.
+if [ -n "$staged" ]; then
+  hits=$(git grep -n --cached -E 'gemba-[a-z0-9]{3}(\.[0-9]+)*([^a-zA-Z]|$)' -- . ':!.githooks' ':!.claude' ':!.beads' 2>/dev/null || true)
+  if [ -n "$hits" ]; then
+    echo "pre-commit: refusing to commit bead/tracker id(s):" >&2
+    printf '%s\n' "$hits" >&2
+    echo "Describe the change/rationale itself instead of pointing at the bead." >&2
+    exit 1
+  fi
+fi
