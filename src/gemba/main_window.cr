@@ -56,6 +56,9 @@ module Gemba
     # #watch_menu_bar.
     MENU_POLL_MS = 100
 
+    # Matches ruby gemba's own FOCUS_POLL_MS - see #watch_app_focus.
+    FOCUS_POLL_MS = 200
+
     # Matches ruby gemba's own turbo_volume_pct default (25) - see
     # EmulatorFrame's own doc comment on why turbo needs this at all.
     TURBO_VOLUME = EmulatorFrame::TURBO_VOLUME
@@ -131,6 +134,10 @@ module Gemba
     @menu_bar : Tryst::UI::Handle?
     @menu_poll : Tryst::RepeatingTimer? = nil
 
+    # See #watch_app_focus.
+    @focus_probe : Proc(Bool)
+    @app_focus_seen = false
+
     # rom_library_path/config_path forward straight to RomLibrary/Config
     # - see their own doc comments. Production code omits both; a spec
     # passes isolated tempfile paths so a test ROM load never touches
@@ -162,6 +169,7 @@ module Gemba
                    rom_overrides_path : String? = nil, boxart_cache_dir : String? = nil,
                    @gamepad_polling : Bool = true,
                    ra_requester : Proc(Hash(String, String), {JSON::Any?, Bool})? = nil,
+                   focus_probe : Proc(Bool)? = nil,
                    logs_dir : String? = nil)
       @config = config_path ? Config.new(config_path) : Config.new
       Locale.load(@config.locale)
@@ -237,6 +245,10 @@ module Gemba
       @video = VideoOutput.new(@app, native_width: NATIVE_WIDTH, native_height: NATIVE_HEIGHT, scale: @config.scale)
       @audio = AudioOutput.new
       @keyboard_map.device = ViewportKeyboard.new(@video.viewport)
+
+      # Overridable because SDL's real focus flag can't be steered from
+      # a headless spec - the same seam ra_requester: is.
+      @focus_probe = focus_probe || -> { @video.viewport.input_focus? }
 
       # Viewport packs itself immediately on construction (see its own
       # #initialize) - hidden again right away since the game picker,
@@ -959,23 +971,34 @@ module Gemba
       update_pause_label
     end
 
-    # <Deactivate>/<Activate> are Tk's "this application stopped/started
-    # being the active one" - Cmd-Tab, clicking another app, switching
-    # macOS Spaces. Deliberately NOT <FocusOut>/<FocusIn>, which also
-    # fire when focus merely moves between widgets inside this window.
+    # Polls SDL for the window's keyboard focus, the same way ruby gemba
+    # does and for the same reason: Tk's <Deactivate>/<Activate> look
+    # like the right events but never arrive for a toplevel SDL has
+    # adopted (verified directly - <Activate> does, <Deactivate> does
+    # not), so a binding on them silently does nothing.
     #
-    # macOS and Windows only: X11 has no notion of an active
-    # application and Tk generates neither event there (bind(n)), so on
-    # Linux the setting is inert rather than wrong.
+    # Latched on the first focus actually OBSERVED rather than trusted
+    # from the start, because the flag isn't meaningful everywhere: on
+    # macOS SDL adopts the toplevel's own window and the flag tracks
+    # Cmd-Tab and Spaces exactly (verified: 1 -> 0 -> 1 across a real
+    # switch), but X11 hands SDL a child window of the frame, which
+    # never receives X input focus at all, so it reads false forever.
+    # Latching means the feature stays off there instead of pausing a
+    # game that nothing would ever unpause.
     #
     # The release is unconditional while the hold honours the setting -
     # switching the setting off while the app is in the background has
     # to still let the game come back.
     private def watch_app_focus : Nil
-      @app.bind(:root, :deactivate) do |_values, _signal|
-        hold_auto_pause(:focus_loss) if @config.pause_on_focus_loss?
+      probe = @focus_probe
+      @app.every(FOCUS_POLL_MS) do
+        if probe.call
+          @app_focus_seen = true
+          release_auto_pause(:focus_loss)
+        elsif @app_focus_seen && @config.pause_on_focus_loss?
+          hold_auto_pause(:focus_loss)
+        end
       end
-      @app.bind(:root, :activate) { |_values, _signal| release_auto_pause(:focus_loss) }
     end
 
     # A menu posted over a game running at max turbo makes the whole UI
