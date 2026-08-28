@@ -1,4 +1,5 @@
 require "tryst/ui"
+require "./button"
 
 module Gemba
   # One Tryst::UI::Signal per event, not a generic Symbol-keyed bus - a
@@ -14,6 +15,26 @@ module Gemba
     getter color_correction_changed = Tryst::UI::Signal(Bool).new
     getter frame_blending_changed = Tryst::UI::Signal(Bool).new
     getter aspect_ratio_changed = Tryst::UI::Signal(Bool).new
+
+    # Gamepad tab - gamepad_mapping_changed's input name arrives as a
+    # String (same as keyboard_mapping_changed's keysym) rather than the
+    # Symbol GamepadMap#set otherwise takes, so GamepadTab's own capture
+    # path stays uniform regardless of which device mode is active; see
+    # GamepadMap#set's String overload.
+    getter keyboard_mapping_changed = Tryst::UI::Signal(Button, String).new
+    getter gamepad_mapping_changed = Tryst::UI::Signal(Button, String).new
+    getter gamepad_dead_zone_changed = Tryst::UI::Signal(Int32).new
+    getter keyboard_reset = Tryst::UI::Signal().new
+    getter gamepad_reset = Tryst::UI::Signal().new
+
+    # true = keyboard mode, false = gamepad mode - which map Undo should
+    # discard in-progress rebinds for.
+    getter undo_input_mappings = Tryst::UI::Signal(Bool).new
+
+    # Fired when the tab's keyboard/gamepad combo changes, so a listener
+    # can refresh the tab's displayed labels from the newly-active map's
+    # real saved state (GamepadTab has no reference to either map itself).
+    getter input_mode_changed = Tryst::UI::Signal(Bool).new
 
     # Fired once the settings window is about to show, so it can
     # populate its controls from the current Config without every

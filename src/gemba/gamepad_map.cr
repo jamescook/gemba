@@ -48,6 +48,15 @@ module Gemba
       @map[gp_button] = gba_btn
     end
 
+    # Same as #set(Button, Symbol), for a caller (the settings UI) that
+    # only has the button's name as a String - a name BUTTON_VALUES
+    # doesn't recognize is silently ignored, matching #load_config's own
+    # handling of an unrecognized saved name.
+    def set(gba_btn : Button, gp_button : String) : Nil
+      symbol = Tryst::SDL::Gamepad::BUTTON_VALUES.keys.find { |k| k.to_s == gp_button }
+      set(gba_btn, symbol) if symbol
+    end
+
     def reset! : Nil
       @map = DEFAULT_MAP.dup
       @dead_zone = DEFAULT_DEAD_ZONE

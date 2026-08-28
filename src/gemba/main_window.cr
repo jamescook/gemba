@@ -181,7 +181,7 @@ module Gemba
       # #show/#hide take over repacking it once a ROM actually loads.
       @app.command(:pack, :forget, @video.viewport.path)
 
-      @settings_window = SettingsWindow.new(@app, @settings_handle, @events)
+      @settings_window = SettingsWindow.new(@app, @settings_handle, @events, @hotkeys)
       @save_state_picker = SaveStatePicker.new(@app, @save_states_handle)
 
       # BoxartFetcher.new does a blocking Dir.mkdir_p, and RomOverrides.new
@@ -319,6 +319,7 @@ module Gemba
       @audio.volume = @config.volume / 100.0
       @audio.muted = @config.muted?
       @settings_window.load_from_config(@config)
+      refresh_gamepad_tab
     end
 
     # Live-applies every Gemba::Events signal to VideoOutput/AudioOutput
@@ -364,6 +365,57 @@ module Gemba
         @video.keep_aspect_ratio = enabled
         @config.keep_aspect_ratio = enabled
         save_config
+      end
+
+      @events.keyboard_mapping_changed.connect do |btn, keysym|
+        @keyboard_map.set(btn, keysym)
+        @keyboard_map.save_to_config(@config)
+        save_config
+      end
+      @events.gamepad_mapping_changed.connect do |btn, gp_button|
+        @gamepad_map.set(btn, gp_button)
+        @gamepad_map.save_to_config(@config)
+        save_config
+      end
+      @events.gamepad_dead_zone_changed.connect do |threshold|
+        @gamepad_map.dead_zone = threshold
+        @gamepad_map.save_to_config(@config)
+        save_config
+      end
+      @events.keyboard_reset.connect do
+        @keyboard_map.reset!
+        @keyboard_map.save_to_config(@config)
+        save_config
+      end
+      @events.gamepad_reset.connect do
+        @gamepad_map.reset!
+        @gamepad_map.save_to_config(@config)
+        save_config
+      end
+      # config.reload! is a real blocking File.read - off_thread same as
+      # #save_config's own File.write.
+      @events.undo_input_mappings.connect do |keyboard_mode|
+        if keyboard_mode
+          @app.off_thread { @keyboard_map.reload!(@config) }
+        else
+          @app.off_thread { @gamepad_map.reload!(@config) }
+        end
+        refresh_gamepad_tab
+      end
+      @events.input_mode_changed.connect { refresh_gamepad_tab }
+    end
+
+    # Pushes whichever map (keyboard or gamepad) is active in the
+    # Gamepad tab's own combo back into it - the tab has no reference to
+    # either map itself (see Settings::GamepadTab's own doc comment), so
+    # this is the only place its display can pick up real saved state:
+    # initial load, after Undo, and after switching modes.
+    private def refresh_gamepad_tab : Nil
+      tab = @settings_window.gamepad_tab
+      if tab.keyboard_mode?
+        tab.refresh(@keyboard_map.labels, 0)
+      else
+        tab.refresh(@gamepad_map.labels.transform_values(&.to_s), @gamepad_map.dead_zone_pct)
       end
     end
 
@@ -520,6 +572,7 @@ module Gemba
       return if @modal_stack.active?
 
       @settings_window.load_from_config(@config)
+      refresh_gamepad_tab
       @modal_stack.push(:settings, @settings_window.handle)
     end
 

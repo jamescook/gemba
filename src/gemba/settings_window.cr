@@ -6,6 +6,8 @@ require "tryst-value-slider"
 require "./config"
 require "./events"
 require "./locale"
+require "./hotkey_map"
+require "./settings/gamepad_tab"
 
 module Gemba
   # A settings modal, live-wired to Gemba::Events and persisted via
@@ -18,15 +20,18 @@ module Gemba
   # grid/tabs builders: Switch/SegmentedControl/ValueSlider all require
   # a concrete Tryst::App, not the DSL's narrow AppContract.
   #
-  # Only two tabs (Video, Audio) exist - the subset of ruby's own
+  # Video, Audio, and Gamepad tabs exist - the subset of ruby's own
   # SettingsWindow this port has a live feature behind; add a tab once
   # the feature it configures exists.
   #
-  # Every tab is built directly in #initialize rather than split into
+  # Video/Audio are built directly in #initialize rather than split into
   # per-tab helper methods: each control ivar is only assigned partway
   # through, and Crystal bans any instance-method call on self until
   # every declared ivar has been assigned at least once (see
-  # MainWindow's own comment on this exact constraint).
+  # MainWindow's own comment on this exact constraint). Gamepad is
+  # complex enough (rebind capture, mode toggle, dead zone) to warrant
+  # its own class - Settings::GamepadTab, constructed only once its own
+  # ivars are ready, same as ruby's own tab split.
   class SettingsWindow
     # Public getters onto the real controls - a caller (a spec included)
     # reads/drives the same widgets #load_from_config itself writes,
@@ -39,15 +44,20 @@ module Gemba
     getter frame_blending_switch : Tryst::Switch
     getter volume_slider : Tryst::ValueSlider
     getter mute_switch : Tryst::Switch
+    getter gamepad_tab : Settings::GamepadTab
 
     @video_tab : String
     @audio_tab : String
 
-    def initialize(@app : Tryst::App, @handle : Tryst::UI::Handle, @events : Events)
+    def initialize(@app : Tryst::App, @handle : Tryst::UI::Handle, @events : Events, @hotkeys : HotkeyMap)
       @path = @handle.path
       @notebook = "#{@path}.nb"
       @app.command("ttk::notebook", @notebook)
       @app.command(:pack, @notebook, fill: :both, expand: 1, padx: 12, pady: 12)
+
+      # Bold button style for a customized (non-default) rebind, shared
+      # by GamepadTab's own button styling.
+      @app.tcl_eval("ttk::style configure Bold.TButton -font [list {*}[font actual TkDefaultFont] -weight bold]")
 
       # -- Video tab --
       video = @video_tab = "#{@notebook}.video"
@@ -106,6 +116,10 @@ module Gemba
       @mute_switch = Tryst::Switch.new(@app, text: Locale.translate("settings.mute"), parent: audio)
       @mute_switch.pack(anchor: :w, pady: 8)
       @mute_switch.on_action { |v| @events.mute_changed.emit(v) }
+
+      # -- Gamepad tab --
+      @gamepad_tab = Settings::GamepadTab.new(@app, @notebook, @path, @events,
+        validate_keyboard_mapping: ->(keysym : String) { validate_kb_mapping(keysym) })
     end
 
     def handle : Tryst::UI::Handle
@@ -122,6 +136,10 @@ module Gemba
       @app.command(@notebook, :select, @audio_tab)
     end
 
+    def select_gamepad_tab : Nil
+      @app.command(@notebook, :select, @gamepad_tab.path)
+    end
+
     # Pushes the current Config into every control - call before showing
     # the window (mirrors ruby's own :config_loaded bus event).
     def load_from_config(config : Config) : Nil
@@ -133,6 +151,16 @@ module Gemba
       @frame_blending_switch.value = config.frame_blending?
       @volume_slider.value = config.volume.to_f64
       @mute_switch.value = config.muted?
+    end
+
+    # Rejects a keyboard rebind that would shadow an existing hotkey -
+    # nil means no conflict.
+    private def validate_kb_mapping(keysym : String) : String?
+      action = @hotkeys.action_for(keysym)
+      return nil unless action
+
+      label = action.to_s.gsub('_', ' ').capitalize
+      %("#{keysym}" is assigned to hotkey: #{label})
     end
 
     private def filter_label(filter : String) : String

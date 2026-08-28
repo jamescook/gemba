@@ -5,7 +5,8 @@ private def build(title : String) : {Tryst::App, Gemba::SettingsWindow, Gemba::E
   handle = session.window(:gemba_settings, title: "Settings", modal: true)
   app = session.run_async.app
   events = Gemba::Events.new
-  window = Gemba::SettingsWindow.new(app, handle, events)
+  hotkeys = Gemba::HotkeyMap.new
+  window = Gemba::SettingsWindow.new(app, handle, events, hotkeys)
   {app, window, events}
 end
 
@@ -81,6 +82,26 @@ describe Gemba::SettingsWindow do
     app.interp.simulate_event(window.volume_slider.path, "<Left>") # 100 -> 99
 
     seen.should eq [0.99]
+    app.destroy
+  end
+
+  it "the Gamepad tab defaults to keyboard mode" do
+    app, window, _events = build("settings_window_spec_6")
+    window.gamepad_tab.keyboard_mode?.should be_true
+    app.destroy
+  end
+
+  it "rebinding a GBA button via keyboard emits Events#keyboard_mapping_changed and clears #listening_for" do
+    app, window, events = build("settings_window_spec_7")
+    seen = [] of {Gemba::Button, String}
+    events.keyboard_mapping_changed.connect { |btn, keysym| seen << {btn, keysym} }
+
+    window.select_gamepad_tab
+    window.gamepad_tab.start_listening(Gemba::Button::A)
+    app.interp.simulate_event(window.gamepad_tab.path, "<KeyPress-z>", keysym: "z")
+
+    seen.should eq [{Gemba::Button::A, "z"}]
+    window.gamepad_tab.listening_for.should be_nil
     app.destroy
   end
 end
