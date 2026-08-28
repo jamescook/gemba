@@ -4,13 +4,8 @@ require "json"
 module Gemba
   module Achievements
     module RetroAchievements
-      # Talks to retroachievements.org's r=login2 endpoint - the
-      # authentication slice of ruby gemba's own RetroAchievements::Backend.
-      # Achievement evaluation (rcheevos, do_frame, unlocks, rich presence)
-      # isn't ported yet; this class only proves/stores credentials.
-      #
       # Every request runs on its own OS thread via App#off_thread, then
-      # calls back on the current fiber (safe to touch Tk/Config from) -
+      # calls back on the current fiber - safe to touch Tk/Config from,
       # same pattern as BoxartFetcher#fetch.
       class Backend
         RA_HOST    = "retroachievements.org"
