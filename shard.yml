@@ -9,26 +9,28 @@ crystal: ">= 1.21.0"
 license: MIT
 
 description: |
-  GBA emulator frontend for tryst - a Crystal/Tryst port of the ruby
-  gemba app (teek + libmgba). Lives inside this monorepo, mainly so it
-  can exercise Tryst under real application conditions - see this
-  shard's own README.
+  GBA emulator frontend - a Crystal/Tryst port of the ruby gemba app
+  (teek + libmgba).
 
-# Same depth as every other sibling shard - a transitive path:
-# dependency has to match the literal relative-path string its
-# declaring shard used (see tryst-value-slider's own shard.yml for the
-# full `shards install` reasoning).
+# tryst, tryst-sdl, and the settings UI's tryst-switch/tryst-segmented/
+# tryst-value-slider are all independent repos - plain github:
+# dependencies, no monorepo path or submodule needed.
 dependencies:
   tryst:
-    path: ../
+    github: jamescook/tryst
   tryst-sdl:
-    path: ../tryst-sdl
+    github: jamescook/tryst-sdl
   tryst-switch:
-    path: ../tryst-switch
+    github: jamescook/tryst-switch
   tryst-segmented:
-    path: ../tryst-segmented
+    github: jamescook/tryst-segmented
   tryst-value-slider:
-    path: ../tryst-value-slider
+    github: jamescook/tryst-value-slider
+
+development_dependencies:
+  ameba:
+    github: crystal-ameba/ameba
+    tag: v1.7.0
 
 # Informational (shards does not install these). tryst-sdl's own
 # shard.yml lists the SDL3 package names this shard also needs (it

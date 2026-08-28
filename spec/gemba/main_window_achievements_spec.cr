@@ -124,6 +124,19 @@ describe Gemba::MainWindow do
           # later, so the site shows the session right away.
           fake.requests.any? { |request| request["r"]? == "ping" && request["g"]? == "515" }.should be_true
         ensure
+          # #stop only sends the worker a Stop message - asynchronous,
+          # per BackgroundWork#close - so it has to be awaited via
+          # #done? (same pattern emulation_worker_spec.cr uses
+          # everywhere) before destroying the app out from under it.
+          # Skipping this raced the worker's per-frame rich-presence
+          # sampling against Tk/SDL viewport teardown often enough to
+          # segfault under Docker/Xvfb - not a flake, reproduced every
+          # time this test ran after any other window in the same
+          # process.
+          if worker = window.worker
+            worker.stop
+            window.app.interp.wait_until(5.seconds) { worker.done? }
+          end
           window.app.destroy
         end
       end
@@ -152,6 +165,13 @@ describe Gemba::MainWindow do
 
           fake.requests.any? { |request| request["r"]? == "gameid" }.should be_false
         ensure
+          # See the "starts the ping heartbeat" test above: #stop is
+          # async, so it has to be awaited via #done? before destroying
+          # the app out from under the worker.
+          if worker = window.worker
+            worker.stop
+            window.app.interp.wait_until(5.seconds) { worker.done? }
+          end
           window.app.destroy
         end
       end

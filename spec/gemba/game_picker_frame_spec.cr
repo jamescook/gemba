@@ -146,6 +146,16 @@ describe Gemba::GamePickerFrame do
       with_app("game_picker_6") do |app|
         picker = new_picker(app, library, dir, fetcher: Gemba::BoxartFetcher.new(app, File.join(dir, "cache"), FakeBackend.new))
         app.command(picker.cards[0].image.path, :cget, "-image").should eq "gemba_boxart_placeholder"
+
+        # BoxartFetcher#fetch's callback fires on its own spawned fiber
+        # and touches this card's Tk image directly (see its own doc
+        # comment) - draining it before `with_app`'s `ensure app.destroy`
+        # runs, same as the next test does, so that callback can't land
+        # on an already-destroyed app. Confirmed directly: skipping this
+        # segfaults under Docker/Xvfb (BadDrawable on X_GetGeometry),
+        # deterministically, not a flake.
+        sleep 50.milliseconds
+        app.update
       end
     end
   end

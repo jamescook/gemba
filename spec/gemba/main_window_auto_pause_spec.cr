@@ -32,6 +32,21 @@ private def running_frame(window : Gemba::MainWindow) : Gemba::EmulatorFrame
   frame
 end
 
+# #stop only sends the worker a Stop message - asynchronous, per
+# BackgroundWork#close - so it has to be awaited via #done? before
+# destroying the app out from under it. A bare `worker.try(&.stop)`
+# still races the worker's own per-frame work against Tk/SDL viewport
+# teardown; confirmed directly, this is what a real load_rom + destroy
+# test needs every time, not just the ones that happened to lose the
+# race under Docker/Xvfb.
+private def stop_and_destroy(window : Gemba::MainWindow) : Nil
+  if worker = window.worker
+    worker.stop
+    window.app.interp.wait_until(5.seconds) { worker.done? }
+  end
+  window.app.destroy
+end
+
 describe Gemba::MainWindow do
   describe "auto-pause on focus loss" do
     it "pauses while the app is unfocused and resumes when focus comes back" do
@@ -50,8 +65,7 @@ describe Gemba::MainWindow do
           window.app.interp.wait_until(5.seconds) { !frame.paused? }
           window.auto_pause.active?.should be_false
         ensure
-          window.worker.try(&.stop)
-          window.app.destroy
+          stop_and_destroy(window)
         end
       end
     end
@@ -71,8 +85,7 @@ describe Gemba::MainWindow do
           frame.paused?.should be_false
           window.auto_pause.active?.should be_false
         ensure
-          window.worker.try(&.stop)
-          window.app.destroy
+          stop_and_destroy(window)
         end
       end
     end
@@ -91,8 +104,7 @@ describe Gemba::MainWindow do
           frame.paused?.should be_false
           window.auto_pause.active?.should be_false
         ensure
-          window.worker.try(&.stop)
-          window.app.destroy
+          stop_and_destroy(window)
         end
       end
     end
@@ -119,8 +131,7 @@ describe Gemba::MainWindow do
           window.modal_stack.pop
           frame.paused?.should be_false
         ensure
-          window.worker.try(&.stop)
-          window.app.destroy
+          stop_and_destroy(window)
         end
       end
     end
@@ -141,8 +152,7 @@ describe Gemba::MainWindow do
 
           frame.paused?.should be_true
         ensure
-          window.worker.try(&.stop)
-          window.app.destroy
+          stop_and_destroy(window)
         end
       end
     end

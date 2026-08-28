@@ -1,15 +1,14 @@
 # Dev/test image for gemba. Mirrors tryst-sdl/Dockerfile for the SDL3
 # packages (this shard depends on tryst-sdl), plus builds libmgba from
 # source with the same minimal flags gemba's own Rakefile uses (see
-# gemba/README.md) - the same recipe run by hand on host for
-# gemba/vendor/mgba-install, reproduced here so Docker verification is
+# README.md) - the same recipe run by hand on host for
+# vendor/mgba-install, reproduced here so Docker verification is
 # real, not stubbed past.
 #
-# Built from the REPO ROOT as context, not from this directory - gemba
-# depends on tryst (path: ../), tryst-sdl (path: ../tryst-sdl), and the
-# settings UI's tryst-switch/tryst-segmented/tryst-value-slider plus
-# their own shared tryst-vector dependency, so all of those have to be
-# inside the build context too.
+# Built from this repo's own root as context. tryst, tryst-sdl, and the
+# settings UI's tryst-switch/tryst-segmented/tryst-value-slider are all
+# `github:` shard dependencies (their own repos), fetched directly by
+# `shards install` rather than needing to be copied into the context.
 #
 # Must be run as `docker run --rm --init <image>` - same requirement as
 # every other Dockerfile in this repo. Without --init, xvfb-run hangs
@@ -41,33 +40,7 @@ RUN set -eux; \
     ln -s /opt/crystal/bin/shards /usr/local/bin/shards; \
     crystal --version
 
-# Both path-dependency shards, laid out exactly as they are in the repo
-# so `path:` resolves the same way it does on a developer's machine.
 WORKDIR /app
-COPY shard.yml ./
-COPY src/ src/
-
-WORKDIR /app/tryst-sdl
-COPY tryst-sdl/shard.yml ./
-COPY tryst-sdl/src/ src/
-
-WORKDIR /app/tryst-vector
-COPY tryst-vector/shard.yml ./
-COPY tryst-vector/src/ src/
-
-WORKDIR /app/tryst-switch
-COPY tryst-switch/shard.yml ./
-COPY tryst-switch/src/ src/
-
-WORKDIR /app/tryst-segmented
-COPY tryst-segmented/shard.yml ./
-COPY tryst-segmented/src/ src/
-
-WORKDIR /app/tryst-value-slider
-COPY tryst-value-slider/shard.yml ./
-COPY tryst-value-slider/src/ src/
-
-WORKDIR /app/gemba
 
 # libmgba, built from source with the exact minimal flags gemba's own
 # Rakefile uses (BUILD_QT/SDL/GL*/LIBRETRO off, USE_SQLITE3/ELF/LZMA/
@@ -95,7 +68,7 @@ RUN set -eux; \
       -DBUILD_LIBRETRO=OFF -DSKIP_FRONTEND=ON \
       -DUSE_SQLITE3=OFF -DUSE_ELF=OFF -DUSE_LZMA=OFF -DUSE_EDITLINE=OFF -DUSE_FFMPEG=OFF \
       -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-      -DCMAKE_INSTALL_PREFIX=/app/gemba/vendor/mgba-install \
+      -DCMAKE_INSTALL_PREFIX=/app/vendor/mgba-install \
       -DCMAKE_POLICY_VERSION_MINIMUM=3.5; \
     cmake --build vendor/build -j "$(nproc)"; \
     cmake --install vendor/build; \
@@ -126,8 +99,8 @@ RUN set -eux; \
     cd ../..; \
     rm -rf vendor/rcheevos
 
-COPY gemba/shard.yml ./
-COPY gemba/native/ native/
+COPY shard.yml ./
+COPY native/ native/
 
 # native/null_logger.c can't be built until libmgba's own headers exist
 # (just installed above) - see its own header comment for why this one
@@ -137,9 +110,9 @@ RUN cc -c -I vendor/mgba-install/include native/null_logger.c -o native/null_log
 
 # High-churn layers last - only these get invalidated on an ordinary
 # source edit, not the expensive libmgba build above.
-COPY gemba/src/ src/
-COPY gemba/spec/ spec/
-COPY gemba/assets/ assets/
+COPY src/ src/
+COPY spec/ spec/
+COPY assets/ assets/
 
 RUN shards install
 
