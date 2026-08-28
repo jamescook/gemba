@@ -34,5 +34,9 @@ module Gemba
     def self.boxart_dir : String
       File.join(config_dir, "boxart")
     end
+
+    def self.logs_dir : String
+      File.join(config_dir, "logs")
+    end
   end
 end

@@ -14,6 +14,7 @@ end
 private def with_app(title : String, &)
   app = Tryst::App.new(title: title)
   begin
+    stub_tk_popup(app)
     yield app
   ensure
     app.destroy

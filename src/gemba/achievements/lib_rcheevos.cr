@@ -25,15 +25,15 @@ lib LibRcheevos
   fun rc_runtime_destroy(runtime : RcRuntimeT*) : Void
 
   fun rc_runtime_activate_achievement(runtime : RcRuntimeT*, id : UInt32, memaddr : LibC::Char*,
-                                       unused_l : Void*, unused_funcs_idx : Int32) : Int32
+                                      unused_l : Void*, unused_funcs_idx : Int32) : Int32
   fun rc_runtime_deactivate_achievement(runtime : RcRuntimeT*, id : UInt32) : Void
 
   fun rc_runtime_activate_richpresence(runtime : RcRuntimeT*, script : LibC::Char*,
-                                        unused_l : Void*, unused_funcs_idx : Int32) : Int32
+                                       unused_l : Void*, unused_funcs_idx : Int32) : Int32
   fun rc_runtime_get_richpresence(runtime : RcRuntimeT*, buffer : LibC::Char*, buffersize : LibC::SizeT,
-                                   peek : PeekT, peek_ud : Void*, unused_l : Void*) : Int32
+                                  peek : PeekT, peek_ud : Void*, unused_l : Void*) : Int32
 
   fun rc_runtime_do_frame(runtime : RcRuntimeT*, event_handler : EventHandlerT, peek : PeekT,
-                           ud : Void*, unused_l : Void*) : Void
+                          ud : Void*, unused_l : Void*) : Void
   fun rc_runtime_reset(runtime : RcRuntimeT*) : Void
 end

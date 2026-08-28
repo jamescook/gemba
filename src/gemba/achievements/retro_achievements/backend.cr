@@ -1,5 +1,6 @@
 require "http/client"
 require "json"
+require "../../session_logger"
 
 module Gemba
   module Achievements
@@ -46,18 +47,27 @@ module Gemba
 
         private def ra_request(params : Hash(String, String), &on_done : JSON::Any?, Bool -> Nil) : Nil
           spawn do
+            Gemba.log { "RA request: #{Backend.redact(params)}" }
             json, request_ok = @app.off_thread(new_thread: true) { @requester.call(params) }
+            Gemba.log { "RA response: r=#{params["r"]?} ok=#{request_ok} success=#{json.try(&.["Success"]?)}" }
             on_done.call(json, request_ok)
           end
+        end
+
+        # p (password) and t (token) are credentials - they must never
+        # reach a log file a user might paste into a bug report.
+        def self.redact(params : Hash(String, String)) : String
+          params.map { |key, value| "#{key}=#{key.in?("p", "t") ? "[redacted]" : value}" }.join(" ")
         end
 
         def self.post(params : Hash(String, String)) : {JSON::Any?, Bool}
           response = HTTP::Client.post("https://#{RA_HOST}#{RA_PATH}",
             headers: HTTP::Headers{"User-Agent" => USER_AGENT},
             form: params)
+          Gemba.log { "RA http: r=#{params["r"]?} status=#{response.status.code}" }
           response.status.success? ? {JSON.parse(response.body), true} : {nil, false}
         rescue ex : Exception
-          STDERR.puts "[Gemba] RetroAchievements: request error (#{params["r"]}): #{ex.message}"
+          Gemba.log(SessionLogger::Level::Error) { "RA request error (r=#{params["r"]?}): #{ex.message}" }
           {nil, false}
         end
       end

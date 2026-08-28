@@ -9,6 +9,7 @@ require "./gamepad_map"
 require "./hotkey_map"
 require "./key_source"
 require "./paths"
+require "./session_logger"
 require "./locale"
 require "./game_index"
 require "./events"
@@ -130,7 +131,8 @@ module Gemba
     def initialize(rom_library_path : String? = nil, config_path : String? = nil,
                    rom_overrides_path : String? = nil, boxart_cache_dir : String? = nil,
                    @gamepad_polling : Bool = true,
-                   ra_requester : Proc(Hash(String, String), {JSON::Any?, Bool})? = nil)
+                   ra_requester : Proc(Hash(String, String), {JSON::Any?, Bool})? = nil,
+                   logs_dir : String? = nil)
       @config = config_path ? Config.new(config_path) : Config.new
       Locale.load(@config.locale)
       GameIndex.preload!
@@ -176,6 +178,8 @@ module Gemba
         bar.menu(label: Locale.translate("menu.view")) do |view|
           @rom_info_item = view.item(:rom_info, label: Locale.translate("menu.rom_info"), state: :disabled) { show_rom_info }
           view.item(:fullscreen, label: Locale.translate("menu.fullscreen"), shortcut: "F11") { toggle_fullscreen }
+          view.separator
+          view.item(:open_logs_dir, label: Locale.translate("menu.open_logs_dir")) { open_logs_dir }
         end
 
         bar.menu(label: Locale.translate("menu.emulation")) do |emu|
@@ -215,6 +219,7 @@ module Gemba
       boxart_dir = boxart_cache_dir || Paths.boxart_dir
       @boxart_fetcher = @app.off_thread { BoxartFetcher.new(@app, boxart_dir, BoxartFetcher::LibretroBackend.new) }
       @rom_overrides = @app.off_thread { RomOverrides.new(rom_overrides_path || RomOverrides.path, boxart_dir: boxart_dir) }
+      Gemba.logger ||= @app.off_thread { SessionLogger.new(logs_dir || Paths.logs_dir) }
       @ra_backend = ra_requester ? Achievements::RetroAchievements::Backend.new(@app, ra_requester) : Achievements::RetroAchievements::Backend.new(@app)
 
       on_open_rom = -> { open_rom_dialog }
@@ -736,6 +741,24 @@ module Gemba
 
     private def fullscreen? : Bool
       @app.tcl_to_bool(@app.window.attribute("-fullscreen"))
+    end
+
+    # Reveals the log directory in the OS file manager - same as ruby
+    # gemba's own View menu item, which also only opens the folder
+    # rather than rendering logs in-app.
+    private def open_logs_dir : Nil
+      dir = Gemba.logger.try(&.log_dir) || Paths.logs_dir
+      @app.off_thread do
+        Dir.mkdir_p(dir)
+        platform = Tryst.platform
+        if platform.darwin?
+          Process.run("open", [dir])
+        elsif platform.windows?
+          Process.run("explorer.exe", [dir.gsub('/', '\\')])
+        else
+          Process.run("xdg-open", [dir])
+        end
+      end
     end
 
     private def report_error(text : String) : Nil

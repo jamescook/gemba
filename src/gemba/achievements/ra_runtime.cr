@@ -25,8 +25,8 @@ module Gemba
         end
       end
 
-      PEEK_TRAMPOLINE = LibRcheevos::PeekT.new do |address, num_bytes, ud|
-        Box(Proc(UInt32, UInt32, UInt32)).unbox(ud).call(address, num_bytes)
+      PEEK_TRAMPOLINE = LibRcheevos::PeekT.new do |address, num_bytes, boxed_peek|
+        Box(Proc(UInt32, UInt32, UInt32)).unbox(boxed_peek).call(address, num_bytes)
       end
 
       def initialize
@@ -82,7 +82,7 @@ module Gemba
         boxed = Box.box(peek)
         buffer = Bytes.new(512)
         len = LibRcheevos.rc_runtime_get_richpresence(@ptr, buffer, buffer.size, PEEK_TRAMPOLINE, boxed, nil)
-        return nil if len <= 0
+        return if len <= 0
         String.new(buffer[0, len])
       end
 

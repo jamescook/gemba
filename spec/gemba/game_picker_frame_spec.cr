@@ -16,6 +16,7 @@ end
 private def with_app(title : String, &)
   app = Tryst::App.new(title: title)
   begin
+    stub_tk_popup(app)
     yield app
   ensure
     app.destroy
@@ -101,7 +102,16 @@ describe Gemba::GamePickerFrame do
       with_app("game_picker_4") do |app|
         picker = new_picker(app, library, dir)
 
-        script = app.tcl_eval("bind #{picker.cards[0].frame.path} <Button-3>")
+        # <<ContextMenu>>, not <Button-3>: GamePickerFrame binds the
+        # portable virtual event (see EventSpec::VIRTUAL_ALIASES), which
+        # sits on a different physical button per platform.
+        #
+        # Queried and run directly rather than via `event generate`
+        # (tried: the synthetic virtual event doesn't reach this frame's
+        # instance binding, so the menu is never built) - the same
+        # limitation list_picker_frame_spec's own invoke_binding exists
+        # for. Tryst has no binding-query wrapper, so this is raw Tcl.
+        script = app.tcl_eval("bind #{picker.cards[0].frame.path} <<ContextMenu>>")
         script.should_not be_empty
         app.tcl_eval(script)
 
