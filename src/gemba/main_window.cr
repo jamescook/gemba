@@ -974,17 +974,16 @@ module Gemba
     # Polls SDL for the window's keyboard focus, the same way ruby gemba
     # does and for the same reason: Tk's <Deactivate>/<Activate> look
     # like the right events but never arrive for a toplevel SDL has
-    # adopted (verified directly - <Activate> does, <Deactivate> does
-    # not), so a binding on them silently does nothing.
+    # adopted - <Activate> does, <Deactivate> does not - so a binding on
+    # them silently does nothing.
     #
     # Latched on the first focus actually OBSERVED rather than trusted
     # from the start, because the flag isn't meaningful everywhere: on
     # macOS SDL adopts the toplevel's own window and the flag tracks
-    # Cmd-Tab and Spaces exactly (verified: 1 -> 0 -> 1 across a real
-    # switch), but X11 hands SDL a child window of the frame, which
-    # never receives X input focus at all, so it reads false forever.
-    # Latching means the feature stays off there instead of pausing a
-    # game that nothing would ever unpause.
+    # Cmd-Tab and Spaces, but X11 hands SDL a child window of the frame,
+    # which never receives X input focus at all, so it reads false
+    # forever. Latching means the feature stays off there instead of
+    # pausing a game that nothing would ever unpause.
     #
     # The release is unconditional while the hold honours the setting -
     # switching the setting off while the app is in the background has
