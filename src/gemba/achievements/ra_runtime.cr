@@ -39,8 +39,7 @@ module Gemba
         LibRcheevos.rc_runtime_destroy(@ptr) unless @ptr.null?
       end
 
-      # Parses memaddr and registers the achievement. Raises
-      # ArgumentError if rcheevos rejects the condition string.
+      # Raises ArgumentError if rcheevos rejects the condition string.
       def activate(id : UInt32, memaddr : String) : Nil
         result = LibRcheevos.rc_runtime_activate_achievement(@ptr, id, memaddr, nil, 0)
         raise ArgumentError.new("RARuntime: rcheevos rejected memaddr (err #{result}): #{memaddr}") unless result == RC_OK
@@ -58,7 +57,6 @@ module Gemba
         LibRcheevos.rc_runtime_reset(@ptr)
       end
 
-      # Destroys all achievements and reinitializes from scratch.
       def clear : Nil
         LibRcheevos.rc_runtime_destroy(@ptr)
         @ptr = LibRcheevos.rc_runtime_alloc
@@ -66,7 +64,6 @@ module Gemba
         @count = 0
       end
 
-      # Number of currently activated achievements.
       def count : Int32
         @count
       end
