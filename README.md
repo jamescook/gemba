@@ -28,6 +28,8 @@ scripts/docker-test.sh          # Debian forky, same suite
 ```
 
 Needs whatever tryst and tryst-sdl need (Crystal >= 1.21.0, Tcl/Tk 8.6,
-SDL3), plus libmgba - see the Dockerfile for how the container builds
-it from source, or tryst-sdl's own README for per-platform SDL package
-names.
+SDL3), plus libmgba and rcheevos - see the Dockerfile for how the
+container builds both from source (`vendor/build_rcheevos.sh` is the
+same rcheevos recipe, runnable directly on host once
+`vendor/rcheevos` is cloned and checked out to the pinned commit), or
+tryst-sdl's own README for per-platform SDL package names.

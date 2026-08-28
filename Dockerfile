@@ -101,6 +101,31 @@ RUN set -eux; \
     cmake --install vendor/build; \
     rm -rf vendor/mgba vendor/build
 
+# rcheevos (RetroAchievements' condition-evaluation engine) - pinned to
+# the same commit ruby gemba's own vendor/rcheevos submodule uses.
+# Built as a plain static lib (no cmake, no Ruby/ext glue needed - see
+# lib_rcheevos.cr's own comment on why rc_runtime_t needs no Crystal
+# struct layout at all), same before-COPY-src placement as libmgba
+# above so this rarely-changing dependency doesn't get rebuilt on every
+# gemba source edit.
+RUN set -eux; \
+    mkdir -p vendor/rcheevos-build; \
+    git clone --quiet https://github.com/RetroAchievements/rcheevos.git vendor/rcheevos; \
+    git -C vendor/rcheevos checkout --quiet e9ca3694c862b61235595176dac4b22677848c93; \
+    cd vendor/rcheevos-build; \
+    for f in ../rcheevos/src/rcheevos/alloc.c ../rcheevos/src/rcheevos/condition.c \
+             ../rcheevos/src/rcheevos/condset.c ../rcheevos/src/rcheevos/format.c \
+             ../rcheevos/src/rcheevos/lboard.c ../rcheevos/src/rcheevos/memref.c \
+             ../rcheevos/src/rcheevos/operand.c ../rcheevos/src/rcheevos/richpresence.c \
+             ../rcheevos/src/rcheevos/runtime.c ../rcheevos/src/rcheevos/runtime_progress.c \
+             ../rcheevos/src/rcheevos/trigger.c ../rcheevos/src/rcheevos/value.c \
+             ../rcheevos/src/rc_compat.c ../rcheevos/src/rc_util.c ../rcheevos/src/rhash/md5.c; do \
+      cc -c -O2 -I ../rcheevos/include -I ../rcheevos/src "$f" -o "$(basename "$f" .c).o"; \
+    done; \
+    ar rcs librcheevos.a *.o; \
+    cd ../..; \
+    rm -rf vendor/rcheevos
+
 COPY gemba/shard.yml ./
 COPY gemba/native/ native/
 

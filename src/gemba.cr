@@ -12,6 +12,7 @@ require "./gemba/virtual_keyboard"
 require "./gemba/keyboard_map"
 require "./gemba/gamepad_map"
 require "./gemba/hotkey_map"
+require "./gemba/achievements/ra_runtime"
 require "./gemba/main_window"
 
 module Gemba
