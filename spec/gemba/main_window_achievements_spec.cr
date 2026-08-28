@@ -86,3 +86,75 @@ describe Gemba::MainWindow do
     end
   end
 end
+
+private FILL_ROM = File.join(__DIR__, "..", "fixtures", "fill.gba")
+
+describe Gemba::MainWindow do
+  describe "rich presence" do
+    # Orchestration only: hash -> gameid -> patch -> first ping. That
+    # the string is really evaluated from live memory is covered in
+    # emulation_worker_spec, without a window rendering for ~4s.
+    it "a ROM load resolves the game against RA and starts the ping heartbeat" do
+      with_tempdir do |dir|
+        fake = Gemba::Achievements::RetroAchievements::FakeRequester.new(
+          game_id: 515_i64, script: "Display:\nIWRAM0 @Number(0xH0000)")
+
+        window = Gemba::MainWindow.new(
+          rom_library_path: File.join(dir, "rom_library.json"),
+          config_path: File.join(dir, "settings.json"),
+          gamepad_polling: false,
+          ra_requester: fake.to_proc,
+        )
+
+        begin
+          window.config.ra_enabled = true
+          window.config.ra_rich_presence = true
+          window.config.ra_username = "someone"
+          window.config.ra_token = "tok123"
+
+          window.load_rom(FILL_ROM)
+
+          window.app.interp.wait_until(10.seconds) do
+            fake.requests.any? { |request| request["r"]? == "ping" }
+          end
+
+          fake.requests.any? { |request| request["r"]? == "gameid" }.should be_true
+          fake.requests.any? { |request| request["r"]? == "patch" && request["g"]? == "515" }.should be_true
+          # Heartbeat starts immediately rather than one full interval
+          # later, so the site shows the session right away.
+          fake.requests.any? { |request| request["r"]? == "ping" && request["g"]? == "515" }.should be_true
+        ensure
+          window.app.destroy
+        end
+      end
+    end
+
+    it "stays off when the rich presence switch is disabled" do
+      with_tempdir do |dir|
+        fake = Gemba::Achievements::RetroAchievements::FakeRequester.new
+
+        window = Gemba::MainWindow.new(
+          rom_library_path: File.join(dir, "rom_library.json"),
+          config_path: File.join(dir, "settings.json"),
+          gamepad_polling: false,
+          ra_requester: fake.to_proc,
+        )
+
+        begin
+          window.config.ra_enabled = true
+          window.config.ra_rich_presence = false
+          window.config.ra_username = "someone"
+          window.config.ra_token = "tok123"
+
+          window.load_rom(FILL_ROM)
+          sleep 500.milliseconds
+          window.app.update
+
+          fake.requests.any? { |request| request["r"]? == "gameid" }.should be_false
+        ensure
+          window.app.destroy
+        end
+      end
+    end
+  end
+end

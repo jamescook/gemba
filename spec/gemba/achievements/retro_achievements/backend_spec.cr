@@ -69,3 +69,86 @@ describe Gemba::Achievements::RetroAchievements::Backend do
     app.destroy
   end
 end
+
+describe "rich presence requests" do
+  it "#lookup_game_id returns the GameID for a known ROM hash" do
+    app, backend = build { |_params| {JSON.parse(%({"Success":true,"GameID":515})), true} }
+
+    game_id = nil
+    done = false
+    backend.lookup_game_id("abc123") { |id| game_id = id; done = true }
+    app.interp.wait_until(5.seconds) { done }
+
+    game_id.should eq 515_i64
+    app.destroy
+  end
+
+  it "#lookup_game_id yields nil for an unrecognised ROM (GameID 0)" do
+    app, backend = build { |_params| {JSON.parse(%({"Success":true,"GameID":0})), true} }
+
+    game_id = 999_i64.as(Int64?)
+    done = false
+    backend.lookup_game_id("nope") { |id| game_id = id; done = true }
+    app.interp.wait_until(5.seconds) { done }
+
+    game_id.should be_nil
+    app.destroy
+  end
+
+  it "#lookup_game_id yields nil when the request fails" do
+    app, backend = build { |_params| {nil, false} }
+
+    game_id = 999_i64.as(Int64?)
+    done = false
+    backend.lookup_game_id("abc123") { |id| game_id = id; done = true }
+    app.interp.wait_until(5.seconds) { done }
+
+    game_id.should be_nil
+    app.destroy
+  end
+
+  it "#fetch_rich_presence_script pulls PatchData.RichPresencePatch" do
+    app, backend = build do |_params|
+      {JSON.parse(%({"PatchData":{"RichPresencePatch":"Display:\\nIn Littleroot Town"}})), true}
+    end
+
+    script = nil
+    done = false
+    backend.fetch_rich_presence_script("someone", "tok", 515_i64) { |got| script = got; done = true }
+    app.interp.wait_until(5.seconds) { done }
+
+    script.should eq "Display:\nIn Littleroot Town"
+    app.destroy
+  end
+
+  it "#fetch_rich_presence_script yields nil when the game has no script" do
+    app, backend = build { |_params| {JSON.parse(%({"PatchData":{"RichPresencePatch":""}})), true} }
+
+    script = "unset"
+    done = false
+    backend.fetch_rich_presence_script("someone", "tok", 515_i64) { |got| script = got; done = true }
+    app.interp.wait_until(5.seconds) { done }
+
+    script.should be_nil
+    app.destroy
+  end
+
+  it "#ping sends the presence string as m= and reports success" do
+    sent = nil
+    app, backend = build do |params|
+      sent = params
+      {JSON.parse(%({"Success":true})), true}
+    end
+
+    ok = nil
+    backend.ping("someone", "tok", 515_i64, "In Littleroot Town") { |success| ok = success }
+    app.interp.wait_until(5.seconds) { !ok.nil? }
+
+    ok.should be_true
+    params = sent.should_not be_nil
+    params["r"].should eq "ping"
+    params["g"].should eq "515"
+    params["m"].should eq "In Littleroot Town"
+    app.destroy
+  end
+end

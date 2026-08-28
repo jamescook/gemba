@@ -3,6 +3,7 @@ require "./core"
 require "./save_state_manager"
 require "./rom_info_data"
 require "./config"
+require "./achievements/ra_runtime"
 
 module Gemba
   # Runs one loaded ROM's Core on its own OS thread (Tryst::BackgroundWork)
@@ -37,6 +38,12 @@ module Gemba
     # rather than ever reusing it early - correctness (never tearing a
     # slot still being read) always wins over staying allocation-free.
     RING_SIZE = 16
+
+    # Frames between Rich Presence evaluations (~4s at 60fps), matching
+    # ruby gemba's own RP_EVAL_INTERVAL. The rcheevos runtime still gets
+    # a #do_frame every frame - only the string is sampled this rarely,
+    # since it's only ever sent to a server every 2 minutes.
+    RP_EVAL_INTERVAL = 240
 
     getter rom_path : String
 
@@ -108,6 +115,18 @@ module Gemba
 
     def load_slot(slot : Int32) : Nil
       @background.send_message("load_slot:#{slot}")
+    end
+
+    # Hands the game's Rich Presence script to the worker, which is
+    # where the rcheevos runtime lives. Once loaded, the worker reports
+    # the evaluated string back through #on_message as
+    # "rich_presence:<text>", whenever it changes.
+    def activate_rich_presence(script : String) : Nil
+      @background.send_message("ra_script:#{script}")
+    end
+
+    def clear_rich_presence : Nil
+      @background.send_message("ra_clear")
     end
 
     # The keys currently held, as a Button mask - sent to the worker for
@@ -254,9 +273,16 @@ module Gemba
       state = WorkerState.new
       ring = FrameRing.new(core.video_buffer.size, Core::AUDIO_BUFFER_SIZE.to_i32 * 2, RING_SIZE)
 
+      # Lives on THIS thread, not the main one: evaluating conditions
+      # means reading emulator memory through core.bus_read*, and Core
+      # is worker-thread-only. Only the resulting string crosses back,
+      # as a plain message.
+      ra_runtime = Achievements::RARuntime.new
+      rich_presence = ""
+
       loop do
         task.check_pause
-        break if drain_messages(task, core, save_states, state, ring)
+        break if drain_messages(task, core, save_states, state, ring, ra_runtime)
 
         core.keys = state.mask
 
@@ -269,6 +295,8 @@ module Gemba
         # snapshot to resume forward from afterward.
         core.rewind_append unless state.rewind? && core.rewind_restore
         core.run_frame
+
+        rich_presence = evaluate_rich_presence(task, core, ra_runtime, frame_num, rich_presence)
 
         # Turbo runs ~TURBO_DIVISOR emulated frames per real-time frame
         # slot, but mGBA generates audio at its own fixed rate regardless
@@ -306,6 +334,7 @@ module Gemba
         next_frame_at = now if now - next_frame_at > 0.1.seconds
       end
 
+      ra_runtime.close
       core.destroy
     end
 
@@ -328,8 +357,60 @@ module Gemba
     # control message (the caller's cue to break its frame loop) - pulled
     # out of #run so the save/load-slot dispatch doesn't count against
     # its own cyclomatic complexity.
+    # Steps the rcheevos runtime for this frame and, every
+    # RP_EVAL_INTERVAL frames, samples the presence string - sending it
+    # to the main thread only when it actually changed. Returns the
+    # current string so the caller can carry it to the next frame.
+    private def evaluate_rich_presence(task : Tryst::TaskContext(FramePacket), core : Core,
+                                       ra_runtime : Achievements::RARuntime,
+                                       frame_num : Int32, previous : String) : String
+      return previous unless ra_runtime.richpresence_active?
+
+      # do_frame is what refreshes rcheevos' cached memory values -
+      # get_richpresence alone reads stale ones, so this runs every
+      # frame even though the string is only sampled periodically.
+      ra_runtime.do_frame { |address, num_bytes| ra_peek(core, address, num_bytes) }
+      return previous unless frame_num % RP_EVAL_INTERVAL == 0
+
+      message = ra_runtime.get_richpresence { |address, num_bytes| ra_peek(core, address, num_bytes) }
+      return previous unless message && message != previous
+
+      task.send_message("rich_presence:#{message}")
+      message
+    end
+
+    # RA addresses are flat; mGBA's bus is not - see
+    # RARuntime.to_gba_address.
+    private def ra_peek(core : Core, address : UInt32, num_bytes : UInt32) : UInt32
+      gba = Achievements::RARuntime.to_gba_address(address)
+      case num_bytes
+      when 1 then core.bus_read8(gba).to_u32
+      when 2 then core.bus_read16(gba).to_u32
+      when 4 then core.bus_read32(gba)
+      else        0_u32
+      end
+    end
+
+    # The RetroAchievements half of the worker's message channel, split
+    # out so #drain_messages' own dispatch stays under the complexity
+    # limit. Returns true when msg was one of ours.
+    private def apply_ra_message(msg, ra_runtime : Achievements::RARuntime) : Bool
+      return false unless msg.is_a?(String)
+
+      if script = msg.lchop?("ra_script:")
+        ra_runtime.activate_richpresence(script)
+        true
+      elsif msg == "ra_clear"
+        ra_runtime.clear
+        true
+      else
+        false
+      end
+    end
+
     private def drain_messages(task : Tryst::TaskContext(FramePacket), core : Core,
-                               save_states : SaveStateManager, state : WorkerState, ring : FrameRing) : Bool
+                               save_states : SaveStateManager, state : WorkerState, ring : FrameRing,
+                               ra_runtime : Achievements::RARuntime) : Bool
       while msg = task.check_message
         case msg
         when "quick_save"
@@ -349,6 +430,8 @@ module Gemba
             task.send_message("load_result:#{ok}:#{slot}:#{text}")
           elsif msg.is_a?(String) && msg.starts_with?("frame_done:")
             ring.release(msg.split(':', 2)[1].to_i)
+          elsif apply_ra_message(msg, ra_runtime)
+            # handled
           elsif state.apply(msg)
             return true
           end

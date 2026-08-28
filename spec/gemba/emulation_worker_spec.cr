@@ -252,3 +252,48 @@ describe Gemba::EmulationWorker do
     app.destroy
   end
 end
+
+describe "rich presence" do
+  it "evaluates the activated script against real emulator memory and reports it back" do
+    app = Tryst::App.new(title: "emulation_worker_spec_rp")
+    worker = Gemba::EmulationWorker.new(app, FILL_ROM)
+
+    messages = [] of String
+    worker.on_message { |text| messages << text }
+
+    # @Number(0xH0000) reads RA address 0, i.e. the first byte of IWRAM -
+    # a real bus read through the peek callback, not a stub.
+    worker.activate_rich_presence("Display:\nIWRAM0 @Number(0xH0000)")
+
+    presence = nil
+    app.interp.wait_until(15.seconds) do
+      presence = messages.find(&.starts_with?("rich_presence:"))
+      !presence.nil?
+    end
+
+    delivered = presence.should_not be_nil
+    delivered.should start_with "rich_presence:IWRAM0 "
+
+    worker.stop
+    app.interp.wait_until(5.seconds) { worker.done? }
+    app.destroy
+  end
+
+  it "sends nothing while no script is active" do
+    app = Tryst::App.new(title: "emulation_worker_spec_rp_off")
+    worker = Gemba::EmulationWorker.new(app, FILL_ROM)
+
+    messages = [] of String
+    worker.on_message { |text| messages << text }
+
+    frames = 0
+    worker.on_frame { frames += 1 }
+    app.interp.wait_until(15.seconds) { frames >= Gemba::EmulationWorker::RP_EVAL_INTERVAL + 5 }
+
+    messages.any?(&.starts_with?("rich_presence:")).should be_false
+
+    worker.stop
+    app.interp.wait_until(5.seconds) { worker.done? }
+    app.destroy
+  end
+end

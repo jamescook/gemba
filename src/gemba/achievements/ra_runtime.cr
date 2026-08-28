@@ -29,14 +29,43 @@ module Gemba
         Box(Proc(UInt32, UInt32, UInt32)).unbox(boxed_peek).call(address, num_bytes)
       end
 
+      # RetroAchievements addresses a GBA as one flat space: IWRAM
+      # (32KB) first, then EWRAM from 0x8000 on. mGBA's bus wants the
+      # real addresses, so every peek goes through here.
+      IWRAM_BASE = 0x03000000_u32
+      EWRAM_BASE = 0x02000000_u32
+      IWRAM_SIZE =     0x8000_u32
+
+      def self.to_gba_address(ra_address : UInt32) : UInt32
+        if ra_address < IWRAM_SIZE
+          IWRAM_BASE + ra_address
+        else
+          EWRAM_BASE + (ra_address - IWRAM_SIZE)
+        end
+      end
+
+      # Lets a caller skip per-frame evaluation entirely when no script
+      # is loaded - #do_frame/#get_richpresence are safe to call anyway,
+      # they'd just be doing nothing useful.
+      getter? richpresence_active : Bool = false
+
       def initialize
         @ptr = LibRcheevos.rc_runtime_alloc
         raise "rcheevos: rc_runtime_alloc returned null" if @ptr.null?
         @count = 0
       end
 
-      def finalize
-        LibRcheevos.rc_runtime_destroy(@ptr) unless @ptr.null?
+      # Deliberately NOT a #finalize. Boehm runs finalizers from inside
+      # a collection, on whatever thread triggered it, and having one
+      # call into C to free rcheevos' allocations crashed the suite
+      # inside GC_finalize. The owner frees this explicitly instead -
+      # the emulation worker, on its own thread, when its run loop ends.
+      # Idempotent, so a double close is harmless.
+      def close : Nil
+        return if @ptr.null?
+        LibRcheevos.rc_runtime_destroy(@ptr)
+        @ptr = Pointer(LibRcheevos::RcRuntimeT).null
+        @richpresence_active = false
       end
 
       # Raises ArgumentError if rcheevos rejects the condition string.
@@ -62,6 +91,7 @@ module Gemba
         @ptr = LibRcheevos.rc_runtime_alloc
         raise "rcheevos: rc_runtime_alloc returned null" if @ptr.null?
         @count = 0
+        @richpresence_active = false
       end
 
       def count : Int32
@@ -71,7 +101,7 @@ module Gemba
       # Loads a Rich Presence script. Returns true on success, false if
       # the script failed to parse.
       def activate_richpresence(script : String) : Bool
-        LibRcheevos.rc_runtime_activate_richpresence(@ptr, script, nil, 0) == RC_OK
+        @richpresence_active = LibRcheevos.rc_runtime_activate_richpresence(@ptr, script, nil, 0) == RC_OK
       end
 
       # Returns the active Rich Presence display string, or nil if none

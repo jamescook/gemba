@@ -40,6 +40,37 @@ module Gemba
           end
         end
 
+        # Resolves a ROM's MD5 to a RetroAchievements game id. on_done
+        # gets nil when the request fails OR when the hash is simply
+        # unrecognised (the server answers 0) - neither is an error
+        # worth surfacing, it just means no achievements for this ROM.
+        def lookup_game_id(md5 : String, &on_done : Int64? -> Nil) : Nil
+          ra_request({"r" => "gameid", "m" => md5}) do |json, request_ok|
+            game_id = json.try(&.["GameID"]?.try(&.as_i64?)) if request_ok
+            on_done.call(game_id.try { |id| id > 0 ? id : nil })
+          end
+        end
+
+        # Achievement data comes back in the same response, but nothing
+        # here reads it yet.
+        def fetch_rich_presence_script(username : String, token : String, game_id : Int64,
+                                       &on_done : String? -> Nil) : Nil
+          ra_request({"r" => "patch", "u" => username, "t" => token, "g" => game_id.to_s}) do |json, request_ok|
+            script = json.try(&.["PatchData"]?.try(&.["RichPresencePatch"]?.try(&.as_s?))) if request_ok
+            on_done.call(script.presence)
+          end
+        end
+
+        # The heartbeat that makes the site show "playing <game>" - the
+        # current presence string rides along as m=.
+        def ping(username : String, token : String, game_id : Int64, message : String,
+                 &on_done : Bool -> Nil) : Nil
+          ra_request({"r" => "ping", "u" => username, "t" => token,
+                      "g" => game_id.to_s, "m" => message}) do |json, request_ok|
+            on_done.call(!!(json && request_ok && json["Success"]?.try(&.as_bool?)))
+          end
+        end
+
         private def error_message(json : JSON::Any?, request_ok : Bool) : String
           return "Could not connect to RetroAchievements" unless request_ok
           json.try(&.["Error"]?.try(&.as_s?)) || "Login failed"

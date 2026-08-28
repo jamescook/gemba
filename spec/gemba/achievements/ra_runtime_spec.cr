@@ -56,3 +56,32 @@ describe Gemba::Achievements::RARuntime do
     runtime.get_richpresence { |_addr, _nbytes| 0_u32 }.should be_nil
   end
 end
+
+describe "RetroAchievements address translation" do
+  it "maps the low 32KB onto IWRAM" do
+    Gemba::Achievements::RARuntime.to_gba_address(0_u32).should eq 0x03000000_u32
+    Gemba::Achievements::RARuntime.to_gba_address(0x7FFF_u32).should eq 0x03007FFF_u32
+  end
+
+  it "maps everything from 0x8000 up onto EWRAM, rebased" do
+    Gemba::Achievements::RARuntime.to_gba_address(0x8000_u32).should eq 0x02000000_u32
+    Gemba::Achievements::RARuntime.to_gba_address(0x8100_u32).should eq 0x02000100_u32
+  end
+
+  it "#richpresence_active? tracks activation and is cleared by #clear" do
+    runtime = Gemba::Achievements::RARuntime.new
+    runtime.richpresence_active?.should be_false
+
+    runtime.activate_richpresence("Display:\nHi").should be_true
+    runtime.richpresence_active?.should be_true
+
+    runtime.clear
+    runtime.richpresence_active?.should be_false
+  end
+
+  it "#richpresence_active? stays false when the script fails to parse" do
+    runtime = Gemba::Achievements::RARuntime.new
+    runtime.activate_richpresence("not a valid script (((").should be_false
+    runtime.richpresence_active?.should be_false
+  end
+end

@@ -23,6 +23,8 @@ require "./boxart_fetcher"
 require "./boxart_fetcher/libretro_backend"
 require "./rom_overrides"
 require "./achievements/retro_achievements/backend"
+require "./achievements/rom_hash"
+require "./achievements/retro_achievements/fake_requester"
 require "./rom_info_window"
 require "./settings_window"
 require "./save_state_picker"
@@ -43,6 +45,11 @@ module Gemba
     # responsive). See #gamepad_probe_tick.
     GAMEPAD_PROBE_MS  = 2000
     GAMEPAD_LISTEN_MS =   50
+
+    # Matches ruby gemba's PING_INTERVAL_SEC. RetroAchievements treats
+    # this as the "still playing" heartbeat, so it also decides how
+    # quickly a finished session stops showing on the site.
+    RA_PING_INTERVAL_MS = 120_000
 
     # Matches ruby gemba's own turbo_volume_pct default (25) - see
     # EmulatorFrame's own doc comment on why turbo needs this at all.
@@ -99,6 +106,14 @@ module Gemba
 
     @emulator_frame : EmulatorFrame?
     @was_paused_before_modal : Bool = false
+
+    # RetroAchievements session for the ROM currently loaded: the game
+    # id resolved from its hash, and the latest presence string the
+    # worker has evaluated. Both nil/empty until a ROM with RA support
+    # is running and the user is logged in.
+    @ra_game_id : Int64? = nil
+    @ra_rich_presence : String = ""
+    @ra_ping_timer : Tryst::RepeatingTimer? = nil
     @pause_item : Tryst::UI::Handle?
 
     # rom_library_path/config_path forward straight to RomLibrary/Config
@@ -286,6 +301,74 @@ module Gemba
       @quick_save_item.try(&.enable)
       @quick_load_item.try(&.enable)
       @save_states_item.try(&.enable)
+
+      start_rich_presence(path)
+    end
+
+    # Resolves this ROM against RetroAchievements and, if it's a known
+    # game with a Rich Presence script, hands the script to the worker
+    # and starts the heartbeat that makes the site show what's being
+    # played. Every step is a no-op unless the user is logged in and has
+    # rich presence switched on, and any failure just leaves presence
+    # off - nothing here is worth interrupting play over.
+    private def start_rich_presence(rom_path : String) : Nil
+      stop_rich_presence
+
+      return unless @config.ra_enabled? && @config.ra_rich_presence?
+      return if @config.ra_username.empty? || @config.ra_token.empty?
+
+      username, token = @config.ra_username, @config.ra_token
+
+      spawn do
+        md5 = @app.off_thread(new_thread: true) { Achievements::RomHash.for_file(rom_path) }
+        Gemba.log { "RA: rich presence lookup for #{File.basename(rom_path)} md5=#{md5[0, 8]}…" }
+
+        @ra_backend.lookup_game_id(md5) do |game_id|
+          unless game_id
+            Gemba.log { "RA: no RetroAchievements game matches this ROM - rich presence off" }
+            next
+          end
+
+          @ra_backend.fetch_rich_presence_script(username, token, game_id) do |script|
+            unless script
+              Gemba.log { "RA: game #{game_id} has no rich presence script" }
+              next
+            end
+
+            @ra_game_id = game_id
+            @emulator_frame.try(&.worker.activate_rich_presence(script))
+            start_ping_timer(username, token, game_id)
+            Gemba.log { "RA: rich presence active for game #{game_id}" }
+          end
+        end
+      end
+    end
+
+    private def start_ping_timer(username : String, token : String, game_id : Int64) : Nil
+      # First ping goes out as soon as the session is known, not one
+      # full interval later: RA only starts showing "playing <game>"
+      # once it has had a ping, and waiting 2 minutes for that reads as
+      # the feature being broken. Ruby gets this from its own
+      # `@ping_last_at.nil?` short-circuit; App#every has no leading
+      # tick, so it's explicit here.
+      send_ping(username, token, game_id)
+      @ra_ping_timer = @app.every(RA_PING_INTERVAL_MS) { send_ping(username, token, game_id) }
+    end
+
+    private def send_ping(username : String, token : String, game_id : Int64) : Nil
+      @ra_backend.ping(username, token, game_id, @ra_rich_presence) do |success|
+        Gemba.log(success ? SessionLogger::Level::Info : SessionLogger::Level::Warn) do
+          "RA: ping g=#{game_id} m=#{@ra_rich_presence.inspect} ok=#{success}"
+        end
+      end
+    end
+
+    private def stop_rich_presence : Nil
+      @ra_ping_timer.try(&.cancel)
+      @ra_ping_timer = nil
+      @ra_game_id = nil
+      @ra_rich_presence = ""
+      @emulator_frame.try(&.worker.clear_rich_presence)
     end
 
     # Patches game_code/rom_id onto the RomLibrary entry #remember just
@@ -511,6 +594,13 @@ module Gemba
       @events.ra_rich_presence_changed.connect do |enabled|
         @config.ra_rich_presence = enabled
         save_config
+        # Takes effect on the ROM already running, rather than only on
+        # the next load.
+        if enabled
+          @emulator_frame.try { |frame| start_rich_presence(frame.worker.rom_path) }
+        else
+          stop_rich_presence
+        end
       end
       @events.ra_screenshot_on_unlock_changed.connect do |enabled|
         @config.ra_screenshot_on_unlock = enabled
@@ -632,6 +722,15 @@ module Gemba
     # than shown to the player - a modal message_box would be jarring
     # for something meant to be a quick, low-ceremony action.
     private def handle_worker_message(text : String) : Nil
+      # Handled before the 4-part split below, which would raise on a
+      # message this shape (a presence string has no slot/ok fields, and
+      # can itself contain colons).
+      if presence = text.lchop?("rich_presence:")
+        @ra_rich_presence = presence
+        Gemba.log { "RA: rich presence = #{presence}" }
+        return
+      end
+
       parts = text.split(':', 4)
       tag, ok, slot, message = parts[0], parts[1], parts[2], parts[3]
 
