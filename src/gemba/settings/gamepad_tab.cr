@@ -94,10 +94,9 @@ module Gemba
         @app.command(@dz_scale, :set, dead_zone_pct)
       end
 
-      # Populates the device combo once gamepad hot-plug detection
-      # exists (nothing calls this yet - see this class's own doc
-      # comment). Keeps the current selection if it's still valid,
-      # otherwise falls back to Keyboard Only.
+      # Populates the device combo - MainWindow#refresh_gamepads calls
+      # this on every hot-plug. Keeps the current selection if it's
+      # still valid, otherwise falls back to Keyboard Only.
       def update_gamepad_list(names : Array(String)) : Nil
         keyboard_only = Locale.translate("settings.keyboard_only")
         choices = [keyboard_only] + names
@@ -107,8 +106,9 @@ module Gemba
       end
 
       # Called while #listening_for is set - a captured keysym (keyboard
-      # mode) or gamepad button name (gamepad mode, once a live-polling
-      # caller exists). Rejects a keyboard mapping that conflicts with a
+      # mode, from the <Key> binding below) or gamepad button name
+      # (gamepad mode, from MainWindow#gamepad_probe_tick's own live
+      # polling). Rejects a keyboard mapping that conflicts with a
       # hotkey rather than silently shadowing it.
       def capture_mapping(button : String) : Nil
         gba_btn = @listening_for

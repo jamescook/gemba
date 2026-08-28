@@ -29,11 +29,18 @@ module Gemba
   # The real, runnable Gemba app - merges MainWindow and AppController
   # into one class; see #load_rom for the key entry point.
   #
-  # GamepadMap is wired but never given a #device yet; its #mask is
-  # Button::None until a later bead plugs one in.
+  # Gamepad hot-plug detection/#device assignment: see #init_gamepad_subsystem's
+  # own doc comment.
   class MainWindow
     NATIVE_WIDTH  = 240
     NATIVE_HEIGHT = 160
+
+    # Matches ruby's own AppController - a slow idle probe (hot-plug
+    # detection only fires this often) vs. a fast one while Settings is
+    # open and a device is already attached (so a rebind capture feels
+    # responsive). See #gamepad_probe_tick.
+    GAMEPAD_PROBE_MS  = 2000
+    GAMEPAD_LISTEN_MS =   50
 
     # Matches ruby gemba's own turbo_volume_pct default (25) - see
     # EmulatorFrame's own doc comment on why turbo needs this at all.
@@ -55,6 +62,7 @@ module Gemba
     getter app : Tryst::App
     getter video : VideoOutput
     getter audio : AudioOutput
+    getter gamepad_map : GamepadMap
     getter config : Config
     getter events : Events
     getter modal_stack : ModalStack
@@ -108,8 +116,18 @@ module Gemba
     # a one-time cold-start exception; every OTHER file write in this
     # class (RomLibrary#remember, Config#save! from #wire_events) runs
     # well after @app exists and does go through #off_thread.
+    #
+    # gamepad_polling: false skips #init_gamepad_subsystem entirely -
+    # for a spec that doesn't care about gamepad hot-plug, since
+    # Tryst::SDL::Gamepad.on_added/#on_removed are process-wide
+    # singletons (replaced, not stacked, on every registration - see
+    # their own doc comments): a spec that doesn't need this class's own
+    # callbacks shouldn't be left holding them once its own App is
+    # destroyed, ready to fire against dead ivars the next time some
+    # OTHER spec (in the same process) calls .poll_events.
     def initialize(rom_library_path : String? = nil, config_path : String? = nil,
-                   rom_overrides_path : String? = nil, boxart_cache_dir : String? = nil)
+                   rom_overrides_path : String? = nil, boxart_cache_dir : String? = nil,
+                   @gamepad_polling : Bool = true)
       @config = config_path ? Config.new(config_path) : Config.new
       Locale.load(@config.locale)
       GameIndex.preload!
@@ -224,6 +242,7 @@ module Gemba
       apply_initial_config
       wire_events
       bind_hotkeys
+      init_gamepad_subsystem if @gamepad_polling
       @app.bring_to_front
     end
 
@@ -310,6 +329,104 @@ module Gemba
 
       spec = hotkey.is_a?(Array) ? hotkey.join('-') : hotkey
       @session.on_key(spec) { |_args, _signal| block.call }
+    end
+
+    # Ported from ruby's own AppController#gamepad_probe_tick/
+    # #refresh_gamepads (start_gamepad_probe et al) - a recursive
+    # @app.after chain rather than Tryst::App#every, since (unlike
+    # #every) the interval itself needs to change: GAMEPAD_LISTEN_MS
+    # while Settings is open with a device attached (for a responsive
+    # rebind capture), GAMEPAD_PROBE_MS otherwise. Brings up
+    # Tryst::SDL::Gamepad's subsystem, wires its process-wide on_added/
+    # on_removed hot-plug callbacks to #refresh_gamepads, and does one
+    # eager refresh so a gamepad already connected at startup isn't
+    # missed (matches Gamepad.init_subsystem's own doc comment on why
+    # that ordering matters).
+    private def init_gamepad_subsystem : Nil
+      Tryst::SDL::Gamepad.init_subsystem
+      Tryst::SDL::Gamepad.on_added { |_instance_id| refresh_gamepads }
+      Tryst::SDL::Gamepad.on_removed do |_instance_id|
+        @gamepad_map.device = nil
+        refresh_gamepads
+      end
+      refresh_gamepads
+      schedule_gamepad_probe(GAMEPAD_PROBE_MS)
+    end
+
+    private def schedule_gamepad_probe(ms : Int32) : Nil
+      @app.after(ms) { gamepad_probe_tick }
+    end
+
+    # While Settings is open and a device is already attached: refreshes
+    # its cached button state (Gamepad#button? reads a cache SDL only
+    # updates on a pump - see Gamepad.update_state's own doc comment for
+    # why this variant, not .poll_events, is safe to call this often)
+    # and, while GamepadTab is waiting for a rebind, scans every button
+    # for the first one currently held. Otherwise: pumps SDL's event
+    # queue (.poll_events, needed for on_added/on_removed to fire at
+    # all) to catch a hot-plug - but ONLY while no ROM is actively
+    # running, matching ruby's own guard: SDL_PollEvent pumps the same
+    # native run loop Tk's own Aqua backend shares on macOS (see
+    # Viewport#track_keyboard's own comment), so pumping it from a timer
+    # during real gameplay would contend with Tk for it. Live gameplay
+    # input still gets fresh gamepad state every frame regardless -
+    # EmulatorFrame#on_frame's own call to Gamepad.update_state, not
+    # this loop.
+    private def gamepad_probe_tick : Nil
+      device = @gamepad_map.device
+
+      if @modal_stack.current == :settings && device
+        Tryst::SDL::Gamepad.update_state
+
+        if @settings_window.gamepad_tab.listening_for
+          Tryst::SDL::Gamepad::BUTTONS.each do |gp_btn|
+            next unless device.button?(gp_btn)
+            @settings_window.gamepad_tab.capture_mapping(gp_btn.to_s)
+            break
+          end
+        end
+
+        schedule_gamepad_probe(GAMEPAD_LISTEN_MS)
+        return
+      end
+
+      Tryst::SDL::Gamepad.poll_events if @frame_stack.current != :emulator
+      schedule_gamepad_probe(GAMEPAD_PROBE_MS)
+    rescue Tryst::TclError
+      # The window this chain belongs to was destroyed while a tick was
+      # still pending (a recursive @app.after chain has no built-in way
+      # to know that happened) - stop rescheduling rather than keep
+      # firing into a dead window forever.
+    end
+
+    # Opens every currently connected gamepad just long enough to read
+    # its name for the Settings dropdown, keeping the FIRST one as
+    # GamepadMap's own #device and closing the rest - matches ruby's own
+    # `@gamepad ||= gp` (a second connected pad doesn't steal the active
+    # one; only #on_removed clearing #device first lets a later refresh
+    # pick a new one). #open raising for an id SDL reports but can't
+    # actually open (a mid-enumeration disconnect) just skips that id
+    # rather than aborting the whole refresh.
+    private def refresh_gamepads : Nil
+      names = [] of String
+
+      Tryst::SDL::Gamepad.ids.each do |id|
+        gamepad = begin
+          Tryst::SDL::Gamepad.open(id)
+        rescue Tryst::SDL::Error
+          next
+        end
+        names << gamepad.name
+
+        if @gamepad_map.device
+          gamepad.destroy
+        else
+          @gamepad_map.device = gamepad
+          @gamepad_map.load_config(@config)
+        end
+      end
+
+      @settings_window.gamepad_tab.update_gamepad_list(names)
     end
 
     private def apply_initial_config : Nil

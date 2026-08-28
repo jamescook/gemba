@@ -26,10 +26,18 @@ end
 # MainWindow's own doc comment on why those two (unlike screenshots
 # below) need an override rather than after-the-fact cleanup: a written
 # rom_library.json/settings.json could otherwise shadow the user's own.
+#
+# gamepad_polling: false - none of these specs exercise gamepad hot-plug
+# (see main_window_gamepad_spec.cr for the ones that do); leaving it on
+# would register this window's Tryst::SDL::Gamepad.on_added/on_removed
+# callbacks anyway (a process-wide singleton, not per-instance - see
+# MainWindow's own doc comment), left dangling against a destroyed
+# window the moment some OTHER spec's .poll_events call fires them.
 private def new_window(dir : String) : Gemba::MainWindow
   Gemba::MainWindow.new(
     rom_library_path: File.join(dir, "rom_library.json"),
     config_path: File.join(dir, "settings.json"),
+    gamepad_polling: false,
   )
 end
 
@@ -67,7 +75,8 @@ describe Gemba::MainWindow do
   it "patches rom_id/game_code onto the RomLibrary entry once the worker reports the loaded ROM back" do
     with_tempdir do |dir|
       rom_library_path = File.join(dir, "rom_library.json")
-      window = Gemba::MainWindow.new(rom_library_path: rom_library_path, config_path: File.join(dir, "settings.json"))
+      window = Gemba::MainWindow.new(rom_library_path: rom_library_path, config_path: File.join(dir, "settings.json"),
+        gamepad_polling: false)
       begin
         window.load_rom(SPACE_BLAST_ROM)
 
@@ -267,6 +276,7 @@ describe Gemba::MainWindow do
       window = Gemba::MainWindow.new(
         rom_library_path: File.join(dir, "rom_library.json"),
         config_path: config_path,
+        gamepad_polling: false,
       )
       window.load_rom(SPACE_BLAST_ROM)
       window.app.interp.wait_until(5.seconds) { !window.video.last_frame_argb.nil? }
