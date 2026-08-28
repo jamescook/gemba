@@ -21,6 +21,7 @@ require "./list_picker_frame"
 require "./boxart_fetcher"
 require "./boxart_fetcher/libretro_backend"
 require "./rom_overrides"
+require "./achievements/retro_achievements/backend"
 require "./rom_info_window"
 require "./settings_window"
 require "./save_state_picker"
@@ -72,6 +73,7 @@ module Gemba
     getter game_picker : GamePickerFrame
     getter list_picker : ListPickerFrame
     getter boxart_fetcher : BoxartFetcher
+    getter ra_backend : Achievements::RetroAchievements::Backend
     getter rom_overrides : RomOverrides
     getter frame_stack : FrameStack
 
@@ -127,7 +129,8 @@ module Gemba
     # OTHER spec (in the same process) calls .poll_events.
     def initialize(rom_library_path : String? = nil, config_path : String? = nil,
                    rom_overrides_path : String? = nil, boxart_cache_dir : String? = nil,
-                   @gamepad_polling : Bool = true)
+                   @gamepad_polling : Bool = true,
+                   ra_requester : Proc(Hash(String, String), {JSON::Any?, Bool})? = nil)
       @config = config_path ? Config.new(config_path) : Config.new
       Locale.load(@config.locale)
       GameIndex.preload!
@@ -212,6 +215,7 @@ module Gemba
       boxart_dir = boxart_cache_dir || Paths.boxart_dir
       @boxart_fetcher = @app.off_thread { BoxartFetcher.new(@app, boxart_dir, BoxartFetcher::LibretroBackend.new) }
       @rom_overrides = @app.off_thread { RomOverrides.new(rom_overrides_path || RomOverrides.path, boxart_dir: boxart_dir) }
+      @ra_backend = ra_requester ? Achievements::RetroAchievements::Backend.new(@app, ra_requester) : Achievements::RetroAchievements::Backend.new(@app)
 
       on_open_rom = -> { open_rom_dialog }
       on_select = ->(path : String) { load_rom(path) }
@@ -505,6 +509,39 @@ module Gemba
       end
       @events.ra_screenshot_on_unlock_changed.connect do |enabled|
         @config.ra_screenshot_on_unlock = enabled
+        save_config
+      end
+
+      @events.ra_login_requested.connect do |username, password|
+        @ra_backend.login_with_password(username, password) do |token, error|
+          if token
+            @config.ra_username = username
+            @config.ra_token = token
+            save_config
+            @settings_window.achievements_tab.login_succeeded(token)
+          else
+            @settings_window.achievements_tab.auth_failed(error.to_s)
+          end
+        end
+      end
+      @events.ra_verify_requested.connect do
+        @ra_backend.verify_token(@config.ra_username, @config.ra_token) do |success, error|
+          if success
+            @settings_window.achievements_tab.ping_succeeded
+            @app.after(3000) { @settings_window.achievements_tab.clear_transient_feedback }
+          else
+            @settings_window.achievements_tab.auth_failed(error.to_s)
+          end
+        end
+      end
+      @events.ra_logout_requested.connect do
+        @config.ra_token = ""
+        save_config
+        @settings_window.achievements_tab.logged_out
+      end
+      @events.ra_reset_requested.connect do
+        @config.ra_username = ""
+        @config.ra_token = ""
         save_config
       end
 

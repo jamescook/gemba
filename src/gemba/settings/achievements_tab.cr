@@ -113,8 +113,8 @@ module Gemba
         @screenshot_switch.pack(anchor: :w, pady: [0, 4])
 
         # -- Wiring (deferred until every ivar above is assigned) --
-        @app.bind(@username_entry, :key_release) { |_values, _signal| @presenter.username = @app.get_variable(@username_var) }
-        @app.bind(@token_entry, :key_release) { |_values, _signal| @presenter.password = @app.get_variable(@password_var) }
+        @app.bind(@username_entry, :key_release) { |_values, _signal| @presenter.username = @app.get_variable(@username_var); apply_presenter_state }
+        @app.bind(@token_entry, :key_release) { |_values, _signal| @presenter.password = @app.get_variable(@password_var); apply_presenter_state }
 
         @enabled_switch.on_action do |value|
           @presenter.enabled = value
@@ -129,6 +129,12 @@ module Gemba
         @frame
       end
 
+      # Current feedback label text - for a spec to synchronize on
+      # (wait_until) after emitting a login/verify Events signal.
+      def feedback_text : String
+        @app.tcl_eval("#{@feedback_lbl} cget -text")
+      end
+
       # Pushes Config into the presenter and every widget - call before
       # showing the window (mirrors every other tab's #load_from_config).
       def load_from_config(config : Config) : Nil
@@ -138,6 +144,33 @@ module Gemba
         @enabled_switch.value = @presenter.enabled?
         @rich_presence_switch.value = config.ra_rich_presence?
         @screenshot_switch.value = config.ra_screenshot_on_unlock?
+        apply_presenter_state
+      end
+
+      # -- Auth-result callbacks (MainWindow, once its backend responds) --
+
+      def login_succeeded(token : String) : Nil
+        @presenter.login_succeeded(token)
+        apply_presenter_state
+      end
+
+      def auth_failed(message : String) : Nil
+        @presenter.auth_failed(message)
+        apply_presenter_state
+      end
+
+      def ping_succeeded : Nil
+        @presenter.ping_succeeded
+        apply_presenter_state
+      end
+
+      def logged_out : Nil
+        @presenter.logged_out
+        apply_presenter_state
+      end
+
+      def clear_transient_feedback : Nil
+        @presenter.clear_transient
         apply_presenter_state
       end
 
@@ -185,9 +218,10 @@ module Gemba
         return unless confirmed
 
         @presenter.username = ""
+        @presenter.logged_out
         @app.set_variable(@username_var, "")
         @app.set_variable(@password_var, "")
-        @events.ra_logout_requested.emit
+        @events.ra_reset_requested.emit
         apply_presenter_state
       end
     end
