@@ -2,6 +2,7 @@ require "tryst"
 require "./core"
 require "./save_state_manager"
 require "./rom_info_data"
+require "./config"
 
 module Gemba
   # Runs one loaded ROM's Core on its own OS thread (Tryst::BackgroundWork)
@@ -45,11 +46,15 @@ module Gemba
     # user's actual save states. quick_save_slot/backup/debounce also
     # forward straight to SaveStateManager - read from Config on the
     # main thread by the caller, since Config itself isn't safe to
-    # share with the worker thread.
+    # share with the worker thread. rewind_seconds forwards to Core as
+    # its rewind_entries (rounded to whole frames at GBA_FPS) - Config's
+    # rewind buffer size only takes effect for a freshly-constructed
+    # Core, not one already running.
     def initialize(app : Tryst::App, @rom_path : String, state_dir_override : String? = nil,
                    @quick_save_slot : Int32 = SaveStateManager::DEFAULT_QUICK_SAVE_SLOT,
                    @backup : Bool = SaveStateManager::DEFAULT_BACKUP,
-                   @debounce : Time::Span = SaveStateManager::DEFAULT_DEBOUNCE)
+                   @debounce : Time::Span = SaveStateManager::DEFAULT_DEBOUNCE,
+                   rewind_seconds : Int32 = Config::DEFAULT_REWIND_SECONDS)
       # Process-wide (BackgroundWork.drop_intermediate is a class_property,
       # not per-instance) - safe to set unconditionally since gemba's own
       # process has no other BackgroundWork use that would want dropping.
@@ -58,8 +63,10 @@ module Gemba
       # every time delivery falls behind by more than one frame.
       Tryst::BackgroundWork.drop_intermediate = false
 
+      rewind_entries = (rewind_seconds * GBA_FPS).round.to_i
+
       @background = Tryst::BackgroundWork(String, FramePacket).new(app, rom_path) do |task, path|
-        run(task, path, state_dir_override, @quick_save_slot, @backup, @debounce)
+        run(task, path, state_dir_override, @quick_save_slot, @backup, @debounce, rewind_entries)
       end
     end
 
@@ -120,6 +127,13 @@ module Gemba
       @background.send_message(enabled ? "turbo:on" : "turbo:off")
     end
 
+    # Hold-to-rewind: true while the hotkey is physically held (see
+    # EmulatorFrame#on_frame, which polls key state every frame since
+    # Tk only fires one KeyRelease for a held key, not a stream).
+    def rewind=(enabled : Bool) : Nil
+      @background.send_message(enabled ? "rewind:on" : "rewind:off")
+    end
+
     # Tells the worker it's safe to reuse the ring buffer slot that
     # frame_num's video/audio point into (see FrameRing) - call once done
     # reading a delivered FramePacket's buffers, not before (EmulatorFrame#
@@ -161,6 +175,7 @@ module Gemba
       property mask : UInt32 = 0_u32
       property ratio : Float64 = 1.0
       property? turbo : Bool = false
+      property? rewind : Bool = false
 
       # Applies one message. Returns true if it was a Stop (the caller's
       # cue to break its loop) - every other kind updates state in place
@@ -180,9 +195,10 @@ module Gemba
       private def apply_string(msg : String) : Nil
         tag, payload = msg.split(':', 2)
         case tag
-        when "mask"  then @mask = payload.to_u32
-        when "fill"  then @ratio = (1.0 - MAX_DELTA) + 2.0 * payload.to_f64 * MAX_DELTA
-        when "turbo" then @turbo = payload == "on"
+        when "mask"   then @mask = payload.to_u32
+        when "fill"   then @ratio = (1.0 - MAX_DELTA) + 2.0 * payload.to_f64 * MAX_DELTA
+        when "turbo"  then @turbo = payload == "on"
+        when "rewind" then @rewind = payload == "on"
         end
       end
     end
@@ -228,8 +244,8 @@ module Gemba
     end
 
     private def run(task : Tryst::TaskContext(FramePacket), rom_path : String, state_dir_override : String?,
-                    quick_save_slot : Int32, backup : Bool, debounce : Time::Span) : Nil
-      core = Core.new(rom_path)
+                    quick_save_slot : Int32, backup : Bool, debounce : Time::Span, rewind_entries : Int32) : Nil
+      core = Core.new(rom_path, rewind_entries: rewind_entries)
       task.send_message("rom_info:#{RomInfoData.from_core(core).to_json}")
       save_states = SaveStateManager.new(core, state_dir: state_dir_override,
         quick_save_slot: quick_save_slot, backup: backup, debounce: debounce)
@@ -243,6 +259,15 @@ module Gemba
         break if drain_messages(task, core, save_states, state, ring)
 
         core.keys = state.mask
+
+        # Ported from mgba/core/thread.c's own _frameStarted: while
+        # rewinding, restore the most recent snapshot instead of taking a
+        # new one, so running forward one frame from progressively older
+        # states is what produces the backward-playing effect. Falls back
+        # to a normal #rewind_append (both when not rewinding, and once
+        # rewinding runs out of history) so playback always has SOME
+        # snapshot to resume forward from afterward.
+        core.rewind_append unless state.rewind? && core.rewind_restore
         core.run_frame
 
         # Turbo runs ~TURBO_DIVISOR emulated frames per real-time frame

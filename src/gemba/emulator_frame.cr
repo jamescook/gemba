@@ -4,9 +4,12 @@ require "./emulation_worker"
 require "./save_state_manager"
 require "./keyboard_map"
 require "./gamepad_map"
+require "./hotkey_map"
+require "./key_source"
 require "./frame_stack"
 require "./rom_info_data"
 require "./locale"
+require "./config"
 
 module Gemba
   # The per-ROM-session half of ruby's own EmulatorFrame (lib/gemba/
@@ -39,6 +42,7 @@ module Gemba
     FPS_INTERVAL = 1.0
 
     @turbo : Bool = false
+    @rewinding : Bool = false
     @saved_volume : Float64
     @on_message : (String -> Nil)?
     @on_rom_info : (RomInfoData -> Nil)?
@@ -46,11 +50,12 @@ module Gemba
     @fps_started_at : Time::Instant
 
     def initialize(@app : Tryst::App, @video : VideoOutput, @audio : AudioOutput,
-                   @keyboard_map : KeyboardMap, @gamepad_map : GamepadMap,
+                   @keyboard_map : KeyboardMap, @gamepad_map : GamepadMap, @hotkeys : HotkeyMap,
                    rom_path : String, state_dir_override : String? = nil,
                    quick_save_slot : Int32 = SaveStateManager::DEFAULT_QUICK_SAVE_SLOT,
                    backup : Bool = SaveStateManager::DEFAULT_BACKUP,
-                   debounce : Time::Span = SaveStateManager::DEFAULT_DEBOUNCE)
+                   debounce : Time::Span = SaveStateManager::DEFAULT_DEBOUNCE,
+                   rewind_seconds : Int32 = Config::DEFAULT_REWIND_SECONDS)
       @rom_title = File.basename(rom_path).sub(/\.gba$/i, "")
       @saved_volume = @audio.volume
       @fps_started_at = Time.instant
@@ -59,7 +64,7 @@ module Gemba
       @audio.reset!
 
       worker = EmulationWorker.new(@app, rom_path, state_dir_override: state_dir_override,
-        quick_save_slot: quick_save_slot, backup: backup, debounce: debounce)
+        quick_save_slot: quick_save_slot, backup: backup, debounce: debounce, rewind_seconds: rewind_seconds)
       worker.on_frame { |packet| on_frame(packet) }
       worker.on_message { |text| handle_message(text) }
       @worker = worker
@@ -159,15 +164,15 @@ module Gemba
       if @turbo
         @saved_volume = @audio.volume
         @audio.volume = TURBO_VOLUME
-        @video.show_ff_label(Locale.translate("player.ff_max"))
       else
         @audio.volume = @saved_volume
-        @video.hide_ff_label
       end
+      update_ff_label
     end
 
     private def on_frame(packet : EmulationWorker::FramePacket) : Nil
-      @video.present(packet[:video], show_ff: @turbo)
+      poll_rewind
+      @video.present(packet[:video], show_ff: @turbo || @rewinding)
       @audio.queue(packet[:audio])
       # Both calls above copy the packet's buffers out synchronously
       # (VideoOutput#draw into its own ARGB buffer/texture, AudioOutput#
@@ -193,6 +198,35 @@ module Gemba
       @video.show_fps_text(Locale.translate("player.fps", fps: fps)) if @video.show_fps?
       @fps_count = 0
       @fps_started_at = Time.instant
+    end
+
+    # Polls the actual held state of the rewind hotkey every frame - see
+    # HotkeyMap#held?'s own doc comment for why a hold-style action needs
+    # polling rather than a press/release binding. A no-op with no
+    # keyboard device attached (matches KeyboardMap#mask's own guard).
+    private def poll_rewind : Nil
+      source = @keyboard_map.device
+      return unless source
+
+      held = @hotkeys.held?(:rewind, source)
+      return if held == @rewinding
+
+      @rewinding = held
+      @worker.rewind = held
+      update_ff_label
+    end
+
+    # Rewind takes priority over turbo's own "FF MAX" label when both
+    # happen to be active at once - unlikely (they're different keys)
+    # but not prevented, and only one corner label can show at a time.
+    private def update_ff_label : Nil
+      if @rewinding
+        @video.show_ff_label(Locale.translate("player.rewind"))
+      elsif @turbo
+        @video.show_ff_label(Locale.translate("player.ff_max"))
+      else
+        @video.hide_ff_label
+      end
     end
 
     private def handle_message(text : String) : Nil

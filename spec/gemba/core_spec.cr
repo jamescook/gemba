@@ -170,4 +170,52 @@ describe Gemba::Core do
     core.load_state_from_file("/nonexistent/state.ss").should be_false
     core.destroy
   end
+
+  # #rewind_append/#rewind_restore mirror mgba/core/thread.c's own
+  # _frameStarted exactly: append snapshots the state BEFORE a frame
+  # runs, so appending then running N times leaves history holding "the
+  # state that produced positions[i]" for each i. One #rewind_restore
+  # loads the second-most-recent snapshot (mCoreRewindRestore's own
+  # previousState/currentState swap keeps one entry "ahead"), so
+  # running one frame from it reproduces positions[-2], not positions[-1].
+  it "#rewind_append/#rewind_restore round-trip memory via mGBA's own patch history" do
+    core = Gemba::Core.new(PONG_ROM)
+
+    begin
+      pong_press_start(core)
+      core.bus_read32(PONG_STATE).should eq 1 # confirms we're really in :playing
+
+      positions = [] of UInt32
+      20.times do
+        core.rewind_append
+        core.run_frame
+        positions << core.bus_read32(PONG_BALL_X)
+      end
+      positions.last.should_not eq positions[-2] # confirms real movement between frames
+
+      core.rewind_restore.should be_true
+      core.run_frame
+      core.bus_read32(PONG_BALL_X).should eq positions[-2]
+    ensure
+      core.destroy
+    end
+  end
+
+  it "#rewind_restore returns false once history is exhausted" do
+    core = Gemba::Core.new(FILL_ROM, rewind_entries: 3)
+
+    begin
+      5.times do
+        core.rewind_append
+        core.run_frame
+      end
+
+      core.rewind_restore.should be_true
+      core.rewind_restore.should be_true
+      core.rewind_restore.should be_true
+      core.rewind_restore.should be_false
+    ensure
+      core.destroy
+    end
+  end
 end

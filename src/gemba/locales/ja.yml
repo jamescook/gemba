@@ -69,6 +69,8 @@ dialog:
 settings:
   video: "映像"
   audio: "音声"
+  gameplay: "ゲームプレイ"
+  rewind_buffer: "巻き戻しバッファ:"
   gamepad: "ゲームパッド"
   save_states: "ステートセーブ"
   window_scale: "ウィンドウ倍率:"
@@ -237,6 +239,7 @@ player:
   fps: "{fps} fps"
   ff: ">> {speed}x"
   ff_max: ">> 最大"
+  rewind: "<<"
   none: "(なし)"
   clear: "クリア"
 

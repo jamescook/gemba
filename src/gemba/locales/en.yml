@@ -69,6 +69,8 @@ dialog:
 settings:
   video: "Video"
   audio: "Audio"
+  gameplay: "Gameplay"
+  rewind_buffer: "Rewind Buffer:"
   gamepad: "Gamepad"
   save_states: "Save States"
   window_scale: "Window Scale:"
@@ -237,6 +239,7 @@ player:
   fps: "{fps} fps"
   ff: ">> {speed}x"
   ff_max: ">> MAX"
+  rewind: "<<"
   none: "(none)"
   clear: "Clear"
 

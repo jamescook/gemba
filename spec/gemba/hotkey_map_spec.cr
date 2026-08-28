@@ -1,6 +1,20 @@
 require "../spec_helper"
 require "file_utils"
 
+# A KeySource #held? can poll without any real Tk/SDL widget behind it -
+# just a Set of raw keysyms, matching Viewport#key_down?'s own lowercase
+# vocabulary ("tab", "shift_l", "iso_left_tab").
+private class FakeKeySource
+  include Gemba::KeySource
+
+  def initialize(@down : Set(String) = Set(String).new)
+  end
+
+  def button?(key : String) : Bool
+    @down.includes?(key.downcase)
+  end
+end
+
 private def with_tempdir(&)
   dir = File.tempname("hotkey_map_spec")
   Dir.mkdir(dir)
@@ -160,6 +174,34 @@ describe Gemba::HotkeyMap do
 
     it "returns nil for a non-modifier keysym" do
       Gemba::HotkeyMap.normalize_modifier("a").should be_nil
+    end
+  end
+
+  describe "#held?" do
+    it "is true when the plain key is held (no modifiers)" do
+      map = Gemba::HotkeyMap.new
+      map.held?(:quit, FakeKeySource.new(Set{"q"})).should be_true
+      map.held?(:quit, FakeKeySource.new(Set(String).new)).should be_false
+    end
+
+    it "is true when a modifier-combo hotkey's key and every modifier side are held" do
+      map = Gemba::HotkeyMap.new
+      map.set(:pause, ["Control", "p"])
+      map.held?(:pause, FakeKeySource.new(Set{"p", "control_l"})).should be_true
+      map.held?(:pause, FakeKeySource.new(Set{"p", "control_r"})).should be_true
+      map.held?(:pause, FakeKeySource.new(Set{"p"})).should be_false
+    end
+
+    it "matches Shift-Tab's default rewind binding via the raw ISO_Left_Tab keysym X11 actually delivers" do
+      map = Gemba::HotkeyMap.new
+      map.held?(:rewind, FakeKeySource.new(Set{"iso_left_tab", "shift_l"})).should be_true
+      map.held?(:rewind, FakeKeySource.new(Set{"tab", "shift_l"})).should be_true
+      map.held?(:rewind, FakeKeySource.new(Set{"iso_left_tab"})).should be_false # Shift released
+    end
+
+    it "is false for a Symbol with no bound hotkey at all" do
+      map = Gemba::HotkeyMap.new
+      map.held?(:not_a_real_action, FakeKeySource.new(Set{"q"})).should be_false
     end
   end
 

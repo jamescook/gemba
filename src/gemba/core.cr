@@ -11,7 +11,7 @@ module Gemba
   # Deliberately NOT ported yet, versus gemba-core's own Core: save_dir
   # override (needs mDirectorySetMapOptions + modeling mCoreOptions,
   # neither needed by the Probe README example this bead's acceptance
-  # criteria targets), BIOS loading, rewind, and the cycle-timing probes
+  # criteria targets), BIOS loading, and the cycle-timing probes
   # (measure_frame_busy_cycles/measure_frame_work) - real gaps, not
   # forgotten, tracked for a follow-up once the core play path is
   # proven.
@@ -24,6 +24,10 @@ module Gemba
     # buffer to AUDIO_BUFFER_SIZE * 2 (stereo, interleaved) int16 elements
     # is always enough to hold one frame's worth of drained samples.
     AUDIO_BUFFER_SIZE = 2048_u64
+
+    # ~10s of history at ~60fps - the default #initialize's rewind_entries
+    # falls back to; EmulationWorker overrides it from Config#rewind_seconds.
+    DEFAULT_REWIND_ENTRIES = 600
 
     # mgba/core/serialize.h's SAVESTATE_* flags - a real @[Flags] enum
     # rather than the header's own bare numbers, so ALL (what
@@ -47,8 +51,9 @@ module Gemba
     @core : LibMgba::MCore*
     @video_buffer : Slice(UInt32)
     @destroyed : Bool
+    @rewind_ctx : LibMgba::MCoreRewindContext
 
-    def initialize(rom_path : String)
+    def initialize(rom_path : String, rewind_entries : Int32 = DEFAULT_REWIND_ENTRIES)
       unless @@logger_installed
         LibMgba.gemba_install_null_logger
         @@logger_installed = true
@@ -106,6 +111,9 @@ module Gemba
       @height = h2.to_i32
       @video_buffer = video_buffer
       @destroyed = false
+
+      @rewind_ctx = LibMgba::MCoreRewindContext.new
+      LibMgba.mCoreRewindContextInit(pointerof(@rewind_ctx), rewind_entries.to_u64, false)
     end
 
     def run_frame : Nil
@@ -187,6 +195,23 @@ module Gemba
       @core.value.rtc.override
     end
 
+    # Snapshots the current state into rewind history - call once per
+    # frame BEFORE #run_frame (mirrors mgba/core/thread.c's own
+    # _frameStarted, the reference this port's rewind loop follows).
+    def rewind_append : Nil
+      raise_if_destroyed!
+      LibMgba.mCoreRewindAppend(pointerof(@rewind_ctx), @core)
+    end
+
+    # Loads the most recent rewind snapshot, moving the pointer one
+    # entry further back for next time. Returns false once history is
+    # exhausted - the caller's cue to fall back to #rewind_append instead
+    # (same fallback _frameStarted itself does).
+    def rewind_restore : Bool
+      raise_if_destroyed!
+      LibMgba.mCoreRewindRestore(pointerof(@rewind_ctx), @core)
+    end
+
     def bus_read8(address : UInt32) : UInt8
       raise_if_destroyed!
       @core.value.bus_read8.call(cp, address).to_u8
@@ -229,6 +254,7 @@ module Gemba
     def destroy : Nil
       return if @destroyed
       @destroyed = true
+      LibMgba.mCoreRewindContextDeinit(pointerof(@rewind_ctx))
       @core.value.deinit.call(cp)
     end
 

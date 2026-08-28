@@ -20,15 +20,15 @@ module Gemba
   # grid/tabs builders: Switch/SegmentedControl/ValueSlider all require
   # a concrete Tryst::App, not the DSL's narrow AppContract.
   #
-  # Video, Audio, and Gamepad tabs exist - the subset of ruby's own
-  # SettingsWindow this port has a live feature behind; add a tab once
-  # the feature it configures exists.
+  # Video, Audio, Gameplay, and Gamepad tabs exist - the subset of
+  # ruby's own SettingsWindow this port has a live feature behind; add a
+  # tab once the feature it configures exists.
   #
-  # Video/Audio are built directly in #initialize rather than split into
-  # per-tab helper methods: each control ivar is only assigned partway
-  # through, and Crystal bans any instance-method call on self until
-  # every declared ivar has been assigned at least once (see
-  # MainWindow's own comment on this exact constraint). Gamepad is
+  # Video/Audio/Gameplay are built directly in #initialize rather than
+  # split into per-tab helper methods: each control ivar is only
+  # assigned partway through, and Crystal bans any instance-method call
+  # on self until every declared ivar has been assigned at least once
+  # (see MainWindow's own comment on this exact constraint). Gamepad is
   # complex enough (rebind capture, mode toggle, dead zone) to warrant
   # its own class - Settings::GamepadTab, constructed only once its own
   # ivars are ready, same as ruby's own tab split.
@@ -44,10 +44,17 @@ module Gemba
     getter frame_blending_switch : Tryst::Switch
     getter volume_slider : Tryst::ValueSlider
     getter mute_switch : Tryst::Switch
+    getter rewind_buffer_control : Tryst::SegmentedControl
     getter gamepad_tab : Settings::GamepadTab
+
+    # Presets the Rewind Buffer segmented control offers - Config's own
+    # #rewind_seconds allows anything in 5..30, but the control only
+    # ever writes one of these back.
+    REWIND_OPTIONS = [5, 10, 20, 30]
 
     @video_tab : String
     @audio_tab : String
+    @gameplay_tab : String
 
     def initialize(@app : Tryst::App, @handle : Tryst::UI::Handle, @events : Events, @hotkeys : HotkeyMap)
       @path = @handle.path
@@ -117,6 +124,22 @@ module Gemba
       @mute_switch.pack(anchor: :w, pady: 8)
       @mute_switch.on_action { |v| @events.mute_changed.emit(v) }
 
+      # -- Gameplay tab --
+      gameplay = @gameplay_tab = "#{@notebook}.gameplay"
+      @app.command("ttk::frame", gameplay, padding: 12)
+      @app.command(@notebook, :add, gameplay, text: Locale.translate("settings.gameplay"))
+
+      rewind_row = "#{gameplay}.rewind_row"
+      @app.command("ttk::frame", rewind_row)
+      @app.command(:pack, rewind_row, fill: :x, pady: 8)
+      @app.command("ttk::label", "#{rewind_row}.lbl", text: Locale.translate("settings.rewind_buffer"))
+      @app.command(:pack, "#{rewind_row}.lbl", side: :left)
+
+      @rewind_buffer_control = Tryst::SegmentedControl.new(@app, options: REWIND_OPTIONS.map { |seconds| "#{seconds}s" },
+        selected: "#{Config::DEFAULT_REWIND_SECONDS}s", parent: rewind_row)
+      @rewind_buffer_control.pack(side: :right)
+      @rewind_buffer_control.on_action { |value| @events.rewind_seconds_changed.emit(value.rstrip('s').to_i) }
+
       # -- Gamepad tab --
       @gamepad_tab = Settings::GamepadTab.new(@app, @notebook, @path, @events,
         validate_keyboard_mapping: ->(keysym : String) { validate_kb_mapping(keysym) })
@@ -136,6 +159,10 @@ module Gemba
       @app.command(@notebook, :select, @audio_tab)
     end
 
+    def select_gameplay_tab : Nil
+      @app.command(@notebook, :select, @gameplay_tab)
+    end
+
     def select_gamepad_tab : Nil
       @app.command(@notebook, :select, @gamepad_tab.path)
     end
@@ -151,6 +178,7 @@ module Gemba
       @frame_blending_switch.value = config.frame_blending?
       @volume_slider.value = config.volume.to_f64
       @mute_switch.value = config.muted?
+      @rewind_buffer_control.selected = "#{nearest_rewind_option(config.rewind_seconds)}s"
     end
 
     # Rejects a keyboard rebind that would shadow an existing hotkey -
@@ -165,6 +193,13 @@ module Gemba
 
     private def filter_label(filter : String) : String
       filter == "nearest" ? Locale.translate("settings.filter_nearest") : Locale.translate("settings.filter_linear")
+    end
+
+    # Snaps a saved Config#rewind_seconds (5..30, not necessarily one of
+    # REWIND_OPTIONS - e.g. a settings.json hand-edited outside the UI)
+    # to the closest preset the control can actually display.
+    private def nearest_rewind_option(seconds : Int32) : Int32
+      REWIND_OPTIONS.min_by { |option| (option - seconds).abs }
     end
   end
 end

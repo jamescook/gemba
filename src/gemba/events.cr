@@ -16,6 +16,10 @@ module Gemba
     getter frame_blending_changed = Tryst::UI::Signal(Bool).new
     getter aspect_ratio_changed = Tryst::UI::Signal(Bool).new
 
+    # Gameplay tab - MainWindow persists it, but it only reaches Core at
+    # the NEXT rom load (see EmulationWorker's own doc comment).
+    getter rewind_seconds_changed = Tryst::UI::Signal(Int32).new
+
     # Gamepad tab - gamepad_mapping_changed's input name arrives as a
     # String (same as keyboard_mapping_changed's keysym) rather than the
     # Symbol GamepadMap#set otherwise takes, so GamepadTab's own capture

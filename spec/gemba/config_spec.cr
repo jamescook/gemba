@@ -23,6 +23,7 @@ describe Gemba::Config do
       config.frame_blending?.should be_false
       config.locale.should eq "auto"
       config.picker_view.should eq "grid"
+      config.rewind_seconds.should eq 10
     end
   end
 
@@ -40,6 +41,7 @@ describe Gemba::Config do
       config.frame_blending = true
       config.locale = "ja"
       config.picker_view = "list"
+      config.rewind_seconds = 20
       config.save!
 
       reloaded = Gemba::Config.new(path)
@@ -53,6 +55,17 @@ describe Gemba::Config do
       reloaded.frame_blending?.should be_true
       reloaded.locale.should eq "ja"
       reloaded.picker_view.should eq "list"
+      reloaded.rewind_seconds.should eq 20
+    end
+  end
+
+  it "#rewind_seconds= clamps to 5..30" do
+    with_tempdir do |dir|
+      config = Gemba::Config.new(File.join(dir, "settings.json"))
+      config.rewind_seconds = 2
+      config.rewind_seconds.should eq 5
+      config.rewind_seconds = 999
+      config.rewind_seconds.should eq 30
     end
   end
 

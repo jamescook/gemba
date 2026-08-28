@@ -85,6 +85,32 @@ describe Gemba::EmulationWorker do
     app.destroy
   end
 
+  # Core's own core_spec.cr proves #rewind_append/#rewind_restore's
+  # actual memory round-trip; this only exercises the cross-thread
+  # message plumbing (#rewind=) - engaging and releasing it mid-stream
+  # shouldn't crash the worker or stop frames from flowing.
+  it "#rewind= toggles append/restore without crashing delivery" do
+    app = Tryst::App.new(title: "emulation_worker_spec_rewind")
+    worker = Gemba::EmulationWorker.new(app, SPACE_BLAST_ROM)
+
+    frames = [] of Gemba::EmulationWorker::FramePacket
+    worker.on_frame { |packet| frames << packet }
+    app.interp.wait_until(5.seconds) { frames.size >= 5 }
+
+    worker.rewind = true
+    frames.clear
+    app.interp.wait_until(5.seconds) { frames.size >= 10 }
+    worker.rewind = false
+
+    frames.clear
+    app.interp.wait_until(5.seconds) { frames.size >= 5 }
+    frames.each(&.[:video].size.should(eq(240 * 160)))
+
+    worker.stop
+    app.interp.wait_until(5.seconds) { worker.done? }
+    app.destroy
+  end
+
   # Save/load happens on the worker thread (Core and SaveStateManager
   # live there exclusively); this exercises the cross-thread round trip.
   # state_dir_override isolates the test.

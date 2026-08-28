@@ -22,6 +22,7 @@ describe Gemba::SettingsWindow do
     config.frame_blending = true
     config.volume = 42
     config.muted = true
+    config.rewind_seconds = 20
 
     window.load_from_config(config)
 
@@ -33,7 +34,31 @@ describe Gemba::SettingsWindow do
     window.frame_blending_switch.value.should be_true
     window.volume_slider.value.should eq 42.0
     window.mute_switch.value.should be_true
+    window.rewind_buffer_control.selected.should eq "20s"
 
+    app.destroy
+  end
+
+  it "#load_from_config snaps a non-preset rewind_seconds to the nearest option" do
+    app, window, _events = build("settings_window_spec_1b")
+    config = Gemba::Config.new(File.tempname("settings_window_spec", ".json"))
+    config.rewind_seconds = 13 # not one of REWIND_OPTIONS - nearest is 10
+
+    window.load_from_config(config)
+
+    window.rewind_buffer_control.selected.should eq "10s"
+    app.destroy
+  end
+
+  it "moving the rewind buffer control emits Events#rewind_seconds_changed" do
+    app, window, events = build("settings_window_spec_1c")
+    seen = [] of Int32
+    events.rewind_seconds_changed.connect { |seconds| seen << seconds }
+
+    window.select_gameplay_tab
+    app.interp.simulate_event(window.rewind_buffer_control.path, "<Left>") # 10s -> 5s
+
+    seen.should eq [5]
     app.destroy
   end
 

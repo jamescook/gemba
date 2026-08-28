@@ -28,6 +28,8 @@ module Gemba
     # gamepad GUIDs - matches ruby gemba's own Config::KEYBOARD_GUID.
     KEYBOARD_GUID = "keyboard"
 
+    DEFAULT_REWIND_SECONDS = 10
+
     def self.empty_tree : JSON::Any
       JSON.parse(%({"global": {}, "gamepads": {}, "hotkeys": {}, "recent_roms": []}))
     end
@@ -104,6 +106,17 @@ module Gemba
 
     def show_fps=(value : Bool) : Bool
       set("show_fps", value)
+    end
+
+    # Seconds of history EmulationWorker's rewind buffer keeps - only
+    # takes effect for the NEXT ROM load, since mCoreRewindContext's
+    # entry count is fixed for the life of the Core that owns it.
+    def rewind_seconds : Int32
+      int("rewind_seconds", DEFAULT_REWIND_SECONDS)
+    end
+
+    def rewind_seconds=(value : Int32) : Int32
+      set("rewind_seconds", value.clamp(5, 30).to_i64)
     end
 
     # "auto", or a two-letter code ("en", "ja").

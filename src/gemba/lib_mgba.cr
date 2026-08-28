@@ -197,6 +197,28 @@ lib LibMgba
 
   fun VFileOpen(path : LibC::Char*, flags : Int32) : VFile*
 
+  # mgba/core/rewind.h's struct mCoreRewindContext - opaque, same
+  # convention as MCore's own dirs/inputMap/config/opts: gemba only ever
+  # passes a pointer to libmgba's own Init/Deinit/Append/Restore, never
+  # reads a field directly, so only its SIZE matters here. 56 bytes,
+  # verified via the same sizeof probe as MCore's own fields - identical
+  # on darwin and linux, unlike mDirectorySet, so no per-platform gate
+  # is needed.
+  #
+  # Constructed via `.new` (which zero-fills a lib struct's fields), not
+  # `uninitialized`: mCoreRewindContextInit itself checks
+  # `context->currentState` to guard against a double-init, and garbage
+  # bytes there could read as a non-null pointer and make it silently
+  # skip real initialization.
+  struct MCoreRewindContext
+    opaque : UInt8[56]
+  end
+
+  fun mCoreRewindContextInit(context : MCoreRewindContext*, entries : LibC::SizeT, on_thread : Bool) : Void
+  fun mCoreRewindContextDeinit(context : MCoreRewindContext*) : Void
+  fun mCoreRewindAppend(context : MCoreRewindContext*, core : MCore*) : Void
+  fun mCoreRewindRestore(context : MCoreRewindContext*, core : MCore*) : Bool
+
   # blip_buf - libmgba's audio ring buffer. Opaque; only ever handed a
   # pointer libmgba itself returned (getAudioChannel), never allocated
   # here.

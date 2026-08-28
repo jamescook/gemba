@@ -235,9 +235,9 @@ module Gemba
     def load_rom(path : String) : Nil
       @emulator_frame.try(&.cleanup)
 
-      frame = EmulatorFrame.new(@app, @video, @audio, @keyboard_map, @gamepad_map, path,
+      frame = EmulatorFrame.new(@app, @video, @audio, @keyboard_map, @gamepad_map, @hotkeys, path,
         quick_save_slot: @config.quick_save_slot, backup: @config.save_state_backup?,
-        debounce: @config.save_state_debounce.seconds)
+        debounce: @config.save_state_debounce.seconds, rewind_seconds: @config.rewind_seconds)
       frame.on_error { |text| report_error(text) }
       frame.on_message { |text| handle_worker_message(text) }
       frame.on_rom_info { |data| update_rom_identity(path, data) }
@@ -287,8 +287,11 @@ module Gemba
     end
 
     # Only the actions with a real handler get bound - HotkeyMap's own
-    # defaults also name rewind/record/input_record, none of which have
-    # an implementation yet - binding those now would just be dead keys.
+    # defaults also name record/input_record, neither implemented yet -
+    # binding those now would just be dead keys. rewind is implemented
+    # but deliberately NOT bound here: it's a hold-style action (see
+    # EmulatorFrame#poll_rewind), not a single-press toggle like every
+    # other hotkey #bind_hotkey wires up.
     private def bind_hotkeys : Nil
       bind_hotkey(:quit) { quit }
       bind_hotkey(:pause) { toggle_pause }
@@ -364,6 +367,14 @@ module Gemba
       @events.aspect_ratio_changed.connect do |enabled|
         @video.keep_aspect_ratio = enabled
         @config.keep_aspect_ratio = enabled
+        save_config
+      end
+
+      # Takes effect starting with the NEXT #load_rom - see #load_rom's
+      # own rewind_seconds: argument, and EmulationWorker's own doc
+      # comment on why the buffer size can't change on a running Core.
+      @events.rewind_seconds_changed.connect do |seconds|
+        @config.rewind_seconds = seconds
         save_config
       end
 

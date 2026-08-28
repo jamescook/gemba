@@ -1,4 +1,5 @@
 require "./config"
+require "./key_source"
 
 module Gemba
   # Maps player actions (quit, pause, etc.) to keyboard hotkeys. A
@@ -38,6 +39,15 @@ module Gemba
 
     # Tk event state bitmask -> modifier name.
     STATE_BITS = {1 => "Shift", 4 => "Control", 8 => "Alt"}
+
+    # Normalized modifier name -> the raw (lowercase) Tk keysyms
+    # KeySource#button? tracks for either physical side - see #held?.
+    MODIFIER_RAW_KEYSYMS = {
+      "Control" => %w[control_l control_r],
+      "Shift"   => %w[shift_l shift_r],
+      "Alt"     => %w[alt_l alt_r meta_l meta_r],
+      "Super"   => %w[super_l super_r],
+    }
 
     # Display-friendly modifier names.
     MODIFIER_DISPLAY = {"Control" => "Ctrl", "Shift" => "Shift", "Alt" => "Alt", "Super" => "Super"}
@@ -95,6 +105,21 @@ module Gemba
         end
       end
       nil
+    end
+
+    # Whether `action`'s hotkey combo is physically held right now, per
+    # `source` - for a HOLD-style action (rewind) that can't use a plain
+    # KeyPress toggle: Tk auto-repeats KeyPress while a key stays down
+    # but only ever fires one KeyRelease at the end, so there's no event
+    # to count "still held" from. Polls live key state instead - the
+    # same technique KeyboardMap#mask already uses for game buttons.
+    def held?(action : Symbol, source : KeySource) : Bool
+      hotkey = key_for(action)
+      return false unless hotkey
+
+      mods, key = hotkey.is_a?(Array) ? {hotkey[0...-1], hotkey.last} : {[] of String, hotkey}
+      return false unless self.class.raw_keysyms_for(key).any? { |raw| source.button?(raw) }
+      mods.all? { |modifier| (MODIFIER_RAW_KEYSYMS[modifier]? || [modifier.downcase]).any? { |raw| source.button?(raw) } }
     end
 
     # Rebinds action to a new hotkey, clearing any existing action
@@ -166,6 +191,16 @@ module Gemba
       return KEYSYM_ALIASES[keysym] if KEYSYM_ALIASES.has_key?(keysym)
       return keysym.downcase if keysym.size == 1 && keysym.matches?(/\A[A-Z]\z/)
       keysym
+    end
+
+    # The raw (lowercase) Tk keysyms that #normalize_keysym would map
+    # back to `keysym` - e.g. "Tab" is reported as itself, or (with
+    # Shift held) as the distinct "ISO_Left_Tab" keysym, see
+    # KEYSYM_ALIASES - #held? needs to poll for whichever one Tk would
+    # actually deliver, not just the normalized name #action_for expects.
+    def self.raw_keysyms_for(keysym : String) : Array(String)
+      aliases = KEYSYM_ALIASES.select { |_, v| v == keysym }.keys
+      ([keysym] + aliases).map(&.downcase)
     end
 
     def self.modifier_key?(keysym : String) : Bool
