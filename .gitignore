@@ -23,3 +23,8 @@ native/*.o
 # on why that command shape is avoided, and .githooks/pre-commit's
 # content-based (not extension-based) executable check for the backstop.
 /gemba_app
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key

@@ -1,0 +1,77 @@
+#!/bin/sh
+# Activate once per clone: git config core.hooksPath .githooks
+set -eu
+
+# --- 1. Ameba lint check ---------------------------------------------
+ameba_bin="lib/ameba/bin/ameba"
+if [ -x "$ameba_bin" ]; then
+  if ! "$ameba_bin" src/ spec/; then
+    echo "pre-commit: ameba found issues (see above) - fix or run 'crystal tool format' first." >&2
+    exit 1
+  fi
+else
+  echo "pre-commit: $ameba_bin not found - run 'shards install' first." >&2
+  exit 1
+fi
+
+# --- 2. Typecheck every example ---------------------------------------
+# `crystal spec` never touches examples/, and ameba above only lints it -
+# so an example could stop COMPILING and nothing would notice until
+# someone ran that one file. Deliberately ONLY "does it compile" - not
+# run (native modal dialogs, block on mainloop) and not realized either.
+# --no-codegen matters twice: it's much faster, and it emits NO binary,
+# so this can't leave behind the stray executable step 3 refuses.
+if ! command -v crystal >/dev/null 2>&1; then
+  echo "pre-commit: 'crystal' is not on PATH, so examples/ can't be typechecked." >&2
+  echo "Commit from a shell where 'crystal -v' works, or add it to the hook's PATH." >&2
+  exit 1
+fi
+
+example_failures=""
+if [ -d examples ]; then
+  if [ ! -d lib ]; then
+    echo "pre-commit: lib/ is missing - run 'shards install'." >&2
+    exit 1
+  fi
+  for f in $(find examples -name '*.cr' | sort); do
+    if ! out=$(crystal build --no-codegen "$f" 2>&1); then
+      example_failures="$example_failures
+--- $f
+$out"
+    fi
+  done
+fi
+
+if [ -n "$example_failures" ]; then
+  echo "pre-commit: example(s) failed to compile:" >&2
+  printf '%s\n' "$example_failures" >&2
+  echo "An example that doesn't compile is dead documentation - fix it or delete it." >&2
+  exit 1
+fi
+
+# --- 3. Refuse compiled executables -----------------------------------
+# Compiled Crystal binaries have no distinguishing file extension
+# (`crystal build foo.cr` with no -o produces a plain `foo`), so a
+# name/extension-based .gitignore entry can't reliably catch a stray one
+# - this checks actual file content instead.
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+if [ -n "$staged" ]; then
+  bad=""
+  for f in $staged; do
+    [ -f "$f" ] || continue
+    desc=$(file -b -- "$f")
+    case "$desc" in
+      *Mach-O*executable*|*ELF*executable*|*PE32*executable*)
+        bad="$bad
+$f: $desc"
+        ;;
+    esac
+  done
+
+  if [ -n "$bad" ]; then
+    echo "pre-commit: refusing to commit compiled executable(s):" >&2
+    printf '%s\n' "$bad" >&2
+    echo "Build artifacts belong outside the repo (scratch/tmp)." >&2
+    exit 1
+  fi
+fi
