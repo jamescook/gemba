@@ -100,6 +100,27 @@ describe Gemba::MainWindow do
     end
   end
 
+  it "each Settings menu item opens the settings window straight on its own tab" do
+    with_tempdir do |dir|
+      window = new_window(dir)
+
+      # Invoked the way a real menu click does, by entry label - what's
+      # under test is the wiring from menu item to pre-selected tab, so
+      # calling #show_settings directly would prove nothing.
+      menu = window.app.tcl_eval(". cget -menu")
+      settings_menu = window.app.tcl_eval("#{menu} entrycget Settings -menu")
+
+      {"General" => :general, "Video" => :video, "Audio" => :audio,
+       "Gameplay" => :gameplay, "Gamepad" => :gamepad, "Achievements" => :achievements}.each do |label, tab|
+        window.app.tcl_eval("#{settings_menu} invoke #{label}")
+        window.settings_window.selected_tab.should eq tab
+        window.modal_stack.pop
+      end
+
+      window.app.destroy
+    end
+  end
+
   it "settings can be reopened after being closed via the OS close button" do
     with_tempdir do |dir|
       window = new_window(dir)

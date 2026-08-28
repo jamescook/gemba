@@ -67,6 +67,7 @@ dialog:
   cancel_bulk_sync_msg: "A bulk sync is in progress. Closing will cancel it — games will need to be re-synced manually."
 
 settings:
+  general: "General"
   video: "Video"
   audio: "Audio"
   gameplay: "Gameplay"

@@ -17,6 +17,7 @@ require "./config"
 require "./rom_library"
 require "./frame_stack"
 require "./modal_stack"
+require "./auto_pause"
 require "./game_picker_frame"
 require "./list_picker_frame"
 require "./boxart_fetcher"
@@ -50,6 +51,10 @@ module Gemba
     # this as the "still playing" heartbeat, so it also decides how
     # quickly a finished session stops showing on the site.
     RA_PING_INTERVAL_MS = 120_000
+
+    # Only ever armed while a menu is actually posted - see
+    # #watch_menu_bar.
+    MENU_POLL_MS = 100
 
     # Matches ruby gemba's own turbo_volume_pct default (25) - see
     # EmulatorFrame's own doc comment on why turbo needs this at all.
@@ -105,7 +110,12 @@ module Gemba
     end
 
     @emulator_frame : EmulatorFrame?
-    @was_paused_before_modal : Bool = false
+
+    # Every pause gemba issues on the user's behalf goes through here -
+    # see AutoPause for why overlapping causes need real bookkeeping
+    # rather than a boolean, and #hold_auto_pause below for the reasons
+    # in use.
+    getter auto_pause = AutoPause.new
 
     # RetroAchievements session for the ROM currently loaded: the game
     # id resolved from its hash, and the latest presence string the
@@ -115,6 +125,11 @@ module Gemba
     @ra_rich_presence : String = ""
     @ra_ping_timer : Tryst::RepeatingTimer? = nil
     @pause_item : Tryst::UI::Handle?
+
+    # The menu bar itself, and the poll that watches it for the menu
+    # closing again - see #watch_menu_bar.
+    @menu_bar : Tryst::UI::Handle?
+    @menu_poll : Tryst::RepeatingTimer? = nil
 
     # rom_library_path/config_path forward straight to RomLibrary/Config
     # - see their own doc comments. Production code omits both; a spec
@@ -178,7 +193,7 @@ module Gemba
         resizable: false, modal: true)
       @rom_info_window = RomInfoWindow.new(@session)
 
-      @session.menu_bar do |bar|
+      @menu_bar = @session.menu_bar do |bar|
         bar.menu(label: Locale.translate("menu.file")) do |file|
           file.item(:open_rom, label: Locale.translate("menu.open_rom"), shortcut: "Ctrl+O") { open_rom_dialog }
           file.item(:screenshot, label: Locale.translate("settings.hk_screenshot"), shortcut: "F9") { take_screenshot }
@@ -186,8 +201,16 @@ module Gemba
           file.item(:quit, label: Locale.translate("menu.quit"), shortcut: "Ctrl+Q") { quit }
         end
 
+        # One item per tab rather than a lone "Settings…" nested under a
+        # Settings menu - same window either way, opened straight on the
+        # section the user picked.
         bar.menu(label: Locale.translate("menu.settings")) do |settings_menu|
-          settings_menu.item(:open_settings, label: "#{Locale.translate("menu.settings")}…") { show_settings }
+          settings_menu.item(:settings_general, label: Locale.translate("settings.general")) { show_settings(:general) }
+          settings_menu.item(:settings_video, label: Locale.translate("settings.video")) { show_settings(:video) }
+          settings_menu.item(:settings_audio, label: Locale.translate("settings.audio")) { show_settings(:audio) }
+          settings_menu.item(:settings_gameplay, label: Locale.translate("settings.gameplay")) { show_settings(:gameplay) }
+          settings_menu.item(:settings_gamepad, label: Locale.translate("settings.gamepad")) { show_settings(:gamepad) }
+          settings_menu.item(:settings_achievements, label: Locale.translate("settings.retroachievements")) { show_settings(:achievements) }
         end
 
         bar.menu(label: Locale.translate("menu.view")) do |view|
@@ -266,6 +289,8 @@ module Gemba
       apply_initial_config
       wire_events
       bind_hotkeys
+      watch_app_focus
+      watch_menu_bar
       init_gamepad_subsystem if @gamepad_polling
       @app.bring_to_front
     end
@@ -579,6 +604,14 @@ module Gemba
         save_config
       end
 
+      # Nothing to apply eagerly - #watch_app_focus reads the setting at
+      # the moment the app is deactivated. Switching it off mid-session
+      # still lets an already-held focus pause release normally.
+      @events.pause_on_focus_loss_changed.connect do |enabled|
+        @config.pause_on_focus_loss = enabled
+        save_config
+      end
+
       # Takes effect starting with the NEXT #load_rom - see #load_rom's
       # own rewind_seconds: argument, and EmulationWorker's own doc
       # comment on why the buffer size can't change on a running Core.
@@ -868,11 +901,12 @@ module Gemba
     # main_window_spec.cr's own settings/ROM-info reopen-after-close
     # tests, which need to trigger this the same way a real menu click
     # does without reaching for a reflection hack.
-    def show_settings : Nil
+    def show_settings(tab : Symbol = :general) : Nil
       return if @modal_stack.active?
 
       @settings_window.load_from_config(@config)
       refresh_gamepad_tab
+      @settings_window.select_tab(tab)
       @modal_stack.push(:settings, @settings_window.handle)
     end
 
@@ -903,20 +937,105 @@ module Gemba
       @modal_stack.push(:save_states, @save_state_picker.handle)
     end
 
+    # Reasons in use: :modal (a settings/ROM-info/save-state dialog is
+    # up), :focus_loss (the app stopped being the active one), :menu (a
+    # menu bar cascade is posted). AutoPause decides whether this
+    # particular hold/release is the one that actually flips the
+    # emulator, so overlapping causes nest correctly.
+    private def hold_auto_pause(reason : Symbol) : Nil
+      frame = @emulator_frame
+      return unless @auto_pause.hold(reason, frame.try(&.paused?) || false)
+
+      Gemba.log { "auto-pause: hold #{reason}" }
+      frame.try(&.pause)
+      update_pause_label
+    end
+
+    private def release_auto_pause(reason : Symbol) : Nil
+      return unless @auto_pause.release(reason)
+
+      Gemba.log { "auto-pause: release #{reason}" }
+      @emulator_frame.try(&.resume)
+      update_pause_label
+    end
+
+    # <Deactivate>/<Activate> are Tk's "this application stopped/started
+    # being the active one" - Cmd-Tab, clicking another app, switching
+    # macOS Spaces. Deliberately NOT <FocusOut>/<FocusIn>, which also
+    # fire when focus merely moves between widgets inside this window.
+    #
+    # macOS and Windows only: X11 has no notion of an active
+    # application and Tk generates neither event there (bind(n)), so on
+    # Linux the setting is inert rather than wrong.
+    #
+    # The release is unconditional while the hold honours the setting -
+    # switching the setting off while the app is in the background has
+    # to still let the game come back.
+    private def watch_app_focus : Nil
+      @app.bind(:root, :deactivate) do |_values, _signal|
+        hold_auto_pause(:focus_loss) if @config.pause_on_focus_loss?
+      end
+      @app.bind(:root, :activate) { |_values, _signal| release_auto_pause(:focus_loss) }
+    end
+
+    # A menu posted over a game running at max turbo makes the whole UI
+    # crawl: Tk deliberately keeps its event loop running while a menu
+    # is open (on macOS it spins one on NSEventTrackingRunLoopMode for
+    # exactly that reason), so the emulation worker goes right on
+    # competing with the menu for it.
+    #
+    # <<MenuSelect>> fires on the menu BAR as soon as one of its
+    # cascades opens, which is the hold. There's no matching "menu
+    # closed" event on macOS - the native NSMenu delegate generates none
+    # - but ending menu tracking does clear the bar's active entry, so
+    # polling for that is the release. X11 clears it too AND fires a
+    # final <<MenuSelect>>, so there the poll rarely gets a turn.
+    private def watch_menu_bar : Nil
+      bar = @menu_bar
+      return unless bar
+
+      @app.bind(bar.path, :menu_select) { |_values, _signal| menu_activity }
+    end
+
+    private def menu_activity : Nil
+      if menu_bar_idle?
+        @menu_poll.try(&.cancel)
+        @menu_poll = nil
+        release_auto_pause(:menu)
+      else
+        hold_auto_pause(:menu)
+        @menu_poll ||= @app.every(MENU_POLL_MS) { menu_activity }
+      end
+    end
+
+    # True once no cascade of the menu bar is posted any more. Tk answers
+    # "none" for a menu with no active entry; anything unexpected (an
+    # error off a torn-down bar) counts as closed too, rather than
+    # leaving the game paused with nothing left to release it.
+    private def menu_bar_idle? : Bool
+      bar = @menu_bar
+      return true unless bar
+
+      @app.command(bar.path, :index, "active").to_i?.nil?
+    rescue
+      true
+    end
+
     # Pauses/resumes emulation around a modal's whole visible lifetime -
     # a settings dialog open over a running game shouldn't keep burning
     # CPU (or audio) behind it. Only the FIRST modal entered/last exited
     # triggers this (ModalStack only calls on_enter/on_exit at the
     # empty <-> non-empty transition), matching ruby's own
     # modal_entered/modal_exited.
+    #
+    # Unconditional, unlike the focus-loss pause below: a modal covers
+    # the game whether or not the user wants focus changes to pause it.
     private def enter_modal : Nil
-      frame = @emulator_frame
-      @was_paused_before_modal = frame.try(&.paused?) || false
-      frame.try(&.pause) unless @was_paused_before_modal
+      hold_auto_pause(:modal)
     end
 
     private def exit_modal : Nil
-      @emulator_frame.try(&.resume) unless @was_paused_before_modal
+      release_auto_pause(:modal)
 
       # A modal's own #show grabs keyboard focus (Handle#show); nothing
       # releases it back on hide, so it's still nominally on the (now

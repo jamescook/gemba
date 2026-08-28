@@ -21,6 +21,7 @@ describe Gemba::Config do
       config.integer_scale?.should be_false
       config.color_correction?.should be_false
       config.frame_blending?.should be_false
+      config.pause_on_focus_loss?.should be_true
       config.locale.should eq "auto"
       config.picker_view.should eq "grid"
       config.rewind_seconds.should eq 10
@@ -44,6 +45,7 @@ describe Gemba::Config do
       config.integer_scale = true
       config.color_correction = true
       config.frame_blending = true
+      config.pause_on_focus_loss = false
       config.locale = "ja"
       config.picker_view = "list"
       config.rewind_seconds = 20
@@ -63,6 +65,7 @@ describe Gemba::Config do
       reloaded.integer_scale?.should be_true
       reloaded.color_correction?.should be_true
       reloaded.frame_blending?.should be_true
+      reloaded.pause_on_focus_loss?.should be_false
       reloaded.locale.should eq "ja"
       reloaded.picker_view.should eq "list"
       reloaded.rewind_seconds.should eq 20

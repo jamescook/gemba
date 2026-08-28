@@ -21,11 +21,13 @@ module Gemba
   # grid/tabs builders: Switch/SegmentedControl/ValueSlider all require
   # a concrete Tryst::App, not the DSL's narrow AppContract.
   #
-  # Video, Audio, Gameplay, Gamepad, and Achievements tabs exist - the
-  # subset of ruby's own SettingsWindow this port has a live feature
-  # behind; add a tab once the feature it configures exists.
+  # General, Video, Audio, Gameplay, Gamepad, and Achievements tabs
+  # exist - the subset of ruby's own SettingsWindow this port has a live
+  # feature behind; add a tab once the feature it configures exists.
+  # (Ruby has no General tab and files its pause-on-focus-loss switch
+  # under Video instead; the setting isn't about video, so it moved.)
   #
-  # Video/Audio/Gameplay are built directly in #initialize rather than
+  # General/Video/Audio/Gameplay are built directly in #initialize rather than
   # split into per-tab helper methods: each control ivar is only
   # assigned partway through, and Crystal bans any instance-method call
   # on self until every declared ivar has been assigned at least once
@@ -38,6 +40,7 @@ module Gemba
     # Public getters onto the real controls - a caller (a spec included)
     # reads/drives the same widgets #load_from_config itself writes,
     # rather than reaching into private state.
+    getter pause_on_focus_loss_switch : Tryst::Switch
     getter scale_control : Tryst::SegmentedControl
     getter filter_control : Tryst::SegmentedControl
     getter aspect_switch : Tryst::Switch
@@ -55,6 +58,7 @@ module Gemba
     # ever writes one of these back.
     REWIND_OPTIONS = [5, 10, 20, 30]
 
+    @general_tab : String
     @video_tab : String
     @audio_tab : String
     @gameplay_tab : String
@@ -68,6 +72,16 @@ module Gemba
       # Bold button style for a customized (non-default) rebind, shared
       # by GamepadTab's own button styling.
       @app.tcl_eval("ttk::style configure Bold.TButton -font [list {*}[font actual TkDefaultFont] -weight bold]")
+
+      # -- General tab --
+      general = @general_tab = "#{@notebook}.general"
+      @app.command("ttk::frame", general, padding: 12)
+      @app.command(@notebook, :add, general, text: Locale.translate("settings.general"))
+
+      @pause_on_focus_loss_switch = Tryst::Switch.new(@app,
+        text: Locale.translate("settings.pause_on_focus_loss"), parent: general)
+      @pause_on_focus_loss_switch.pack(anchor: :w, pady: 8)
+      @pause_on_focus_loss_switch.on_action { |v| @events.pause_on_focus_loss_changed.emit(v) }
 
       # -- Video tab --
       video = @video_tab = "#{@notebook}.video"
@@ -155,8 +169,38 @@ module Gemba
       @handle
     end
 
+    # The Settings menu has one item per tab rather than a single
+    # "Settings…" - each opens this window already on the tab it names.
+    # An unknown symbol leaves whichever tab is current selected.
+    def select_tab(tab : Symbol) : Nil
+      case tab
+      when :general      then select_general_tab
+      when :video        then select_video_tab
+      when :audio        then select_audio_tab
+      when :gameplay     then select_gameplay_tab
+      when :gamepad      then select_gamepad_tab
+      when :achievements then select_achievements_tab
+      end
+    end
+
+    # The inverse of #select_tab - nil for a tab this doesn't know about.
+    def selected_tab : Symbol?
+      case @app.command(@notebook, :select)
+      when @general_tab           then :general
+      when @video_tab             then :video
+      when @audio_tab             then :audio
+      when @gameplay_tab          then :gameplay
+      when @gamepad_tab.path      then :gamepad
+      when @achievements_tab.path then :achievements
+      end
+    end
+
     # Unmapped tabs aren't viewable until selected (a Tk requirement),
     # so select first before accessing controls on them.
+    def select_general_tab : Nil
+      @app.command(@notebook, :select, @general_tab)
+    end
+
     def select_video_tab : Nil
       @app.command(@notebook, :select, @video_tab)
     end
@@ -180,6 +224,7 @@ module Gemba
     # Pushes the current Config into every control - call before showing
     # the window (mirrors ruby's own :config_loaded bus event).
     def load_from_config(config : Config) : Nil
+      @pause_on_focus_loss_switch.value = config.pause_on_focus_loss?
       @scale_control.selected = "#{config.scale}x"
       @filter_control.selected = filter_label(config.pixel_filter)
       @aspect_switch.value = config.keep_aspect_ratio?
@@ -196,7 +241,7 @@ module Gemba
     # nil means no conflict.
     private def validate_kb_mapping(keysym : String) : String?
       action = @hotkeys.action_for(keysym)
-      return nil unless action
+      return unless action
 
       label = action.to_s.gsub('_', ' ').capitalize
       %("#{keysym}" is assigned to hotkey: #{label})

@@ -67,6 +67,7 @@ dialog:
   cancel_bulk_sync_msg: "一括同期が実行中です。閉じるとキャンセルされます — 手動で再同期が必要になります。"
 
 settings:
+  general: "一般"
   video: "映像"
   audio: "音声"
   gameplay: "ゲームプレイ"

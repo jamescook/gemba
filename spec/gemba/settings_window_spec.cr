@@ -23,9 +23,11 @@ describe Gemba::SettingsWindow do
     config.volume = 42
     config.muted = true
     config.rewind_seconds = 20
+    config.pause_on_focus_loss = false
 
     window.load_from_config(config)
 
+    window.pause_on_focus_loss_switch.value.should be_false
     window.scale_control.selected.should eq "2x"
     window.filter_control.selected.should eq "Bilinear"
     window.aspect_switch.value.should be_false
@@ -62,11 +64,39 @@ describe Gemba::SettingsWindow do
     app.destroy
   end
 
+  it "#select_tab round-trips through #selected_tab for every tab the Settings menu offers" do
+    app, window, _events = build("settings_window_spec_1e")
+
+    window.selected_tab.should eq :general
+    [:video, :audio, :gameplay, :gamepad, :achievements, :general].each do |tab|
+      window.select_tab(tab)
+      window.selected_tab.should eq tab
+    end
+
+    app.destroy
+  end
+
+  it "toggling the General tab's pause-on-focus-loss switch emits its event" do
+    app, window, events = build("settings_window_spec_1d")
+    seen = [] of Bool
+    events.pause_on_focus_loss_changed.connect { |enabled| seen << enabled }
+
+    window.select_general_tab
+    app.interp.simulate_event(window.pause_on_focus_loss_switch.path, "<space>")
+
+    seen.should eq [true]
+    app.destroy
+  end
+
   it "moving the scale control emits Events#scale_changed" do
     app, window, events = build("settings_window_spec_2")
     seen = [] of Int32
     events.scale_changed.connect { |scale| seen << scale }
 
+    # General, not Video, is the tab the notebook opens on - and an
+    # unmapped widget can't take focus (same reason the Mute test below
+    # selects its own tab first).
+    window.select_video_tab
     app.interp.simulate_event(window.scale_control.path, "<Left>") # 3x -> 2x
 
     seen.should eq [2]
@@ -78,6 +108,7 @@ describe Gemba::SettingsWindow do
     seen = [] of Symbol
     events.filter_changed.connect { |mode| seen << mode }
 
+    window.select_video_tab
     app.interp.simulate_event(window.filter_control.path, "<Right>") # Nearest -> Linear
 
     seen.should eq [:linear]

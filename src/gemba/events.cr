@@ -16,6 +16,9 @@ module Gemba
     getter frame_blending_changed = Tryst::UI::Signal(Bool).new
     getter aspect_ratio_changed = Tryst::UI::Signal(Bool).new
 
+    # General tab.
+    getter pause_on_focus_loss_changed = Tryst::UI::Signal(Bool).new
+
     # Gameplay tab - MainWindow persists it, but it only reaches Core at
     # the NEXT rom load (see EmulationWorker's own doc comment).
     getter rewind_seconds_changed = Tryst::UI::Signal(Int32).new

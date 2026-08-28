@@ -100,6 +100,17 @@ module Gemba
       set("frame_blending", value)
     end
 
+    # Pauses emulation whenever the app stops being the active one -
+    # switching macOS Spaces, Cmd-Tab, clicking another window. Same key
+    # and default as ruby gemba, which writes this file too.
+    def pause_on_focus_loss? : Bool
+      bool("pause_on_focus_loss", true)
+    end
+
+    def pause_on_focus_loss=(value : Bool) : Bool
+      set("pause_on_focus_loss", value)
+    end
+
     def show_fps? : Bool
       bool("show_fps", true)
     end
