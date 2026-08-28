@@ -48,5 +48,17 @@ module Gemba
     # rom_title: the display title (e.g. "Pokemon FireRed"), for the
     # window title bar and ROM Info panel to react to independently.
     getter rom_loaded = Tryst::UI::Signal(String).new
+
+    # Achievements tab - persisted booleans go straight to Config like
+    # every other tab; the login/verify/logout/reset actions have no
+    # backend to reach yet (rcheevos isn't vendored), so a listener is
+    # deferred to when that lands.
+    getter ra_enabled_changed = Tryst::UI::Signal(Bool).new
+    getter ra_rich_presence_changed = Tryst::UI::Signal(Bool).new
+    getter ra_screenshot_on_unlock_changed = Tryst::UI::Signal(Bool).new
+    getter ra_login_requested = Tryst::UI::Signal(String, String).new
+    getter ra_verify_requested = Tryst::UI::Signal().new
+    getter ra_logout_requested = Tryst::UI::Signal().new
+    getter ra_reset_requested = Tryst::UI::Signal().new
   end
 end

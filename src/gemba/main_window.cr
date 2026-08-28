@@ -495,6 +495,19 @@ module Gemba
         save_config
       end
 
+      @events.ra_enabled_changed.connect do |enabled|
+        @config.ra_enabled = enabled
+        save_config
+      end
+      @events.ra_rich_presence_changed.connect do |enabled|
+        @config.ra_rich_presence = enabled
+        save_config
+      end
+      @events.ra_screenshot_on_unlock_changed.connect do |enabled|
+        @config.ra_screenshot_on_unlock = enabled
+        save_config
+      end
+
       @events.keyboard_mapping_changed.connect do |btn, keysym|
         @keyboard_map.set(btn, keysym)
         @keyboard_map.save_to_config(@config)

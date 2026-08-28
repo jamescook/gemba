@@ -8,6 +8,7 @@ require "./events"
 require "./locale"
 require "./hotkey_map"
 require "./settings/gamepad_tab"
+require "./settings/achievements_tab"
 
 module Gemba
   # A settings modal, live-wired to Gemba::Events and persisted via
@@ -20,18 +21,19 @@ module Gemba
   # grid/tabs builders: Switch/SegmentedControl/ValueSlider all require
   # a concrete Tryst::App, not the DSL's narrow AppContract.
   #
-  # Video, Audio, Gameplay, and Gamepad tabs exist - the subset of
-  # ruby's own SettingsWindow this port has a live feature behind; add a
-  # tab once the feature it configures exists.
+  # Video, Audio, Gameplay, Gamepad, and Achievements tabs exist - the
+  # subset of ruby's own SettingsWindow this port has a live feature
+  # behind; add a tab once the feature it configures exists.
   #
   # Video/Audio/Gameplay are built directly in #initialize rather than
   # split into per-tab helper methods: each control ivar is only
   # assigned partway through, and Crystal bans any instance-method call
   # on self until every declared ivar has been assigned at least once
-  # (see MainWindow's own comment on this exact constraint). Gamepad is
-  # complex enough (rebind capture, mode toggle, dead zone) to warrant
-  # its own class - Settings::GamepadTab, constructed only once its own
-  # ivars are ready, same as ruby's own tab split.
+  # (see MainWindow's own comment on this exact constraint). Gamepad and
+  # Achievements are complex enough (rebind capture / credential state)
+  # to warrant their own classes - Settings::GamepadTab and
+  # Settings::AchievementsTab, constructed only once their own ivars are
+  # ready, same as ruby's own tab split.
   class SettingsWindow
     # Public getters onto the real controls - a caller (a spec included)
     # reads/drives the same widgets #load_from_config itself writes,
@@ -46,6 +48,7 @@ module Gemba
     getter mute_switch : Tryst::Switch
     getter rewind_buffer_control : Tryst::SegmentedControl
     getter gamepad_tab : Settings::GamepadTab
+    getter achievements_tab : Settings::AchievementsTab
 
     # Presets the Rewind Buffer segmented control offers - Config's own
     # #rewind_seconds allows anything in 5..30, but the control only
@@ -143,6 +146,9 @@ module Gemba
       # -- Gamepad tab --
       @gamepad_tab = Settings::GamepadTab.new(@app, @notebook, @path, @events,
         validate_keyboard_mapping: ->(keysym : String) { validate_kb_mapping(keysym) })
+
+      # -- Achievements tab --
+      @achievements_tab = Settings::AchievementsTab.new(@app, @notebook, @path, @events)
     end
 
     def handle : Tryst::UI::Handle
@@ -167,6 +173,10 @@ module Gemba
       @app.command(@notebook, :select, @gamepad_tab.path)
     end
 
+    def select_achievements_tab : Nil
+      @app.command(@notebook, :select, @achievements_tab.path)
+    end
+
     # Pushes the current Config into every control - call before showing
     # the window (mirrors ruby's own :config_loaded bus event).
     def load_from_config(config : Config) : Nil
@@ -179,6 +189,7 @@ module Gemba
       @volume_slider.value = config.volume.to_f64
       @mute_switch.value = config.muted?
       @rewind_buffer_control.selected = "#{nearest_rewind_option(config.rewind_seconds)}s"
+      @achievements_tab.load_from_config(config)
     end
 
     # Rejects a keyboard rebind that would shadow an existing hotkey -

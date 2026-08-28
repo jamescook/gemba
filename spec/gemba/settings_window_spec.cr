@@ -129,4 +129,34 @@ describe Gemba::SettingsWindow do
     window.gamepad_tab.listening_for.should be_nil
     app.destroy
   end
+
+  it "#load_from_config pushes RetroAchievements state into the Achievements tab" do
+    app, window, _events = build("settings_window_spec_8")
+    config = Gemba::Config.new(File.tempname("settings_window_spec", ".json"))
+    config.ra_enabled = true
+    config.ra_username = "someone"
+    config.ra_token = "tok123"
+    config.ra_rich_presence = true
+    config.ra_screenshot_on_unlock = false
+
+    window.load_from_config(config)
+
+    window.achievements_tab.enabled_switch.value.should be_true
+    window.achievements_tab.rich_presence_switch.value.should be_true
+    window.achievements_tab.screenshot_switch.value.should be_false
+    app.get_variable("::gemba_ra_username").should eq "someone"
+    app.destroy
+  end
+
+  it "toggling the RetroAchievements enable switch emits Events#ra_enabled_changed" do
+    app, window, events = build("settings_window_spec_9")
+    seen = [] of Bool
+    events.ra_enabled_changed.connect { |enabled| seen << enabled }
+
+    window.select_achievements_tab
+    app.interp.simulate_event(window.achievements_tab.enabled_switch.path, "<space>")
+
+    seen.should eq [true]
+    app.destroy
+  end
 end

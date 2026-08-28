@@ -24,6 +24,11 @@ describe Gemba::Config do
       config.locale.should eq "auto"
       config.picker_view.should eq "grid"
       config.rewind_seconds.should eq 10
+      config.ra_enabled?.should be_false
+      config.ra_username.should eq ""
+      config.ra_token.should eq ""
+      config.ra_rich_presence?.should be_false
+      config.ra_screenshot_on_unlock?.should be_true
     end
   end
 
@@ -42,6 +47,11 @@ describe Gemba::Config do
       config.locale = "ja"
       config.picker_view = "list"
       config.rewind_seconds = 20
+      config.ra_enabled = true
+      config.ra_username = "someone"
+      config.ra_token = "tok123"
+      config.ra_rich_presence = true
+      config.ra_screenshot_on_unlock = false
       config.save!
 
       reloaded = Gemba::Config.new(path)
@@ -56,6 +66,11 @@ describe Gemba::Config do
       reloaded.locale.should eq "ja"
       reloaded.picker_view.should eq "list"
       reloaded.rewind_seconds.should eq 20
+      reloaded.ra_enabled?.should be_true
+      reloaded.ra_username.should eq "someone"
+      reloaded.ra_token.should eq "tok123"
+      reloaded.ra_rich_presence?.should be_true
+      reloaded.ra_screenshot_on_unlock?.should be_false
     end
   end
 

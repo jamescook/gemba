@@ -119,6 +119,46 @@ module Gemba
       set("rewind_seconds", value.clamp(5, 30).to_i64)
     end
 
+    def ra_enabled? : Bool
+      bool("ra_enabled", false)
+    end
+
+    def ra_enabled=(value : Bool) : Bool
+      set("ra_enabled", value)
+    end
+
+    def ra_username : String
+      str("ra_username", "")
+    end
+
+    def ra_username=(value : String) : String
+      set("ra_username", value)
+    end
+
+    def ra_token : String
+      str("ra_token", "")
+    end
+
+    def ra_token=(value : String) : String
+      set("ra_token", value)
+    end
+
+    def ra_rich_presence? : Bool
+      bool("ra_rich_presence", false)
+    end
+
+    def ra_rich_presence=(value : Bool) : Bool
+      set("ra_rich_presence", value)
+    end
+
+    def ra_screenshot_on_unlock? : Bool
+      bool("ra_screenshot_on_unlock", true)
+    end
+
+    def ra_screenshot_on_unlock=(value : Bool) : Bool
+      set("ra_screenshot_on_unlock", value)
+    end
+
     # "auto", or a two-letter code ("en", "ja").
     def locale : String
       str("locale", "auto")
