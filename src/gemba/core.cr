@@ -271,6 +271,19 @@ module Gemba
       ok
     end
 
+    # Writes the RAW current frame (pre color-correction/frame-blending -
+    # the canonical screenshot) straight to a PNG at path via libmgba's
+    # own encoder. No Crystal-side Tk::Photo round-trip needed, unlike
+    # the save-state thumbnails in MainWindow#write_state_thumbnail.
+    def take_screenshot_to_file(path : String) : Bool
+      raise_if_destroyed!
+      vf = LibMgba.VFileOpen(path, LibC::O_CREAT | LibC::O_TRUNC | LibC::O_WRONLY)
+      raise "cannot open screenshot file for writing: #{path}" if vf.null?
+      ok = LibMgba.mCoreTakeScreenshotVF(@core, vf.as(Void*))
+      vf.value.close.call(vf.as(Void*))
+      ok
+    end
+
     def destroy : Nil
       return if @destroyed
       @destroyed = true

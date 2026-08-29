@@ -145,7 +145,7 @@ module Gemba
     # state_dir_override convention EmulationWorker's save-state tests
     # already use).
     # Config/Locale/GameIndex's own file reads below are genuine blocking
-    # syscalls (see the same guard #take_screenshot routes around via
+    # syscalls (see the same guard #save_config routes around via
     # App#off_thread) but happen before any Tryst::App/interpreter
     # exists in this process at all - there's no Tk thread yet to
     # corrupt, only the guard's own conservative heuristic firing
@@ -738,10 +738,9 @@ module Gemba
     end
 
     # Config#save! is a real blocking File.write - routed through
-    # off_thread same as #take_screenshot's own Dir.mkdir_p/Time.local,
-    # and for the same reason (this runs from a live event, well after
+    # off_thread since this runs from a live event, well after
     # @app/the Tk mainloop both exist, unlike Config's initial load in
-    # #initialize - see that method's own comment).
+    # #initialize (see that method's own comment).
     private def save_config : Nil
       @app.off_thread { @config.save! }
     end
@@ -773,6 +772,19 @@ module Gemba
       if presence = text.lchop?("rich_presence:")
         @ra_rich_presence = presence
         Gemba.log { "RA: rich presence = #{presence}" }
+        return
+      end
+
+      # Also handled up front: screenshot_result:<ok>:<filename> only
+      # has 3 fields, not the 4 save_result/load_result carry - the
+      # generic split below would otherwise raise on parts[3].
+      if payload = text.lchop?("screenshot_result:")
+        ok, filename = payload.split(':', 2)
+        if ok == "true"
+          @video.show_toast(Locale.translate("toast.screenshot_saved", name: filename))
+        else
+          @video.show_toast(Locale.translate("toast.screenshot_failed"))
+        end
         return
       end
 
@@ -823,38 +835,16 @@ module Gemba
       end
     end
 
-    # Captures whatever's currently on screen (post color-correction/
-    # frame-blending, same as ruby's own Core#video_buffer_argb-based
-    # take_screenshot) at the CURRENT scale.
+    # Takes the RAW emulator frame straight from the core (see
+    # Core#take_screenshot_to_file) - deliberately NOT the same
+    # post-color-correction/frame-blending frame VideoOutput displays
+    # (that's what write_state_thumbnail uses for save-state thumbnails,
+    # where matching what's on screen actually matters). The core's own
+    # PNG encoder is the canonical screenshot and needs no Tk::Photo
+    # round-trip; runs on the worker thread since Core is
+    # worker-thread-only, reporting back through handle_worker_message.
     def take_screenshot : Nil
-      bytes = @video.last_frame_argb
-      return unless bytes
-
-      dir = Paths.screenshots_dir
-      # Both Dir.mkdir_p and Time.local are blocking calls that don't
-      # belong on Tk's own thread (Time.local lazily loads timezone data
-      # from disk the first time anything asks for local time - not
-      # obviously a file read, but confirmed directly: it trips the same
-      # syscall guard File.mkdir_p does).
-      stamp = @app.off_thread do
-        Dir.mkdir_p(dir) unless Dir.exists?(dir)
-        Time.local.to_s("%Y%m%d_%H%M%S")
-      end
-      rom_title = @emulator_frame.try(&.rom_title)
-      title = rom_title.nil? || rom_title.empty? ? "gemba" : rom_title
-      path = File.join(dir, "#{title}_#{stamp}.png")
-
-      scale = @config.scale
-      out_w = @video.native_width * scale
-      out_h = @video.native_height * scale
-      photo = Tryst::Photo.new(@app, width: out_w, height: out_h)
-      begin
-        photo.put_zoomed_block(bytes, @video.native_width, @video.native_height,
-          zoom_x: scale, zoom_y: scale, format: Tryst::PixelFormat::ARGB)
-        photo.command(:write, path, format: "png")
-      ensure
-        photo.delete
-      end
+      @emulator_frame.try(&.take_screenshot)
     end
 
     private def toggle_pause : Nil

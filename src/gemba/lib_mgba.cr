@@ -184,6 +184,7 @@ lib LibMgba
   fun mCoreAutoloadSave(core : MCore*) : Bool
   fun mCoreSaveStateNamed(core : MCore*, vf : Void*, flags : Int32) : Bool
   fun mCoreLoadStateNamed(core : MCore*, vf : Void*, flags : Int32) : Bool
+  fun mCoreTakeScreenshotVF(core : MCore*, vf : Void*) : Bool
 
   # mgba-util/vfs.h's struct VFile - only its first field (close is
   # ALWAYS the first member of the real struct's function-pointer table,

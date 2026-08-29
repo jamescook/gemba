@@ -81,7 +81,7 @@ module Gemba
 
     # Fires for any worker message OTHER than "rom_info:..." (which
     # #handle_message intercepts and caches as #rom_info itself) -
-    # currently "save_result:.../load_result:...".
+    # currently "save_result:.../load_result:.../screenshot_result:...".
     def on_message(&block : String -> Nil) : self
       @on_message = block
       self
@@ -125,6 +125,10 @@ module Gemba
 
     def load_slot(slot : Int32) : Nil
       @worker.load_slot(slot)
+    end
+
+    def take_screenshot : Nil
+      @worker.take_screenshot(@rom_title)
     end
 
     # The per-ROM save-state directory (states/<game>-<crc>/, computed

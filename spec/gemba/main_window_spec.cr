@@ -203,9 +203,16 @@ describe Gemba::MainWindow do
 
       before = Dir.exists?(Gemba::Paths.screenshots_dir) ? Dir.children(Gemba::Paths.screenshots_dir) : [] of String
       window.take_screenshot
-      after = Dir.children(Gemba::Paths.screenshots_dir)
-      new_files = after - before
-      new_files.size.should eq 1
+
+      # Now round-trips through the worker thread (Core is
+      # worker-thread-only) rather than writing synchronously on Tk's
+      # own thread, so the file isn't guaranteed to exist the instant
+      # #take_screenshot returns.
+      new_files = [] of String
+      window.app.interp.wait_until(5.seconds) do
+        new_files = Dir.exists?(Gemba::Paths.screenshots_dir) ? Dir.children(Gemba::Paths.screenshots_dir) - before : [] of String
+        new_files.size == 1
+      end
 
       path = File.join(Gemba::Paths.screenshots_dir, new_files.first)
       File.size(path).should be > 0

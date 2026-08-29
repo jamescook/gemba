@@ -88,8 +88,9 @@ module Gemba
     end
 
     # Fires for a non-frame message the worker sends back - currently
-    # only "save_result:<ok>:<slot>:<text>"/"load_result:<ok>:<slot>:<text>",
-    # see #quick_save/#quick_load/#save_slot/#load_slot.
+    # "save_result:<ok>:<slot>:<text>"/"load_result:<ok>:<slot>:<text>"/
+    # "screenshot_result:<ok>:<filename>", see
+    # #quick_save/#quick_load/#save_slot/#load_slot/#take_screenshot.
     def on_message(&block : String -> Nil) : self
       @background.on_message { |text| block.call(text) }
       self
@@ -115,6 +116,14 @@ module Gemba
 
     def load_slot(slot : Int32) : Nil
       @background.send_message("load_slot:#{slot}")
+    end
+
+    # rom_title crosses over because it's derived from the ROM's file
+    # path (EmulatorFrame#rom_title), which the main thread already has
+    # and Core has no equivalent of - Core#title is the cart header's
+    # own game title, not the same string.
+    def take_screenshot(rom_title : String) : Nil
+      @background.send_message("screenshot:#{rom_title}")
     end
 
     # Hands the game's Rich Presence script to the worker, which is
@@ -408,6 +417,45 @@ module Gemba
       end
     end
 
+    # Writes Paths.screenshots_dir/<title>_<timestamp>.png straight from
+    # the core (see Core#take_screenshot_to_file) and returns the
+    # filename alone (not the full path) - all handle_worker_message's
+    # toast needs. mkdir_p/Time.local both belong here rather than on
+    # the main thread: the same blocking-syscall guard that pushed
+    # ruby's old Tk-Photo screenshot path through App#off_thread applies
+    # equally to this worker thread, it's just already off Tk's.
+    private def take_screenshot(core : Core, rom_title : String) : {Bool, String}
+      dir = Paths.screenshots_dir
+      Dir.mkdir_p(dir) unless Dir.exists?(dir)
+      title = rom_title.empty? ? "gemba" : rom_title
+      filename = "#{title}_#{Time.local.to_s("%Y%m%d_%H%M%S")}.png"
+      {core.take_screenshot_to_file(File.join(dir, filename)), filename}
+    end
+
+    # save_slot/load_slot/screenshot/frame_done, split out for the same
+    # reason as #apply_ra_message: keeps #drain_messages' own dispatch
+    # under the complexity limit. Returns true when msg was one of ours.
+    private def apply_slot_message(msg, task : Tryst::TaskContext(FramePacket), core : Core,
+                                   save_states : SaveStateManager, ring : FrameRing) : Bool
+      return false unless msg.is_a?(String)
+
+      if slot = msg.lchop?("save_slot:")
+        ok, text = save_states.save_state(core, slot.to_i)
+        task.send_message("save_result:#{ok}:#{slot}:#{text}")
+      elsif slot = msg.lchop?("load_slot:")
+        ok, text = save_states.load_state(core, slot.to_i)
+        task.send_message("load_result:#{ok}:#{slot}:#{text}")
+      elsif rom_title = msg.lchop?("screenshot:")
+        ok, filename = take_screenshot(core, rom_title)
+        task.send_message("screenshot_result:#{ok}:#{filename}")
+      elsif frame_num = msg.lchop?("frame_done:")
+        ring.release(frame_num.to_i)
+      else
+        return false
+      end
+      true
+    end
+
     private def drain_messages(task : Tryst::TaskContext(FramePacket), core : Core,
                                save_states : SaveStateManager, state : WorkerState, ring : FrameRing,
                                ra_runtime : Achievements::RARuntime) : Bool
@@ -420,16 +468,8 @@ module Gemba
           ok, text = save_states.quick_load(core)
           task.send_message("load_result:#{ok}:#{save_states.quick_save_slot}:#{text}")
         else
-          if msg.is_a?(String) && msg.starts_with?("save_slot:")
-            slot = msg.split(':', 2)[1].to_i
-            ok, text = save_states.save_state(core, slot)
-            task.send_message("save_result:#{ok}:#{slot}:#{text}")
-          elsif msg.is_a?(String) && msg.starts_with?("load_slot:")
-            slot = msg.split(':', 2)[1].to_i
-            ok, text = save_states.load_state(core, slot)
-            task.send_message("load_result:#{ok}:#{slot}:#{text}")
-          elsif msg.is_a?(String) && msg.starts_with?("frame_done:")
-            ring.release(msg.split(':', 2)[1].to_i)
+          if apply_slot_message(msg, task, core, save_states, ring)
+            # handled
           elsif apply_ra_message(msg, ra_runtime)
             # handled
           elsif state.apply(msg)
