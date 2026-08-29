@@ -21,6 +21,8 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build image
+        env:
+          DOCKER_BUILDKIT: "1"
         run: docker build -t gemba-test:latest -f Dockerfile .
 
       - name: Run crystal spec
