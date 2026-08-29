@@ -23,7 +23,7 @@ jobs:
       - name: Build image
         env:
           DOCKER_BUILDKIT: "1"
-        run: docker build -t gemba-test:latest -f Dockerfile .
+        run: docker build --build-arg CACHEBUST=$(date +%s) -t gemba-test:latest -f Dockerfile .
 
       - name: Run crystal spec
         run: docker run --rm --init -t gemba-test:latest xvfb-run -a crystal spec -v

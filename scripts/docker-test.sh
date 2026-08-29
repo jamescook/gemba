@@ -21,7 +21,7 @@ LABEL=project=gemba
 # This script lives in <repo>/scripts, so the root is one up.
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 
-docker build --label "$LABEL" -t "$IMAGE" -f "$ROOT/Dockerfile" "$ROOT"
+docker build --build-arg CACHEBUST="$(date +%s)" --label "$LABEL" -t "$IMAGE" -f "$ROOT/Dockerfile" "$ROOT"
 
 status=0
 if [ "$#" -eq 0 ]; then

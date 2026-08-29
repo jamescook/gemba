@@ -125,6 +125,19 @@ COPY src/ src/
 COPY spec/ spec/
 COPY assets/ assets/
 
+# shards install resolves tryst/tryst-sdl/tryst-vector/etc. via their
+# `github:` branch refs in shard.yml - Docker's cache key for this layer
+# is shard.yml's own content, which never changes just because an
+# upstream dependency got a new commit. On a one-shot build (GitHub's
+# old hosted runners) that was invisible; on this machine's persistent
+# self-hosted Docker daemon it meant every build silently kept
+# resolving whatever commit was fetched the FIRST time this layer ever
+# ran, no matter how many times the actual dependency repos changed
+# afterward (confirmed directly: stuck testing an hours-stale tryst
+# commit through several rounds of pushed fixes). CACHEBUST forces this
+# layer (and only this one - everything above it still caches normally)
+# to always re-resolve.
+ARG CACHEBUST=1
 RUN shards install
 
 CMD ["xvfb-run", "-a", "crystal", "spec"]
