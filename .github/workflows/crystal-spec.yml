@@ -20,10 +20,36 @@ jobs:
         id: buildx
         uses: docker/setup-buildx-action@v3
 
-      # cache-from/cache-to: type=gha caches the built image's layers via
-      # GitHub's Actions cache backend, so an unchanged Dockerfile skips
-      # the libmgba/rcheevos build layers entirely instead of redoing
-      # them on every run.
+      # The Dockerfile's own apt-get RUN uses --mount=type=cache, which
+      # BuildKit keeps in the local daemon's cache - gone by default on
+      # the next run, since GitHub Actions runners are ephemeral. This
+      # restores/saves that cache mount via actions/cache instead, the
+      # same pattern crystal-teek's own workflow uses - a rerun doesn't
+      # re-download this Dockerfile's (large) apt package list from
+      # scratch every time.
+      - name: Restore apt build cache
+        uses: actions/cache@v4
+        with:
+          path: cache-mount
+          key: docker-cache-${{ hashFiles('Dockerfile') }}
+          restore-keys: |
+            docker-cache-
+
+      - name: Inject/extract Docker cache mounts
+        uses: reproducible-containers/buildkit-cache-dance@v3
+        with:
+          cache-map: |
+            {
+              "cache-mount/var-cache-apt": "/var/cache/apt",
+              "cache-mount/var-lib-apt": "/var/lib/apt"
+            }
+          builder: ${{ steps.buildx.outputs.name }}
+
+      # cache-from/cache-to: type=gha additionally caches the built
+      # image's own layers (not just apt's package cache) via GitHub's
+      # Actions cache backend - so an unchanged Dockerfile skips the
+      # libmgba/rcheevos build layers entirely instead of redoing them
+      # on every run.
       - name: Build image
         uses: docker/build-push-action@v6
         with:

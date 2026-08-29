@@ -18,7 +18,19 @@ FROM debian:forky
 ARG CRYSTAL_VERSION=1.21.0
 ARG CRYSTAL_RELEASE=1
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# The --mount=type=cache below lets .github/workflows' CI build persist
+# apt's downloaded packages across runs (via buildkit-cache-dance, see
+# that workflow's own comment) instead of re-fetching this whole list -
+# bigger here than crystal-teek's own Dockerfile, so it matters more.
+# No effect on a plain `docker build`/scripts/docker-test.sh run on
+# host: BuildKit is Docker Desktop's default builder there too, so the
+# cache mount is honored locally as well, just without anything
+# restoring/saving it across separate `docker build` invocations. A
+# cache mount isn't part of the resulting image layer either way, so
+# there's no `rm -rf /var/lib/apt/lists/*` cleanup needed afterward.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
     tcl-dev tk-dev \
     libsdl3-dev libsdl3-mixer-dev libsdl3-image-dev libsdl3-ttf-dev \
     libthorvg-dev \
@@ -26,8 +38,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     cmake make git \
     libpng-dev libzip-dev zlib1g-dev \
     ca-certificates curl gcc g++ pkg-config \
-    libpcre2-dev libgc-dev libevent-dev libssl-dev libyaml-dev libxml2-dev \
-    && rm -rf /var/lib/apt/lists/*
+    libpcre2-dev libgc-dev libevent-dev libssl-dev libyaml-dev libxml2-dev
 
 RUN set -eux; \
     arch="$(uname -m)"; \
