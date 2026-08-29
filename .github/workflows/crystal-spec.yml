@@ -26,4 +26,4 @@ jobs:
         run: docker build -t gemba-test:latest -f Dockerfile .
 
       - name: Run crystal spec
-        run: docker run --rm --init -t gemba-test:latest
+        run: docker run --rm --init -t gemba-test:latest xvfb-run -a crystal spec -v
