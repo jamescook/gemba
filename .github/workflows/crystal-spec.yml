@@ -61,4 +61,4 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Run crystal spec
-        run: docker run --rm --init gemba-test:latest
+        run: docker run --rm --init -t gemba-test:latest
