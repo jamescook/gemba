@@ -1,0 +1,38 @@
+name: crystal spec (docker)
+
+# Manual only - no `on: push`/`on: pull_request`. This Dockerfile builds
+# libmgba and rcheevos from source (~2-3 minutes) on top of a fresh
+# Crystal toolchain pull, then runs the full suite under Xvfb - too slow
+# to burn Actions minutes on every push/PR for a single-maintainer,
+# pre-release repo. Trigger it by hand from the Actions tab (or
+# `gh workflow run crystal-spec.yml`) when you want the Linux/Xvfb lane
+# checked. Mirrors crystal-teek's own .github/workflows/crystal-spec.yml.
+on:
+  workflow_dispatch:
+
+jobs:
+  spec:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v3
+
+      # cache-from/cache-to: type=gha caches the built image's layers via
+      # GitHub's Actions cache backend, so an unchanged Dockerfile skips
+      # the libmgba/rcheevos build layers entirely instead of redoing
+      # them on every run.
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          builder: ${{ steps.buildx.outputs.name }}
+          load: true
+          tags: gemba-test:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run crystal spec
+        run: docker run --rm --init gemba-test:latest
