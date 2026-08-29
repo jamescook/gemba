@@ -42,6 +42,18 @@ module Gemba
       set("scale", value.clamp(1, 4).to_i64)
     end
 
+    # Multiplier applied to a screenshot's native 240x160 GBA resolution
+    # after Core writes it (see MainWindow#upscale_screenshot) - separate
+    # from #scale, the WINDOW's zoom, since a screenshot has no window to
+    # inherit a size from.
+    def screenshot_scale : Int32
+      int("screenshot_scale", 2)
+    end
+
+    def screenshot_scale=(value : Int32) : Int32
+      set("screenshot_scale", value.clamp(1, 4).to_i64)
+    end
+
     # 0-100, matching ruby's own on-disk percent representation.
     def volume : Int32
       int("volume", 100)

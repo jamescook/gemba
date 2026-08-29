@@ -80,6 +80,7 @@ settings:
   maintain_aspect: "アスペクト比を維持"
   show_fps: "FPSを表示"
   pause_on_focus_loss: "ウィンドウのフォーカスが外れたら一時停止"
+  screenshot_scale: "スクリーンショット拡大率:"
   volume: "音量:"
   mute: "ミュート"
   dead_zone: "デッドゾーン:"

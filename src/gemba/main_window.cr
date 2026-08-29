@@ -624,6 +624,13 @@ module Gemba
         save_config
       end
 
+      # Also nothing to apply eagerly - #take_screenshot reads
+      # @config.screenshot_scale at the moment a screenshot is taken.
+      @events.screenshot_scale_changed.connect do |scale|
+        @config.screenshot_scale = scale
+        save_config
+      end
+
       # Takes effect starting with the NEXT #load_rom - see #load_rom's
       # own rewind_seconds: argument, and EmulationWorker's own doc
       # comment on why the buffer size can't change on a running Core.
@@ -781,6 +788,8 @@ module Gemba
       if payload = text.lchop?("screenshot_result:")
         ok, filename = payload.split(':', 2)
         if ok == "true"
+          scale = @config.screenshot_scale
+          upscale_screenshot(File.join(Paths.screenshots_dir, filename), scale) if scale > 1
           @video.show_toast(Locale.translate("toast.screenshot_saved", name: filename))
         else
           @video.show_toast(Locale.translate("toast.screenshot_failed"))
@@ -832,6 +841,30 @@ module Gemba
         photo.command(:write, path, format: "png")
       ensure
         photo.delete
+      end
+    end
+
+    # Rewrites path in place at scale x its native size, via Tk::Photo's
+    # own PNG codec (same as #write_state_thumbnail) rather than a
+    # Crystal-side one. Runs on the Tk thread, same as every other Photo
+    # write in this class - the file is tiny (native 240x160 GBA
+    # resolution), so this is a fast local round-trip, not a real
+    # blocking-syscall concern.
+    private def upscale_screenshot(path : String, scale : Int32) : Nil
+      source = Tryst::Photo.new(@app, file: path)
+      begin
+        size = source.get_size
+        pixels = source.get_image
+        dest = Tryst::Photo.new(@app, width: size[:width] * scale, height: size[:height] * scale)
+        begin
+          dest.put_zoomed_block(pixels[:data], size[:width], size[:height],
+            zoom_x: scale, zoom_y: scale, format: Tryst::PixelFormat::RGBA)
+          dest.command(:write, path, format: "png")
+        ensure
+          dest.delete
+        end
+      ensure
+        source.delete
       end
     end
 

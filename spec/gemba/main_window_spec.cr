@@ -206,8 +206,9 @@ describe Gemba::MainWindow do
 
       # Now round-trips through the worker thread (Core is
       # worker-thread-only) rather than writing synchronously on Tk's
-      # own thread, so the file isn't guaranteed to exist the instant
-      # #take_screenshot returns.
+      # own thread, so the file isn't guaranteed to exist - or be done
+      # with its default 2x upscale rewrite, see MainWindow#
+      # upscale_screenshot - the instant #take_screenshot returns.
       new_files = [] of String
       window.app.interp.wait_until(5.seconds) do
         new_files = Dir.exists?(Gemba::Paths.screenshots_dir) ? Dir.children(Gemba::Paths.screenshots_dir) - before : [] of String
@@ -215,9 +216,27 @@ describe Gemba::MainWindow do
       end
 
       path = File.join(Gemba::Paths.screenshots_dir, new_files.first)
-      File.size(path).should be > 0
       new_files.first.should start_with "space_blast_"
       new_files.first.should end_with ".png"
+
+      # The worker's raw native-resolution write lands on disk (and so
+      # in the Dir.children check above) BEFORE the upscale rewrite that
+      # only happens once the main thread processes the worker's
+      # message - so this polls for the FINAL (scaled) size rather than
+      # trusting the file's mere existence. A mid-rewrite partial read
+      # is expected to fail; that's "not ready yet", not a real error.
+      width = height = 0
+      window.app.interp.wait_until(5.seconds) do
+        photo = Tryst::Photo.new(window.app, file: path)
+        size = photo.get_size
+        width, height = size[:width], size[:height]
+        photo.delete
+        width == window.video.native_width * 2 && height == window.video.native_height * 2
+      rescue Tryst::TclError
+        false
+      end
+      width.should eq window.video.native_width * 2
+      height.should eq window.video.native_height * 2
 
       File.delete(path)
       window.worker.try(&.stop)

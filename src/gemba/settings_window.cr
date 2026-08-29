@@ -41,6 +41,7 @@ module Gemba
     # reads/drives the same widgets #load_from_config itself writes,
     # rather than reaching into private state.
     getter pause_on_focus_loss_switch : Tryst::Switch
+    getter screenshot_scale_control : Tryst::SegmentedControl
     getter scale_control : Tryst::SegmentedControl
     getter filter_control : Tryst::SegmentedControl
     getter aspect_switch : Tryst::Switch
@@ -82,6 +83,17 @@ module Gemba
         text: Locale.translate("settings.pause_on_focus_loss"), parent: general)
       @pause_on_focus_loss_switch.pack(anchor: :w, pady: 8)
       @pause_on_focus_loss_switch.on_action { |v| @events.pause_on_focus_loss_changed.emit(v) }
+
+      screenshot_scale_row = "#{general}.screenshot_scale_row"
+      @app.command("ttk::frame", screenshot_scale_row)
+      @app.command(:pack, screenshot_scale_row, fill: :x, pady: 8)
+      @app.command("ttk::label", "#{screenshot_scale_row}.lbl", text: Locale.translate("settings.screenshot_scale"))
+      @app.command(:pack, "#{screenshot_scale_row}.lbl", side: :left)
+
+      @screenshot_scale_control = Tryst::SegmentedControl.new(@app, options: ["1x", "2x", "3x", "4x"],
+        selected: "2x", parent: screenshot_scale_row)
+      @screenshot_scale_control.pack(side: :right)
+      @screenshot_scale_control.on_action { |value| @events.screenshot_scale_changed.emit(value.rstrip('x').to_i) }
 
       # -- Video tab --
       video = @video_tab = "#{@notebook}.video"
@@ -225,6 +237,7 @@ module Gemba
     # the window (mirrors ruby's own :config_loaded bus event).
     def load_from_config(config : Config) : Nil
       @pause_on_focus_loss_switch.value = config.pause_on_focus_loss?
+      @screenshot_scale_control.selected = "#{config.screenshot_scale}x"
       @scale_control.selected = "#{config.scale}x"
       @filter_control.selected = filter_label(config.pixel_filter)
       @aspect_switch.value = config.keep_aspect_ratio?

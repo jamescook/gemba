@@ -18,6 +18,7 @@ module Gemba
 
     # General tab.
     getter pause_on_focus_loss_changed = Tryst::UI::Signal(Bool).new
+    getter screenshot_scale_changed = Tryst::UI::Signal(Int32).new
 
     # Gameplay tab - MainWindow persists it, but it only reaches Core at
     # the NEXT rom load (see EmulationWorker's own doc comment).

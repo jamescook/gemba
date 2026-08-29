@@ -80,6 +80,7 @@ settings:
   maintain_aspect: "Maintain aspect ratio"
   show_fps: "Show FPS"
   pause_on_focus_loss: "Pause when window loses focus"
+  screenshot_scale: "Screenshot Scale:"
   volume: "Volume:"
   mute: "Mute"
   dead_zone: "Dead zone:"
