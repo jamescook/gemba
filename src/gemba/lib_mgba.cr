@@ -197,22 +197,16 @@ lib LibMgba
 
   fun VFileOpen(path : LibC::Char*, flags : Int32) : VFile*
 
-  # mgba/core/rewind.h's struct mCoreRewindContext - opaque, same
-  # convention as MCore's own dirs/inputMap/config/opts: gemba only ever
+  # mgba/core/rewind.h's struct mCoreRewindContext - gemba only ever
   # passes a pointer to libmgba's own Init/Deinit/Append/Restore, never
-  # reads a field directly, so only its SIZE matters here. 56 bytes,
-  # verified via the same sizeof probe as MCore's own fields - identical
-  # on darwin and linux, unlike mDirectorySet, so no per-platform gate
-  # is needed.
-  #
-  # Constructed via `.new` (which zero-fills a lib struct's fields), not
-  # `uninitialized`: mCoreRewindContextInit itself checks
-  # `context->currentState` to guard against a double-init, and garbage
-  # bytes there could read as a non-null pointer and make it silently
-  # skip real initialization.
-  struct MCoreRewindContext
-    opaque : UInt8[56]
-  end
+  # reads a field directly, so a real Crystal `struct` mirroring its
+  # layout was never needed - just a pointer tag. NOT constructed as a
+  # Crystal value: its true size depends on build flags this project's
+  # own vendored mgba always sets (176 bytes on Linux, 192 on macOS,
+  # both with USE_PTHREADS - see Core's own comment on where that number
+  # comes from and why it's allocated on the C side instead, generously
+  # oversized, rather than declared here at all).
+  alias MCoreRewindContext = Void
 
   fun mCoreRewindContextInit(context : MCoreRewindContext*, entries : LibC::SizeT, on_thread : Bool) : Void
   fun mCoreRewindContextDeinit(context : MCoreRewindContext*) : Void

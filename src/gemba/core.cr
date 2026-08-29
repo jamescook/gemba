@@ -51,7 +51,27 @@ module Gemba
     @core : LibMgba::MCore*
     @video_buffer : Slice(UInt32)
     @destroyed : Bool
-    @rewind_ctx : LibMgba::MCoreRewindContext
+    @rewind_ctx : LibMgba::MCoreRewindContext*
+
+    # struct mCoreRewindContext's real size depends on build flags this
+    # project's own vendored mgba always sets - 176 bytes on Linux, 192
+    # on macOS, both confirmed with a C sizeof probe that #includes
+    # mgba/flags.h before mgba/core/rewind.h (skip flags.h and
+    # mgba-util/threading.h silently DEFINES DISABLE_THREADING itself,
+    # reporting 56 regardless of how the library was actually built -
+    # exactly how gemba's own lib_mgba.cr got this wrong before: a
+    # 56-byte `struct MCoreRewindContext` embedded BY VALUE in every
+    # Core, with mCoreRewindContextInit/Append/Restore's real writes
+    # landing up to ~150 bytes past the end of that region - into
+    # whatever Boehm GC object happened to sit next to a Core's own
+    # allocation. Silent heap corruption that moved with allocation
+    # layout, one zeroed byte at a time - confirmed as the source of a
+    # long-running series of seemingly random Hash corruption crashes
+    # throughout this codebase's own test suite.
+    #
+    # Heap-allocated here instead, well past either real size, rather
+    # than ever declared as a sized Crystal struct again.
+    REWIND_CONTEXT_SIZE = 512
 
     def initialize(rom_path : String, rewind_entries : Int32 = DEFAULT_REWIND_ENTRIES)
       unless @@logger_installed
@@ -112,8 +132,8 @@ module Gemba
       @video_buffer = video_buffer
       @destroyed = false
 
-      @rewind_ctx = LibMgba::MCoreRewindContext.new
-      LibMgba.mCoreRewindContextInit(pointerof(@rewind_ctx), rewind_entries.to_u64, false)
+      @rewind_ctx = Pointer(UInt8).malloc(REWIND_CONTEXT_SIZE).as(LibMgba::MCoreRewindContext*)
+      LibMgba.mCoreRewindContextInit(@rewind_ctx, rewind_entries.to_u64, false)
     end
 
     def run_frame : Nil
@@ -200,7 +220,7 @@ module Gemba
     # _frameStarted, the reference this port's rewind loop follows).
     def rewind_append : Nil
       raise_if_destroyed!
-      LibMgba.mCoreRewindAppend(pointerof(@rewind_ctx), @core)
+      LibMgba.mCoreRewindAppend(@rewind_ctx, @core)
     end
 
     # Loads the most recent rewind snapshot, moving the pointer one
@@ -209,7 +229,7 @@ module Gemba
     # (same fallback _frameStarted itself does).
     def rewind_restore : Bool
       raise_if_destroyed!
-      LibMgba.mCoreRewindRestore(pointerof(@rewind_ctx), @core)
+      LibMgba.mCoreRewindRestore(@rewind_ctx, @core)
     end
 
     def bus_read8(address : UInt32) : UInt8
@@ -254,7 +274,7 @@ module Gemba
     def destroy : Nil
       return if @destroyed
       @destroyed = true
-      LibMgba.mCoreRewindContextDeinit(pointerof(@rewind_ctx))
+      LibMgba.mCoreRewindContextDeinit(@rewind_ctx)
       @core.value.deinit.call(cp)
     end
 
