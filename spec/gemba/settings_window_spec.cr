@@ -6,7 +6,7 @@ private def build(title : String) : {Tryst::App, Gemba::SettingsWindow, Gemba::E
   app = session.run_async.app
   events = Gemba::Events.new
   hotkeys = Gemba::HotkeyMap.new
-  window = Gemba::SettingsWindow.new(app, handle, events, hotkeys)
+  window = Gemba::SettingsWindow.new(app, handle, events, hotkeys, session)
   {app, window, events}
 end
 

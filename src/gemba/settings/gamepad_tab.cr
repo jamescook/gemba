@@ -1,4 +1,5 @@
 require "tryst"
+require "tryst/ui"
 require "../button"
 require "../locale"
 require "../events"
@@ -11,6 +12,13 @@ module Gemba
     # MainWindow applies them to the real maps and persists. #refresh
     # pushes real map state back in (initial load, after Undo, after a
     # mode switch).
+    #
+    # Built through the Tryst::UI DSL (Session#add, targeting
+    # SettingsWindow's shared notebook by name) rather than raw
+    # @app.command("ttk::...") calls - see SettingsWindow's own class
+    # comment. #add's block builds the whole subtree before anything
+    # realizes, so every Handle it hands back is captured into a local
+    # first and only read (#path/#configure) once #add itself returns.
     class GamepadTab
       LISTEN_TIMEOUT_MS = 10_000
 
@@ -44,24 +52,32 @@ module Gemba
       getter? keyboard_mode : Bool
       getter listening_for : Button?
 
+      # The device-select combobox's own real Tk path - a spec needs
+      # this to simulate <<ComboboxSelected>> on it directly (see
+      # main_window_gamepad_spec.cr); no other public method reaches
+      # this specific widget.
+      getter gp_combo : String
+
       @listen_timer : Tryst::AfterHandle?
 
+      @frame : String
+      @dz_scale : String
+      @dz_label : String
+      @undo_btn : String
+      @reset_btn : String
+      @btn_widgets : Hash(Button, String)
+
+      # notebook_name: the shared notebook's own DSL name (SettingsWindow
+      # ::NOTEBOOK_NAME) - this tab adds itself to it via its own
+      # Session#add call rather than being inlined into SettingsWindow's.
       # toplevel_path: the settings window's own toplevel, not this
       # tab's frame - keyboard capture binds <Key> there (same as ruby's
       # Paths::TOP) so it fires regardless of which child widget has
       # focus. validate_keyboard_mapping: an optional hotkey-conflict
       # check (MainWindow's own HotkeyMap#action_for) - nil skips it.
-      def initialize(@app : Tryst::App, parent_notebook : String, @toplevel_path : String, @events : Events,
+      def initialize(@app : Tryst::App, @session : Tryst::UI::Session, notebook_name : Symbol,
+                     @toplevel_path : String, @events : Events,
                      @validate_keyboard_mapping : Proc(String, String?)? = nil)
-        @frame = "#{parent_notebook}.gamepad"
-        @gp_row = "#{@frame}.gp_row"
-        @gp_combo = "#{@gp_row}.gp_combo"
-        @dz_row = "#{@frame}.dz_row"
-        @dz_scale = "#{@dz_row}.dz_scale"
-        @dz_label = "#{@dz_row}.dz_label"
-        @btn_bar = "#{@frame}.btn_bar"
-        @undo_btn = "#{@btn_bar}.undo_btn"
-        @reset_btn = "#{@btn_bar}.reset_btn"
         @gp_var = "::gemba_gamepad_device"
         @dz_var = "::gemba_deadzone"
         @keyboard_mode = true
@@ -70,13 +86,67 @@ module Gemba
         @listening_for = nil
         @listen_timer = nil
 
-        @app.command("ttk::frame", @frame)
-        @app.command(parent_notebook, :add, @frame, text: Locale.translate("settings.gamepad"))
+        frame_handle = nil
+        gp_combo_handle = nil
+        dz_scale_handle = nil
+        dz_label_handle = nil
+        undo_btn_handle = nil
+        reset_btn_handle = nil
+        btn_widget_handles = {} of Button => Tryst::UI::Handle
 
-        build_gamepad_selector
-        build_button_rows
-        build_bottom_bar
-        build_deadzone_slider
+        @session.add(notebook_name) do |session|
+          frame_handle = session.tab(Locale.translate("settings.gamepad"), :gamepad_tab) do |tab|
+            tab.row(gap: 4, pad: 8) do |row|
+              row.label(text: "#{Locale.translate("settings.gamepad")}:")
+              gp_combo_handle = row.dropdown(textvariable: @gp_var, state: :readonly, width: 20)
+            end
+
+            ORDER.each do |btn|
+              suffix = btn.to_s.downcase
+              tab.row(gap: 2, pad: 2) do |row|
+                row.label(text: Locale.translate("settings.gp_#{suffix}"), width: 14, anchor: :w)
+                btn_widget_handles[btn] = row.button(width: 12,
+                  text: btn_display(btn), style: gp_customized?(btn) ? "Bold.TButton" : "TButton",
+                  command: ->(_values : Array(String), _signal : Tryst::CallbackSignal) { start_listening(btn); nil })
+              end
+            end
+
+            tab.row(gap: 0, pad: 8) do |row|
+              undo_btn_handle = row.button(text: Locale.translate("settings.undo"), state: :disabled,
+                command: ->(_values : Array(String), _signal : Tryst::CallbackSignal) { do_undo; nil })
+              reset_btn_handle = row.button(text: Locale.translate("settings.reset_defaults"),
+                command: ->(_values : Array(String), _signal : Tryst::CallbackSignal) { confirm_reset; nil })
+            end
+
+            tab.row(gap: 4, pad: 8) do |row|
+              row.label(text: Locale.translate("settings.dead_zone"))
+              dz_label_handle = row.label(text: "25%", width: 5)
+              dz_scale_handle = row.slider(orient: :horizontal, from: 0, to: 50, length: 150,
+                variable: @dz_var,
+                command: ->(values : Array(String), _signal : Tryst::CallbackSignal) {
+                  pct = values[0].to_f.round.to_i
+                  @app.command(realized!(dz_label_handle).path, "configure", text: "#{pct}%")
+                  threshold = (pct / 100.0 * 32767).round.to_i
+                  @events.gamepad_dead_zone_changed.emit(threshold)
+                  nil
+                })
+            end
+          end
+        end
+
+        @frame = realized!(frame_handle).path
+        @gp_combo = realized!(gp_combo_handle).path
+        @dz_scale = realized!(dz_scale_handle).path
+        @dz_label = realized!(dz_label_handle).path
+        @undo_btn = realized!(undo_btn_handle).path
+        @reset_btn = realized!(reset_btn_handle).path
+        @btn_widgets = btn_widget_handles.transform_values(&.path)
+
+        keyboard_only = Locale.translate("settings.keyboard_only")
+        @app.set_variable(@gp_var, keyboard_only)
+        @app.command(@gp_combo, "configure", values: @app.make_list(keyboard_only))
+        @app.bind(@gp_combo, :combobox_selected) { |_values, _signal| switch_input_mode }
+        @app.set_variable(@dz_var, "25")
 
         set_deadzone_enabled(false)
       end
@@ -169,80 +239,6 @@ module Gemba
         @app.unbind(@toplevel_path, :key)
       end
 
-      private def build_gamepad_selector : Nil
-        @app.command("ttk::frame", @gp_row)
-        @app.command(:pack, @gp_row, fill: :x, padx: 10, pady: [8, 4])
-
-        lbl = "#{@gp_row}.lbl"
-        @app.command("ttk::label", lbl, text: "#{Locale.translate("settings.gamepad")}:")
-        @app.command(:pack, lbl, side: :left)
-
-        keyboard_only = Locale.translate("settings.keyboard_only")
-        @app.set_variable(@gp_var, keyboard_only)
-        @app.command("ttk::combobox", @gp_combo, textvariable: @gp_var, state: :readonly, width: 20)
-        @app.command(:pack, @gp_combo, side: :left, padx: 4)
-        @app.command(@gp_combo, "configure", values: @app.make_list(keyboard_only))
-
-        @app.bind(@gp_combo, :combobox_selected) { |_values, _signal| switch_input_mode }
-      end
-
-      private def build_button_rows : Nil
-        ORDER.each do |btn|
-          suffix = btn.to_s.downcase
-          row = "#{@frame}.row_#{suffix}"
-          @app.command("ttk::frame", row)
-          @app.command(:pack, row, fill: :x, padx: 10, pady: 2)
-
-          lbl = "#{row}.lbl"
-          @app.command("ttk::label", lbl, text: Locale.translate("settings.gp_#{suffix}"), width: 14, anchor: :w)
-          @app.command(:pack, lbl, side: :left)
-
-          widget = "#{row}.btn"
-          @btn_widgets[btn] = widget
-          @app.command("ttk::button", widget, text: btn_display(btn), width: 12,
-            style: gp_customized?(btn) ? "Bold.TButton" : "TButton",
-            command: ->(_values : Array(String), _signal : Tryst::CallbackSignal) { start_listening(btn); nil })
-          @app.command(:pack, widget, side: :right)
-        end
-      end
-
-      private def build_bottom_bar : Nil
-        @app.command("ttk::frame", @btn_bar)
-        @app.command(:pack, @btn_bar, fill: :x, side: :bottom, padx: 10, pady: [4, 8])
-
-        @app.command("ttk::button", @undo_btn, text: Locale.translate("settings.undo"), state: :disabled,
-          command: ->(_values : Array(String), _signal : Tryst::CallbackSignal) { do_undo; nil })
-        @app.command(:pack, @undo_btn, side: :left)
-
-        @app.command("ttk::button", @reset_btn, text: Locale.translate("settings.reset_defaults"),
-          command: ->(_values : Array(String), _signal : Tryst::CallbackSignal) { confirm_reset; nil })
-        @app.command(:pack, @reset_btn, side: :right)
-      end
-
-      private def build_deadzone_slider : Nil
-        @app.command("ttk::frame", @dz_row)
-        @app.command(:pack, @dz_row, fill: :x, padx: 10, pady: [4, 8], side: :bottom)
-
-        lbl = "#{@dz_row}.lbl"
-        @app.command("ttk::label", lbl, text: Locale.translate("settings.dead_zone"))
-        @app.command(:pack, lbl, side: :left)
-
-        @app.command("ttk::label", @dz_label, text: "25%", width: 5)
-        @app.command(:pack, @dz_label, side: :right)
-
-        @app.set_variable(@dz_var, "25")
-        @app.command("ttk::scale", @dz_scale, orient: :horizontal, from: 0, to: 50, length: 150,
-          variable: @dz_var,
-          command: ->(values : Array(String), _signal : Tryst::CallbackSignal) {
-            pct = values[0].to_f.round.to_i
-            @app.command(@dz_label, "configure", text: "#{pct}%")
-            threshold = (pct / 100.0 * 32767).round.to_i
-            @events.gamepad_dead_zone_changed.emit(threshold)
-            nil
-          })
-        @app.command(:pack, @dz_scale, side: :right, padx: [5, 5])
-      end
-
       private def btn_display(gba_btn : Button) : String
         label = @gp_labels[gba_btn]? || "?"
         locale_key = KEY_DISPLAY_LOCALE[label]?
@@ -301,6 +297,15 @@ module Gemba
       private def do_undo : Nil
         @events.undo_input_mappings.emit(@keyboard_mode)
         @app.command(@undo_btn, "configure", state: :disabled)
+      end
+
+      # #add's block builds the whole subtree before anything realizes
+      # (see #initialize's own comment on this), so every Handle it
+      # hands back is genuinely always assigned by the time this runs -
+      # a raise here means a bug in that build block, not a legitimate
+      # nil case.
+      private def realized!(handle : Tryst::UI::Handle?) : Tryst::UI::Handle
+        handle || raise "GamepadTab widget handle wasn't realized by Session#add - this is a bug in its own build block"
       end
     end
   end

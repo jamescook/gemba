@@ -17,9 +17,14 @@ module Gemba
   # mutually-exclusive choices (scale, filter mode), and
   # Tryst::ValueSlider for volume.
   #
-  # Its contents are built with raw App calls, not the Tryst::UI DSL's
-  # grid/tabs builders: Switch/SegmentedControl/ValueSlider all require
-  # a concrete Tryst::App, not the DSL's narrow AppContract.
+  # The notebook/tab/row/label scaffolding is built through the
+  # Tryst::UI DSL (Session#add, targeting the :gemba_settings window
+  # MainWindow already declared) rather than raw @app.command("ttk::...")
+  # calls. Switch/SegmentedControl/ValueSlider still can't be DSL nodes
+  # themselves - they have no registered Tryst::UI::WidgetType, and need
+  # a concrete Tryst::App rather than the DSL's own AppContract - so
+  # they're constructed directly against @app once the DSL block
+  # realizes, parented at whichever row's Handle#path it just produced.
   #
   # General, Video, Audio, Gameplay, Gamepad, and Achievements tabs
   # exist - the subset of ruby's own SettingsWindow this port has a live
@@ -27,15 +32,10 @@ module Gemba
   # (Ruby has no General tab and files its pause-on-focus-loss switch
   # under Video instead; the setting isn't about video, so it moved.)
   #
-  # General/Video/Audio/Gameplay are built directly in #initialize rather than
-  # split into per-tab helper methods: each control ivar is only
-  # assigned partway through, and Crystal bans any instance-method call
-  # on self until every declared ivar has been assigned at least once
-  # (see MainWindow's own comment on this exact constraint). Gamepad and
-  # Achievements are complex enough (rebind capture / credential state)
-  # to warrant their own classes - Settings::GamepadTab and
-  # Settings::AchievementsTab, constructed only once their own ivars are
-  # ready, same as ruby's own tab split.
+  # Gamepad and Achievements are complex enough (rebind capture /
+  # credential state) to warrant their own classes - Settings::GamepadTab
+  # and Settings::AchievementsTab, each doing its OWN Session#add against
+  # the shared notebook (see #initialize) rather than being inlined here.
   class SettingsWindow
     # Public getters onto the real controls - a caller (a spec included)
     # reads/drives the same widgets #load_from_config itself writes,
@@ -59,67 +59,99 @@ module Gemba
     # ever writes one of these back.
     REWIND_OPTIONS = [5, 10, 20, 30]
 
+    # The notebook's own DSL name - GamepadTab/AchievementsTab each add
+    # their own tab to it via their own Session#add(NOTEBOOK_NAME) call,
+    # rather than being inlined into this class's own #initialize.
+    NOTEBOOK_NAME = :gemba_settings_notebook
+
+    @notebook : String
     @general_tab : String
     @video_tab : String
     @audio_tab : String
     @gameplay_tab : String
 
-    def initialize(@app : Tryst::App, @handle : Tryst::UI::Handle, @events : Events, @hotkeys : HotkeyMap)
+    def initialize(@app : Tryst::App, @handle : Tryst::UI::Handle, @events : Events, @hotkeys : HotkeyMap,
+                   @session : Tryst::UI::Session)
       @path = @handle.path
-      @notebook = "#{@path}.nb"
-      @app.command("ttk::notebook", @notebook)
-      @app.command(:pack, @notebook, fill: :both, expand: 1, padx: 12, pady: 12)
 
       # Bold button style for a customized (non-default) rebind, shared
       # by GamepadTab's own button styling.
       @app.tcl_eval("ttk::style configure Bold.TButton -font [list {*}[font actual TkDefaultFont] -weight bold]")
 
-      # -- General tab --
-      general = @general_tab = "#{@notebook}.general"
-      @app.command("ttk::frame", general, padding: 12)
-      @app.command(@notebook, :add, general, text: Locale.translate("settings.general"))
+      # Session#add's block builds the WHOLE new subtree first (no Tk
+      # calls yet - realize happens once the block returns), so a node's
+      # Handle#path isn't valid until AFTER #add itself returns. These
+      # locals capture each Handle #add hands back; reading their #path
+      # right after #add (not inside the block) is what makes that safe.
+      # Nilable rather than a single unconditional assignment #add's
+      # block is trusted to make, so a raised exception mid-build fails
+      # with a catchable NilAssertionError below instead of undefined
+      # behavior from reading an uninitialized reference.
+      notebook_handle = nil
+      general_tab_handle = nil
+      screenshot_scale_row_handle = nil
+      video_tab_handle = nil
+      scale_row_handle = nil
+      filter_row_handle = nil
+      audio_tab_handle = nil
+      gameplay_tab_handle = nil
+      rewind_row_handle = nil
 
+      @session.add(handle_name!) do |session|
+        notebook_handle = session.tabs(NOTEBOOK_NAME, pad: 12) do |notebook|
+          general_tab_handle = notebook.tab(Locale.translate("settings.general"), :general_tab, pad: 12) do |tab|
+            screenshot_scale_row_handle = tab.row(:screenshot_scale_row, gap: 8) do |row|
+              row.label(text: Locale.translate("settings.screenshot_scale"))
+            end
+          end
+
+          video_tab_handle = notebook.tab(Locale.translate("settings.video"), :video_tab, pad: 12) do |tab|
+            scale_row_handle = tab.row(:scale_row, gap: 8) { |row| row.label(text: Locale.translate("settings.window_scale")) }
+            filter_row_handle = tab.row(:filter_row, gap: 8) { |row| row.label(text: Locale.translate("settings.pixel_filter")) }
+          end
+
+          audio_tab_handle = notebook.tab(Locale.translate("settings.audio"), :audio_tab, pad: 12)
+
+          gameplay_tab_handle = notebook.tab(Locale.translate("settings.gameplay"), :gameplay_tab, pad: 12) do |tab|
+            rewind_row_handle = tab.row(:rewind_row, gap: 8) { |row| row.label(text: Locale.translate("settings.rewind_buffer")) }
+          end
+        end
+      end
+
+      @notebook = realized!(notebook_handle, "notebook").path
+      general = @general_tab = realized!(general_tab_handle, "general_tab").path
+      video = @video_tab = realized!(video_tab_handle, "video_tab").path
+      audio = @audio_tab = realized!(audio_tab_handle, "audio_tab").path
+      @gameplay_tab = realized!(gameplay_tab_handle, "gameplay_tab").path
+      screenshot_scale_row_handle = realized!(screenshot_scale_row_handle, "screenshot_scale_row")
+      scale_row_handle = realized!(scale_row_handle, "scale_row")
+      filter_row_handle = realized!(filter_row_handle, "filter_row")
+      rewind_row_handle = realized!(rewind_row_handle, "rewind_row")
+
+      # -- General tab --
+      # Packed after the DSL row above (already arranged as part of
+      # #add's own realize) rather than before it, unlike the switch's
+      # old raw-command position - a purely cosmetic reordering, nothing
+      # here depends on which one visually sits on top.
       @pause_on_focus_loss_switch = Tryst::Switch.new(@app,
         text: Locale.translate("settings.pause_on_focus_loss"), parent: general)
       @pause_on_focus_loss_switch.pack(anchor: :w, pady: 8)
       @pause_on_focus_loss_switch.on_action { |v| @events.pause_on_focus_loss_changed.emit(v) }
 
-      screenshot_scale_row = "#{general}.screenshot_scale_row"
-      @app.command("ttk::frame", screenshot_scale_row)
-      @app.command(:pack, screenshot_scale_row, fill: :x, pady: 8)
-      @app.command("ttk::label", "#{screenshot_scale_row}.lbl", text: Locale.translate("settings.screenshot_scale"))
-      @app.command(:pack, "#{screenshot_scale_row}.lbl", side: :left)
-
       @screenshot_scale_control = Tryst::SegmentedControl.new(@app, options: ["1x", "2x", "3x", "4x"],
-        selected: "2x", parent: screenshot_scale_row)
+        selected: "2x", parent: screenshot_scale_row_handle.path)
       @screenshot_scale_control.pack(side: :right)
       @screenshot_scale_control.on_action { |value| @events.screenshot_scale_changed.emit(value.rstrip('x').to_i) }
 
       # -- Video tab --
-      video = @video_tab = "#{@notebook}.video"
-      @app.command("ttk::frame", video, padding: 12)
-      @app.command(@notebook, :add, video, text: Locale.translate("settings.video"))
-
-      scale_row = "#{video}.scale_row"
-      @app.command("ttk::frame", scale_row)
-      @app.command(:pack, scale_row, fill: :x, pady: 8)
-      @app.command("ttk::label", "#{scale_row}.lbl", text: Locale.translate("settings.window_scale"))
-      @app.command(:pack, "#{scale_row}.lbl", side: :left)
-
       @scale_control = Tryst::SegmentedControl.new(@app, options: ["1x", "2x", "3x", "4x"],
-        selected: "3x", parent: scale_row)
+        selected: "3x", parent: scale_row_handle.path)
       @scale_control.pack(side: :right)
       @scale_control.on_action { |value| @events.scale_changed.emit(value.rstrip('x').to_i) }
 
-      filter_row = "#{video}.filter_row"
-      @app.command("ttk::frame", filter_row)
-      @app.command(:pack, filter_row, fill: :x, pady: 8)
-      @app.command("ttk::label", "#{filter_row}.lbl", text: Locale.translate("settings.pixel_filter"))
-      @app.command(:pack, "#{filter_row}.lbl", side: :left)
-
       nearest_label = Locale.translate("settings.filter_nearest")
       linear_label = Locale.translate("settings.filter_linear")
-      @filter_control = Tryst::SegmentedControl.new(@app, options: [nearest_label, linear_label], parent: filter_row)
+      @filter_control = Tryst::SegmentedControl.new(@app, options: [nearest_label, linear_label], parent: filter_row_handle.path)
       @filter_control.pack(side: :right)
       @filter_control.on_action { |value| @events.filter_changed.emit(value == nearest_label ? :nearest : :linear) }
 
@@ -140,10 +172,6 @@ module Gemba
       @frame_blending_switch.on_action { |v| @events.frame_blending_changed.emit(v) }
 
       # -- Audio tab --
-      audio = @audio_tab = "#{@notebook}.audio"
-      @app.command("ttk::frame", audio, padding: 12)
-      @app.command(@notebook, :add, audio, text: Locale.translate("settings.audio"))
-
       @volume_slider = Tryst::ValueSlider.new(@app, min: 0.0, max: 100.0, step: 1.0,
         value: 100.0, parent: audio)
       @volume_slider.pack(fill: "x", pady: 8)
@@ -154,27 +182,17 @@ module Gemba
       @mute_switch.on_action { |v| @events.mute_changed.emit(v) }
 
       # -- Gameplay tab --
-      gameplay = @gameplay_tab = "#{@notebook}.gameplay"
-      @app.command("ttk::frame", gameplay, padding: 12)
-      @app.command(@notebook, :add, gameplay, text: Locale.translate("settings.gameplay"))
-
-      rewind_row = "#{gameplay}.rewind_row"
-      @app.command("ttk::frame", rewind_row)
-      @app.command(:pack, rewind_row, fill: :x, pady: 8)
-      @app.command("ttk::label", "#{rewind_row}.lbl", text: Locale.translate("settings.rewind_buffer"))
-      @app.command(:pack, "#{rewind_row}.lbl", side: :left)
-
       @rewind_buffer_control = Tryst::SegmentedControl.new(@app, options: REWIND_OPTIONS.map { |seconds| "#{seconds}s" },
-        selected: "#{Config::DEFAULT_REWIND_SECONDS}s", parent: rewind_row)
+        selected: "#{Config::DEFAULT_REWIND_SECONDS}s", parent: rewind_row_handle.path)
       @rewind_buffer_control.pack(side: :right)
       @rewind_buffer_control.on_action { |value| @events.rewind_seconds_changed.emit(value.rstrip('s').to_i) }
 
       # -- Gamepad tab --
-      @gamepad_tab = Settings::GamepadTab.new(@app, @notebook, @path, @events,
+      @gamepad_tab = Settings::GamepadTab.new(@app, @session, NOTEBOOK_NAME, @path, @events,
         validate_keyboard_mapping: ->(keysym : String) { validate_kb_mapping(keysym) })
 
       # -- Achievements tab --
-      @achievements_tab = Settings::AchievementsTab.new(@app, @notebook, @path, @events)
+      @achievements_tab = Settings::AchievementsTab.new(@app, @session, NOTEBOOK_NAME, @path, @events)
     end
 
     def handle : Tryst::UI::Handle
@@ -269,6 +287,22 @@ module Gemba
     # to the closest preset the control can actually display.
     private def nearest_rewind_option(seconds : Int32) : Int32
       REWIND_OPTIONS.min_by { |option| (option - seconds).abs }
+    end
+
+    # @handle was always constructed with an explicit name (see
+    # MainWindow's own @session.window(:gemba_settings, ...)) - this is
+    # a real invariant, not a possible-nil to defend against, but
+    # #add's own signature still wants a bare Symbol.
+    private def handle_name! : Symbol
+      @handle.name || raise "SettingsWindow's own window handle has no name - can't Session#add into it"
+    end
+
+    # #add's block builds the whole subtree before anything realizes
+    # (see #initialize's own comment on this), so every Handle it hands
+    # back is genuinely always assigned by the time this runs - a raise
+    # here means a bug in that build block, not a legitimate nil case.
+    private def realized!(handle : Tryst::UI::Handle?, what : String) : Tryst::UI::Handle
+      handle || raise "SettingsWindow's #{what} wasn't realized by Session#add - this is a bug in its own build block"
     end
   end
 end

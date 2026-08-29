@@ -256,7 +256,7 @@ module Gemba
       # #show/#hide take over repacking it once a ROM actually loads.
       @app.command(:pack, :forget, @video.viewport.path)
 
-      @settings_window = SettingsWindow.new(@app, @settings_handle, @events, @hotkeys)
+      @settings_window = SettingsWindow.new(@app, @settings_handle, @events, @hotkeys, @session)
       @save_state_picker = SaveStatePicker.new(@app, @save_states_handle)
 
       # BoxartFetcher.new does a blocking Dir.mkdir_p, and RomOverrides.new

@@ -32,8 +32,7 @@ end
 # GamepadTab itself binds, not a class binding.
 private def select_gamepad_device(window : Gemba::MainWindow, name : String) : Nil
   window.app.set_variable("::gemba_gamepad_device", name)
-  combo_path = "#{window.settings_window.gamepad_tab.path}.gp_row.gp_combo"
-  window.app.interp.simulate_event(combo_path, "<<ComboboxSelected>>")
+  window.app.interp.simulate_event(window.settings_window.gamepad_tab.gp_combo, "<<ComboboxSelected>>")
 end
 
 describe Gemba::MainWindow do

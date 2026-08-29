@@ -1,4 +1,5 @@
 require "tryst"
+require "tryst/ui"
 require "tryst-switch"
 require "../locale"
 require "../events"
@@ -11,12 +12,16 @@ module Gemba
     # there) isn't ported here, since nothing in this port reads a BIOS
     # path yet.
     #
-    # Built entirely inline in #initialize, not split into per-section
-    # helper methods (see SettingsWindow's own comment on this exact
-    # constraint): several control ivars (@enabled_switch,
-    # @rich_presence_switch, @screenshot_switch) are only assigned
-    # partway through, and Crystal bans any instance-method call on self
-    # until every declared ivar has been assigned at least once.
+    # Built through the Tryst::UI DSL (Session#add, targeting
+    # SettingsWindow's shared notebook by name) - see its own class
+    # comment, and GamepadTab's for the general pattern. The readonly
+    # gray-background credential fields (@username_ro/@token_ro) are the
+    # one piece with no DSL-native equivalent: :text_box always creates
+    # ttk::entry, but the readonly display variant needs classic
+    # tk::entry (only that one supports a settable background color, the
+    # same trick ruby's own RO fields use) - built via the DSL's own
+    # #raw escape hatch instead, parented at the (by-then-realized)
+    # credentials row looked up by name.
     class AchievementsTab
       # Public getters onto the real controls - a spec drives/reads the
       # same widgets #load_from_config itself writes, matching every
@@ -25,87 +30,98 @@ module Gemba
       getter rich_presence_switch : Tryst::Switch
       getter screenshot_switch : Tryst::Switch
 
-      def initialize(@app : Tryst::App, parent_notebook : String, @toplevel_path : String, @events : Events)
-        @frame = "#{parent_notebook}.achievements"
-        @creds_row = "#{@frame}.creds_row"
-        @username_entry = "#{@creds_row}.username"
-        @username_ro = "#{@creds_row}.username_ro"
-        @token_entry = "#{@creds_row}.token"
-        @token_ro = "#{@creds_row}.token_ro"
-        @token_lbl = "#{@creds_row}.token_lbl"
-        @btn_row = "#{@frame}.btn_row"
-        @login_btn = "#{@btn_row}.login"
-        @verify_btn = "#{@btn_row}.verify"
-        @logout_btn = "#{@btn_row}.logout"
-        @reset_btn = "#{@btn_row}.reset"
-        @feedback_lbl = "#{@frame}.feedback"
+      @frame : String
+      @creds_row : String
+      @username_entry : String
+      @token_entry : String
+      @token_lbl : String
+      @username_ro : String
+      @token_ro : String
+      @login_btn : String
+      @verify_btn : String
+      @logout_btn : String
+      @reset_btn : String
+      @feedback_lbl : String
+
+      def initialize(@app : Tryst::App, @session : Tryst::UI::Session, notebook_name : Symbol,
+                     @toplevel_path : String, @events : Events)
         @username_var = "::gemba_ra_username"
         @password_var = "::gemba_ra_password"
         @presenter = Achievements::CredentialsPresenter.with_defaults
 
-        @app.command("ttk::frame", @frame, padding: 12)
-        @app.command(parent_notebook, :add, @frame, text: Locale.translate("settings.retroachievements"))
+        frame_handle = nil
+        creds_row_handle = nil
+        username_entry_handle = nil
+        token_entry_handle = nil
+        token_lbl_handle = nil
+        login_btn_handle = nil
+        verify_btn_handle = nil
+        logout_btn_handle = nil
+        reset_btn_handle = nil
+        feedback_lbl_handle = nil
 
-        # -- Enable switch --
+        @session.add(notebook_name) do |session|
+          frame_handle = session.tab(Locale.translate("settings.retroachievements"), :achievements_tab, pad: 12) do |tab|
+            creds_row_handle = tab.row(gap: 4, pad: 4) do |row|
+              row.label(text: Locale.translate("settings.ra_username_placeholder"))
+              username_entry_handle = row.text_box(textvariable: @username_var, width: 18)
+              token_lbl_handle = row.label(text: Locale.translate("settings.ra_token_placeholder"))
+              token_entry_handle = row.text_box(textvariable: @password_var, show: "*", width: 18)
+            end
+
+            # The readonly tk::entry variants aren't DSL nodes (see class
+            # comment) - #raw defers its block to link time, by which
+            # every sibling above (creds_row_handle included) is already
+            # realized, so closing over that local (rather than looking
+            # it up by name) is safe here.
+            tab.raw do |app_contract|
+              row_path = realized!(creds_row_handle).path
+              app_contract.command("entry", "#{row_path}.username_ro", textvariable: @username_var,
+                state: :readonly, readonlybackground: "#cccccc", relief: :sunken, width: 18)
+              app_contract.command("entry", "#{row_path}.token_ro",
+                state: :readonly, readonlybackground: "#cccccc", relief: :sunken, width: 18)
+            end
+
+            tab.row(gap: 6, pad: 4) do |row|
+              login_btn_handle = row.button(text: Locale.translate("settings.ra_login"), state: :disabled,
+                command: ->(_values : Array(String), _signal : Tryst::CallbackSignal) {
+                  @events.ra_login_requested.emit(@app.get_variable(@username_var).strip, @app.get_variable(@password_var))
+                  nil
+                })
+              verify_btn_handle = row.button(text: Locale.translate("settings.ra_verify"), state: :disabled,
+                command: ->(_values : Array(String), _signal : Tryst::CallbackSignal) { @events.ra_verify_requested.emit; nil })
+              logout_btn_handle = row.button(text: Locale.translate("settings.ra_logout"), state: :disabled,
+                command: ->(_values : Array(String), _signal : Tryst::CallbackSignal) { @events.ra_logout_requested.emit; nil })
+              reset_btn_handle = row.button(text: Locale.translate("settings.ra_reset"), state: :disabled,
+                command: ->(_values : Array(String), _signal : Tryst::CallbackSignal) { confirm_reset; nil })
+            end
+
+            feedback_lbl_handle = tab.label(text: "", anchor: :w, pad: 4)
+          end
+        end
+
+        @frame = realized!(frame_handle).path
+        @creds_row = realized!(creds_row_handle).path
+        @username_entry = realized!(username_entry_handle).path
+        @token_entry = realized!(token_entry_handle).path
+        @token_lbl = realized!(token_lbl_handle).path
+        @username_ro = "#{@creds_row}.username_ro"
+        @token_ro = "#{@creds_row}.token_ro"
+        @login_btn = realized!(login_btn_handle).path
+        @verify_btn = realized!(verify_btn_handle).path
+        @logout_btn = realized!(logout_btn_handle).path
+        @reset_btn = realized!(reset_btn_handle).path
+        @feedback_lbl = realized!(feedback_lbl_handle).path
+
+        @app.set_variable(@username_var, "")
+        @app.set_variable(@password_var, "")
+
+        # -- Enable / per-game switches -- not DSL nodes (see
+        # SettingsWindow's own class comment), packed directly under the
+        # tab frame the same as before.
         @enabled_switch = Tryst::Switch.new(@app, text: Locale.translate("settings.ra_enabled"), parent: @frame)
         @enabled_switch.pack(anchor: :w, pady: 8)
 
-        # -- Username / password row --
-        @app.command("ttk::frame", @creds_row)
-        @app.command(:pack, @creds_row, fill: :x, pady: [0, 4])
-
-        username_lbl = "#{@creds_row}.username_lbl"
-        @app.command("ttk::label", username_lbl, text: Locale.translate("settings.ra_username_placeholder"))
-        @app.command(:pack, username_lbl, side: :left, padx: [0, 4])
-
-        @app.set_variable(@username_var, "")
-        @app.command("ttk::entry", @username_entry, textvariable: @username_var, width: 18)
-        @app.command(:pack, @username_entry, side: :left, padx: [0, 10])
-
-        # Readonly display variants - classic tk::entry (not ttk) so
-        # their background color is settable, same trick as ruby's own
-        # RO fields. Not packed initially; swapped in by
-        # #apply_presenter_state once logged in.
-        @app.command("entry", @username_ro, textvariable: @username_var, state: :readonly,
-          readonlybackground: "#cccccc", relief: :sunken, width: 18)
-
-        @app.command("ttk::label", @token_lbl, text: Locale.translate("settings.ra_token_placeholder"))
-        @app.command(:pack, @token_lbl, side: :left, padx: [0, 4])
-
-        @app.set_variable(@password_var, "")
-        @app.command("ttk::entry", @token_entry, textvariable: @password_var, show: "*", width: 18)
-        @app.command(:pack, @token_entry, side: :left)
-
-        @app.command("entry", @token_ro, state: :readonly, readonlybackground: "#cccccc", relief: :sunken, width: 18)
-
-        # -- Login / Verify / Logout / Reset buttons --
-        @app.command("ttk::frame", @btn_row)
-        @app.command(:pack, @btn_row, fill: :x, pady: [4, 0])
-
-        @app.command("ttk::button", @login_btn, text: Locale.translate("settings.ra_login"), state: :disabled,
-          command: ->(_values : Array(String), _signal : Tryst::CallbackSignal) {
-            @events.ra_login_requested.emit(@app.get_variable(@username_var).strip, @app.get_variable(@password_var))
-            nil
-          })
-        @app.command(:pack, @login_btn, side: :left, padx: [0, 6])
-
-        @app.command("ttk::button", @verify_btn, text: Locale.translate("settings.ra_verify"), state: :disabled,
-          command: ->(_values : Array(String), _signal : Tryst::CallbackSignal) { @events.ra_verify_requested.emit; nil })
-        @app.command(:pack, @verify_btn, side: :left, padx: [0, 6])
-
-        @app.command("ttk::button", @logout_btn, text: Locale.translate("settings.ra_logout"), state: :disabled,
-          command: ->(_values : Array(String), _signal : Tryst::CallbackSignal) { @events.ra_logout_requested.emit; nil })
-        @app.command(:pack, @logout_btn, side: :left, padx: [0, 6])
-
-        @app.command("ttk::button", @reset_btn, text: Locale.translate("settings.ra_reset"), state: :disabled,
-          command: ->(_values : Array(String), _signal : Tryst::CallbackSignal) { confirm_reset; nil })
-        @app.command(:pack, @reset_btn, side: :left)
-
-        # -- Feedback label --
-        @app.command("ttk::label", @feedback_lbl, text: "")
-        @app.command(:pack, @feedback_lbl, anchor: :w, padx: 2, pady: [4, 6])
-
-        # -- Per-game switches --
         @rich_presence_switch = Tryst::Switch.new(@app, text: Locale.translate("settings.ra_rich_presence"), parent: @frame)
         @rich_presence_switch.pack(anchor: :w, pady: [0, 4])
 
@@ -223,6 +239,15 @@ module Gemba
         @app.set_variable(@password_var, "")
         @events.ra_reset_requested.emit
         apply_presenter_state
+      end
+
+      # #add's block builds the whole subtree before anything realizes
+      # (see #initialize's own comment on this), so every Handle it
+      # hands back is genuinely always assigned by the time this runs -
+      # a raise here means a bug in that build block, not a legitimate
+      # nil case.
+      private def realized!(handle : Tryst::UI::Handle?) : Tryst::UI::Handle
+        handle || raise "AchievementsTab widget handle wasn't realized by Session#add - this is a bug in its own build block"
       end
     end
   end
