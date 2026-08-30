@@ -71,22 +71,30 @@ module Gemba
 
       session.add(@handle) do |build|
         build.component(:achievements) do |scope|
-          scope.column(:body, pad: 8, gap: 6) do |column|
+          # grow:/align: :stretch all the way down, so the table takes
+          # whatever the window is resized to and the dropdown the
+          # toolbar's leftover width.
+          scope.column(:body, pad: 8, gap: 6, align: :stretch, grow: true) do |column|
             column.row(:toolbar, gap: 6) do |row|
               row.label(text: Locale.translate("achievements.game_label"))
               game_var = row.var("")
-              dropdown_handle = row.dropdown(:game, bind: game_var, state: :readonly, width: 36)
+              dropdown_handle = row.dropdown(:game, bind: game_var, state: :readonly, grow: true)
               sync_handle = row.button(:sync, text: Locale.translate("achievements.sync"), state: :disabled)
+            end
+
+            table_handle = column.table(:achievements, columns: ["name", "points", "earned"],
+              selectmode: :browse, grow: true)
+
+            # Status on the left, the switch on the right - below the
+            # table rather than in the toolbar, where it fell off the
+            # edge at the default width.
+            column.row(:footer, gap: 6) do |row|
+              status_var = row.var(Locale.translate("achievements.none"))
+              row.label(:status, bind: status_var, anchor: :w, grow: true)
               unofficial_var = row.var(@config.ra_unofficial?)
               unofficial_handle = row.checkbox(:unofficial, text: Locale.translate("achievements.include_unofficial"),
                 bind: unofficial_var)
             end
-
-            table_handle = column.table(:achievements, columns: ["name", "points", "earned"],
-              height: 16, selectmode: :browse)
-
-            status_var = column.var(Locale.translate("achievements.none"))
-            column.label(:status, bind: status_var, anchor: :w)
           end
         end
       end
