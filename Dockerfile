@@ -37,6 +37,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     xvfb xauth \
     cmake make git \
     libpng-dev libzip-dev zlib1g-dev \
+    ffmpeg \
     ca-certificates curl gcc g++ pkg-config \
     libpcre2-dev libgc-dev libevent-dev libssl-dev libyaml-dev libxml2-dev
 
