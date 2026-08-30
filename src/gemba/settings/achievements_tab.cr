@@ -97,7 +97,9 @@ module Gemba
                   command: ->(_values : Array(String), _signal : Tryst::CallbackSignal) { confirm_reset; nil })
               end
 
-              feedback_lbl_handle = tab.label(:feedback, text: "", anchor: :w, pad: 4)
+              # padding: (ttk's own option) rather than the DSL's pad:,
+              # which only a container takes.
+              feedback_lbl_handle = tab.label(:feedback, text: "", anchor: :w, padding: 4)
             end
           end
         end

@@ -93,7 +93,10 @@ module Gemba
       rewind_row_handle = nil
 
       @session.add(@handle) do |session|
-        notebook_handle = session.tabs(pad: 12) do |notebook|
+        # The 12px margin around the notebook is the window's own pad:
+        # (declared in MainWindow) - a notebook has no packed children to
+        # space, so pad: on it is rejected at validation.
+        notebook_handle = session.tabs do |notebook|
           general_tab_handle = notebook.tab(Locale.translate("settings.general"), :general_tab, pad: 12) do |tab|
             screenshot_scale_row_handle = tab.row(:screenshot_scale_row, gap: 8) do |row|
               row.label(text: Locale.translate("settings.screenshot_scale"))

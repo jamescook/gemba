@@ -220,8 +220,11 @@ module Gemba
       # ValueSlider (raw-block args are only ever an AppContract - see
       # its own class comment), so only an EMPTY window is declared here
       # and SettingsWindow's actual content is built after run_async.
+      # pad: is the margin around the notebook SettingsWindow adds into
+      # this window - a window stacks its content like a column, so the
+      # margin belongs here, not on the notebook.
       @settings_handle = @session.window(:gemba_settings, title: Locale.translate("menu.settings"),
-        resizable: false, modal: true)
+        resizable: false, modal: true, pad: 12)
       @save_states_handle = @session.window(:gemba_save_states, title: Locale.translate("picker.title"),
         resizable: false, modal: true)
       # Non-modal: browsing achievements while the game keeps running is
