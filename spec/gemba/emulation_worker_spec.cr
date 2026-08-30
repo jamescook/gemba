@@ -185,6 +185,53 @@ describe Gemba::EmulationWorker do
     end
   end
 
+  # The whole message round-trip for a .gir recording: start (which
+  # creates the directory and the anchor state on the worker thread,
+  # where Core lives), masks captured per frame as they're applied,
+  # stop finalizing the header. InputRecorder's own spec covers the
+  # file format; this is the cross-thread plumbing.
+  it "records the masks frames actually ran under via #start_input_recording/#stop_input_recording" do
+    with_tempdir do |tmp|
+      app = Tryst::App.new(title: "emulation_worker_spec_gir")
+      worker = Gemba::EmulationWorker.new(app, FILL_ROM)
+
+      messages = [] of String
+      worker.on_message { |text| messages << text }
+      frames = 0
+      worker.on_frame { frames += 1 }
+
+      # A nested, not-yet-existing directory - start is what creates it.
+      path = File.join(tmp, "recordings", "session.gir")
+      worker.start_input_recording(path)
+      app.interp.wait_until(5.seconds) { messages.includes?("input_record_result:start:true") }
+
+      worker.input_mask = 0x041_u32
+      baseline = frames
+      app.interp.wait_until(5.seconds) { frames >= baseline + 10 }
+      worker.stop_input_recording
+      app.interp.wait_until(5.seconds) { messages.any?(&.starts_with?("input_record_result:stop:")) }
+
+      reported = messages.find!(&.starts_with?("input_record_result:stop:"))
+        .lchop("input_record_result:stop:").to_i
+      reported.should be > 0
+
+      replayer = Gemba::InputReplayer.new(path)
+      replayer.frame_count.should eq reported
+      replayer.header_frame_count.should eq reported
+      replayer.rom_checksum.should_not be_nil
+      File.exists?(replayer.anchor_state_path).should be_true
+
+      # The mask sent mid-recording shows up in the recorded stream.
+      masks = [] of UInt32
+      replayer.each_bitmask { |mask, _frame| masks << mask }
+      masks.should contain 0x041_u32
+
+      worker.stop
+      app.interp.wait_until(5.seconds) { worker.done? }
+      app.destroy
+    end
+  end
+
   # The correctness property FrameRing exists to guarantee: a packet the
   # main thread is still holding must never have its buffer contents
   # change out from under it, even once the worker has produced far more

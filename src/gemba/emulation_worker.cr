@@ -5,6 +5,7 @@ require "./rom_info_data"
 require "./config"
 require "./achievements/ra_runtime"
 require "./achievements/achievement"
+require "./input_recorder"
 
 module Gemba
   # Runs one loaded ROM's Core on its own OS thread (Tryst::BackgroundWork)
@@ -95,7 +96,10 @@ module Gemba
     # (#activate_rich_presence) and "achievement_unlocked:<id>"/
     # "achievement_rejected:<id>:<reason>"/
     # "achievement_screenshot_result:<ok>:<filename>"
-    # (#activate_achievements/#take_achievement_screenshot).
+    # (#activate_achievements/#take_achievement_screenshot), and
+    # "input_record_result:start:<ok>[:<error>]"/
+    # "input_record_result:stop:<frames>"
+    # (#start_input_recording/#stop_input_recording).
     def on_message(&block : String -> Nil) : self
       @background.on_message { |text| block.call(text) }
       self
@@ -191,6 +195,29 @@ module Gemba
       @background.send_message(enabled ? "turbo:on" : "turbo:off")
     end
 
+    # Starts recording per-frame input masks to path (see InputRecorder
+    # - it lives on the worker thread, where Core and the authoritative
+    # per-frame mask both are; the main thread's #input_mask= updates
+    # only arrive between frames, so capturing there could log a mask a
+    # frame never actually ran under). Parent directories are created as
+    # needed. Reports back "input_record_result:start:<ok>[:<error>]" -
+    # a start can genuinely fail (the anchor save state not writing) and
+    # the caller's recording indicator should only ever show a recording
+    # that's real. Ignored if a recording is already running.
+    def start_input_recording(path : String) : Nil
+      @background.send_message("input_record_start:#{path}")
+    end
+
+    # Stops and finalizes the current recording (flush + the header's
+    # in-place frame_count rewrite), reporting
+    # "input_record_result:stop:<frames>". Ignored if nothing is
+    # recording. A worker stopped mid-recording (#stop, or the ROM being
+    # swapped) finalizes the file the same way on its way out - it just
+    # sends no message, since the channel is already closing.
+    def stop_input_recording : Nil
+      @background.send_message("input_record_stop")
+    end
+
     # Hold-to-rewind: true while the hotkey is physically held (see
     # EmulatorFrame#on_frame, which polls key state every frame since
     # Tk only fires one KeyRelease for a held key, not a stream).
@@ -240,6 +267,12 @@ module Gemba
       property ratio : Float64 = 1.0
       property? turbo : Bool = false
       property? rewind : Bool = false
+
+      # The active input recording, if any - held here (rather than as
+      # a #run local) so the message dispatch below can start/stop it
+      # while the frame loop reads it. Worker-thread-only, like the
+      # Core it snapshots its anchor state from.
+      property input_recorder : InputRecorder?
 
       # Applies one message. Returns true if it was a Stop (the caller's
       # cue to break its loop) - every other kind updates state in place
@@ -332,6 +365,10 @@ module Gemba
         break if drain_messages(task, core, save_states, state, ring, ra_runtime)
 
         core.keys = state.mask
+        # Captured HERE, not where the "mask:" message lands: this is
+        # the mask this frame actually runs under, which is the whole
+        # contract a .gir replay depends on.
+        state.input_recorder.try(&.capture(state.mask))
 
         # Ported from mgba/core/thread.c's own _frameStarted: while
         # rewinding, restore the most recent snapshot instead of taking a
@@ -380,9 +417,24 @@ module Gemba
         sleep(next_frame_at - now) if next_frame_at > now
         next_frame_at = now if now - next_frame_at > 0.1.seconds
       end
-
-      ra_runtime.close
-      core.destroy
+    ensure
+      # The loop above never exits normally on #stop: TaskContext raises
+      # Stopped out of check_pause/check_message the moment the Stop
+      # control arrives (caught by BackgroundWork#start, a frame above
+      # this one), so teardown only ever runs via this ensure - plain
+      # code after the loop silently never ran (which used to leak a
+      # whole mGBA core per ROM swap, ra_runtime.close and core.destroy
+      # having sat exactly there). The .try calls aren't decoration
+      # either: Core.new itself can raise (a bad ROM path), landing here
+      # with the later locals never assigned.
+      #
+      # A recording still running when the worker stops (ROM swapped,
+      # app quitting) is finalized rather than left with a zero
+      # frame_count and an unflushed tail - the file should replay no
+      # matter how the session ended.
+      state.try(&.input_recorder).try(&.stop)
+      ra_runtime.try(&.close)
+      core.try(&.destroy)
     end
 
     # Copies this frame's drained audio into its ring slot and returns
@@ -533,6 +585,45 @@ module Gemba
       true
     end
 
+    # The input-recording half of the message channel - same split-out
+    # shape as #apply_ra_message, same reason. Returns true when msg was
+    # one of ours.
+    private def apply_input_record_message(msg, task : Tryst::TaskContext(FramePacket), core : Core,
+                                           state : WorkerState) : Bool
+      return false unless msg.is_a?(String)
+
+      if path = msg.lchop?("input_record_start:")
+        start_input_record(path, task, core, state)
+      elsif msg == "input_record_stop"
+        if recorder = state.input_recorder
+          recorder.stop
+          state.input_recorder = nil
+          task.send_message("input_record_result:stop:#{recorder.frame_count}")
+        end
+      else
+        return false
+      end
+      true
+    end
+
+    # A failed start (most plausibly the anchor save state not writing -
+    # a full disk, a permissions problem) is reported, not raised: it's
+    # a lost recording, not a reason to stop emulating. A duplicate
+    # start while one is already running is silently ignored - the first
+    # start's own result message already told the main thread what's on.
+    private def start_input_record(path : String, task : Tryst::TaskContext(FramePacket),
+                                   core : Core, state : WorkerState) : Nil
+      return if state.input_recorder
+
+      Dir.mkdir_p(File.dirname(path))
+      recorder = InputRecorder.new(path, core, rom_path: @rom_path)
+      recorder.start
+      state.input_recorder = recorder
+      task.send_message("input_record_result:start:true")
+    rescue ex
+      task.send_message("input_record_result:start:false:#{ex.message}")
+    end
+
     # Reports a load's outcome and, if memory really did just jump to
     # the saved state, sends every achievement back through rcheevos'
     # priming: one whose condition happens to hold in the loaded memory
@@ -567,6 +658,8 @@ module Gemba
           if apply_slot_message(msg, task, core, save_states, ring, ra_runtime)
             # handled
           elsif apply_ra_message(msg, task, ra_runtime)
+            # handled
+          elsif apply_input_record_message(msg, task, core, state)
             # handled
           elsif state.apply(msg)
             return true

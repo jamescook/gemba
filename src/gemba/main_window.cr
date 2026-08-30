@@ -108,6 +108,7 @@ module Gemba
     getter quick_save_item : Tryst::UI::Handle?
     getter quick_load_item : Tryst::UI::Handle?
     getter save_states_item : Tryst::UI::Handle?
+    getter input_record_item : Tryst::UI::Handle?
 
     def worker : EmulationWorker?
       @emulator_frame.try(&.worker)
@@ -199,6 +200,7 @@ module Gemba
                    focus_probe : Proc(Bool)? = nil,
                    logs_dir : String? = nil,
                    achievements_cache_dir : String? = nil,
+                   recordings_dir : String? = nil,
                    @ra_ping_interval_ms : Int32 = RA_PING_INTERVAL_MS)
       @config = config_path ? Config.new(config_path) : Config.new
       Locale.load(@config.locale)
@@ -276,6 +278,11 @@ module Gemba
             shortcut: "F8", state: :disabled) { quick_load }
           @save_states_item = emu.item(:save_states, label: Locale.translate("menu.save_states"),
             shortcut: "F6", state: :disabled) { show_save_states }
+          emu.separator
+          # Relabeled Start <-> Stop as the state actually changes - see
+          # #update_input_recording_menu.
+          @input_record_item = emu.item(:input_record, label: Locale.translate("menu.start_input_recording"),
+            shortcut: "F4", state: :disabled) { toggle_input_recording }
         end
       end
 
@@ -317,6 +324,8 @@ module Gemba
       # achievements_cache_dir: same isolation story as boxart_cache_dir
       # - a spec's ROM load must never write a real user cache file.
       @achievements_cache_dir = achievements_cache_dir || Paths.achievements_cache_dir
+      # recordings_dir: same again, for .gir input recordings.
+      @recordings_dir = recordings_dir || Paths.recordings_dir
       @achievements_window = AchievementsWindow.new(@app, @achievements_handle, @session, @rom_library, @config,
         @rom_overrides, @achievements_cache_dir)
 
@@ -366,10 +375,12 @@ module Gemba
 
       frame = EmulatorFrame.new(@app, @video, @audio, @keyboard_map, @gamepad_map, @hotkeys, path,
         quick_save_slot: @config.quick_save_slot, backup: @config.save_state_backup?,
-        debounce: @config.save_state_debounce.seconds, rewind_seconds: @config.rewind_seconds)
+        debounce: @config.save_state_debounce.seconds, rewind_seconds: @config.rewind_seconds,
+        recordings_dir: @recordings_dir)
       frame.on_error { |text| report_error(text) }
       frame.on_message { |text| handle_worker_message(text) }
       frame.on_rom_info { |data| update_rom_identity(path, data) }
+      frame.on_input_recording_changed { |recording| update_input_recording_menu(recording) }
       @emulator_frame = frame
       @current_rom_id = nil
 
@@ -388,6 +399,11 @@ module Gemba
       @quick_save_item.try(&.enable)
       @quick_load_item.try(&.enable)
       @save_states_item.try(&.enable)
+      @input_record_item.try(&.enable)
+      # A recording running when the previous ROM was swapped out ends
+      # with the old worker, with no stop message back (see
+      # EmulatorFrame#cleanup) - the label must not stay on "Stop".
+      update_input_recording_menu(false)
 
       start_ra_session(path)
     end
@@ -675,11 +691,11 @@ module Gemba
     end
 
     # Only the actions with a real handler get bound - HotkeyMap's own
-    # defaults also name record/input_record, neither implemented yet -
-    # binding those now would just be dead keys. rewind is implemented
-    # but deliberately NOT bound here: it's a hold-style action (see
-    # EmulatorFrame#poll_rewind), not a single-press toggle like every
-    # other hotkey #bind_hotkey wires up.
+    # defaults also name record (the .grec video capture), not
+    # implemented yet - binding it now would just be a dead key. rewind
+    # is implemented but deliberately NOT bound here: it's a hold-style
+    # action (see EmulatorFrame#poll_rewind), not a single-press toggle
+    # like every other hotkey #bind_hotkey wires up.
     private def bind_hotkeys : Nil
       bind_hotkey(:quit) { quit }
       bind_hotkey(:pause) { toggle_pause }
@@ -690,6 +706,7 @@ module Gemba
       bind_hotkey(:save_states) { show_save_states }
       bind_hotkey(:screenshot) { take_screenshot }
       bind_hotkey(:show_fps) { toggle_show_fps }
+      bind_hotkey(:input_record) { toggle_input_recording }
       # '?' isn't a HotkeyMap action (it's not rebindable - the panel
       # is how you find out what is). Bound on the panel too, since a
       # window manager may hand the panel focus on show and "." would
@@ -704,6 +721,20 @@ module Gemba
 
       spec = hotkey.is_a?(Array) ? hotkey.join('-') : hotkey
       @session.on_key(spec) { |_args, _signal| block.call }
+    end
+
+    # Starts/stops recording the running game's per-frame input to a
+    # .gir file (see EmulatorFrame#toggle_input_recording) - a no-op
+    # with no ROM loaded, matching ruby's own `return unless @core`
+    # guard (the F4 binding is app-wide, unlike the menu item, which
+    # #load_rom gates by enablement).
+    def toggle_input_recording : Nil
+      @emulator_frame.try(&.toggle_input_recording)
+    end
+
+    private def update_input_recording_menu(recording : Bool) : Nil
+      key = recording ? "menu.stop_input_recording" : "menu.start_input_recording"
+      @input_record_item.try(&.configure(label: Locale.translate(key)))
     end
 
     # Ported from ruby's own AppController#gamepad_probe_tick/

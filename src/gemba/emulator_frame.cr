@@ -10,6 +10,8 @@ require "./frame_stack"
 require "./rom_info_data"
 require "./locale"
 require "./config"
+require "./paths"
+require "./session_logger"
 
 module Gemba
   # The per-ROM-session half of ruby's own EmulatorFrame (lib/gemba/
@@ -41,11 +43,18 @@ module Gemba
     # counter's text updates - matches ruby's own update_fps.
     FPS_INTERVAL = 1.0
 
+    # Whether a .gir input recording is running - flipped on the
+    # worker's CONFIRMED result messages, not optimistically on toggle:
+    # a start can fail (see EmulationWorker#start_input_recording), and
+    # the HUD dot must never show a recording that isn't real.
+    getter? input_recording : Bool = false
+
     @turbo : Bool = false
     @rewinding : Bool = false
     @saved_volume : Float64
     @on_message : (String -> Nil)?
     @on_rom_info : (RomInfoData -> Nil)?
+    @on_input_recording_changed : (Bool -> Nil)?
     @fps_count : Int32 = 0
     @fps_started_at : Time::Instant
 
@@ -55,7 +64,8 @@ module Gemba
                    quick_save_slot : Int32 = SaveStateManager::DEFAULT_QUICK_SAVE_SLOT,
                    backup : Bool = SaveStateManager::DEFAULT_BACKUP,
                    debounce : Time::Span = SaveStateManager::DEFAULT_DEBOUNCE,
-                   rewind_seconds : Int32 = Config::DEFAULT_REWIND_SECONDS)
+                   rewind_seconds : Int32 = Config::DEFAULT_REWIND_SECONDS,
+                   @recordings_dir : String = Paths.recordings_dir)
       @rom_title = File.basename(rom_path).sub(/\.gba$/i, "")
       @saved_volume = @audio.volume
       @fps_started_at = Time.instant
@@ -87,6 +97,14 @@ module Gemba
       self
     end
 
+    # Fires whenever #input_recording? actually changes (a confirmed
+    # start, a stop, the reverted flag after a failed start) - what
+    # MainWindow relabels its Start/Stop menu item from.
+    def on_input_recording_changed(&block : Bool -> Nil) : self
+      @on_input_recording_changed = block
+      self
+    end
+
     # Fires once, the moment the "rom_info:..." message itself arrives
     # (not just whenever #rom_info happens to be queried afterward) - lets
     # a caller react right when game_code/checksum become known, e.g. to
@@ -106,8 +124,13 @@ module Gemba
     end
 
     # Stops the worker thread. Does NOT destroy @video/@audio - those
-    # outlive this frame, see the class comment.
+    # outlive this frame, see the class comment. The worker finalizes
+    # any running input recording on its way out (see EmulationWorker's
+    # own teardown), but its stop result never arrives - so the shared
+    # VideoOutput's recording dot is cleared here, not left lit for the
+    # next ROM.
     def cleanup : Nil
+      @video.input_recording_dot = false
       @worker.stop
     end
 
@@ -165,6 +188,18 @@ module Gemba
 
     def toggle_pause : Nil
       paused? ? resume : pause
+    end
+
+    # Starts or stops recording this session's per-frame input to a
+    # fresh .gir under @recordings_dir - fire-and-forget like
+    # #quick_save; the flag/toast/HUD dot react to the worker's result
+    # message (see #handle_input_record_result).
+    def toggle_input_recording : Nil
+      if input_recording?
+        @worker.stop_input_recording
+      else
+        @worker.start_input_recording(next_recording_path)
+      end
     end
 
     def toggle_turbo : Nil
@@ -246,9 +281,47 @@ module Gemba
         data = RomInfoData.from_json(payload)
         @rom_info = data
         @on_rom_info.try(&.call(data))
+      elsif tag == "input_record_result"
+        handle_input_record_result(payload)
       else
         @on_message.try(&.call(text))
       end
+    end
+
+    # "start:<ok>[:<error>]" or "stop:<frames>" - flips the flag, the
+    # HUD dot and the toasts, then reports the (possibly unchanged)
+    # state to #on_input_recording_changed.
+    private def handle_input_record_result(payload : String) : Nil
+      parts = payload.split(':', 3)
+
+      case parts[0]?
+      when "start"
+        if parts[1]? == "true"
+          set_input_recording(true)
+          @video.show_toast(Locale.translate("toast.input_recording_started"))
+        else
+          Gemba.log(SessionLogger::Level::Warn) { "Input recording failed to start: #{parts[2]?}" }
+        end
+      when "stop"
+        set_input_recording(false)
+        @video.show_toast(Locale.translate("toast.input_recording_stopped", frames: parts[1]? || "0"))
+      end
+    end
+
+    private def set_input_recording(recording : Bool) : Nil
+      @input_recording = recording
+      @video.input_recording_dot = recording
+      @on_input_recording_changed.try(&.call(recording))
+    end
+
+    # Same naming scheme as ruby gemba's start_input_recording, built
+    # from #rom_title (the main thread's name for the ROM - Core's own
+    # cart-header title lives on the worker thread) - consistent with
+    # this port's screenshot filenames, which made the same swap.
+    private def next_recording_path : String
+      timestamp = Time.local.to_s("%Y%m%d_%H%M%S_%L")
+      title = @rom_title.gsub(/[^a-zA-Z0-9_.-]/, "_")
+      File.join(@recordings_dir, "#{title}_#{timestamp}.gir")
     end
   end
 end

@@ -31,6 +31,13 @@ module Gemba
     # itself rather than a preference.
     getter? show_fps : Bool = true
 
+    # Whether the input-recording indicator (HudOverlay's green dot,
+    # top-left) draws - set by EmulatorFrame while a .gir recording is
+    # confirmed running. A plain property rather than a per-#draw
+    # argument (the way show_ff is passed) so #redraw reproduces it
+    # unchanged with no caller involvement.
+    property? input_recording_dot : Bool = false
+
     # The same font every toast/HUD overlay in this port draws with -
     # bundled at gemba/assets, same file ruby gemba ships (JetBrains Mono,
     # SIL OFL - freely redistributable).
@@ -187,7 +194,7 @@ module Gemba
       renderer = @viewport.renderer
       renderer.clear(Tryst::SDL::Color::BLACK)
       renderer.copy(@texture, dest: dest)
-      @hud.draw(dest, show_fps: show_fps?, show_ff: @show_ff)
+      @hud.draw(dest, show_fps: show_fps?, show_ff: @show_ff, show_input_record: input_recording_dot?)
       @toast.draw(dest)
     end
 
@@ -215,7 +222,7 @@ module Gemba
       @texture.update(bytes)
       renderer.clear(Tryst::SDL::Color::BLACK)
       renderer.copy(@texture, dest: dest)
-      @hud.draw(dest, show_fps: show_fps?, show_ff: @show_ff)
+      @hud.draw(dest, show_fps: show_fps?, show_ff: @show_ff, show_input_record: input_recording_dot?)
       @toast.draw(dest)
     end
 

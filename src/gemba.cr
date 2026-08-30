@@ -13,6 +13,8 @@ require "./gemba/keyboard_map"
 require "./gemba/gamepad_map"
 require "./gemba/hotkey_map"
 require "./gemba/achievements/ra_runtime"
+require "./gemba/input_recorder"
+require "./gemba/input_replayer"
 require "./gemba/main_window"
 
 module Gemba

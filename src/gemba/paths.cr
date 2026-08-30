@@ -44,5 +44,11 @@ module Gemba
     def self.achievements_cache_dir : String
       File.join(config_dir, "achievements")
     end
+
+    # .gir input recordings (and, later, .grec captures) - ruby gemba's
+    # own default_recordings_dir.
+    def self.recordings_dir : String
+      File.join(config_dir, "recordings")
+    end
   end
 end
