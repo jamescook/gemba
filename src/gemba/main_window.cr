@@ -198,7 +198,8 @@ module Gemba
                    ra_retry_schedule : Achievements::RetroAchievements::UnlockQueue::Schedule = Achievements::RetroAchievements::UnlockQueue::Schedule::DEFAULT,
                    focus_probe : Proc(Bool)? = nil,
                    logs_dir : String? = nil,
-                   achievements_cache_dir : String? = nil)
+                   achievements_cache_dir : String? = nil,
+                   @ra_ping_interval_ms : Int32 = RA_PING_INTERVAL_MS)
       @config = config_path ? Config.new(config_path) : Config.new
       Locale.load(@config.locale)
       GameIndex.preload!
@@ -501,7 +502,9 @@ module Gemba
       # `@ping_last_at.nil?` short-circuit; App#every has no leading
       # tick, so it's explicit here.
       send_ping(username, token, game_id)
-      @ra_ping_timer = @app.every(RA_PING_INTERVAL_MS) { send_ping(username, token, game_id) }
+      # @ra_ping_interval_ms: RA_PING_INTERVAL_MS unless a spec shortens
+      # it to watch the heartbeat repeat (same seam as ra_retry_schedule).
+      @ra_ping_timer = @app.every(@ra_ping_interval_ms) { send_ping(username, token, game_id) }
     end
 
     private def send_ping(username : String, token : String, game_id : Int64) : Nil

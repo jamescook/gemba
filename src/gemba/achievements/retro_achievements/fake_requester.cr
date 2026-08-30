@@ -35,7 +35,15 @@ module Gemba
         # to by activating nothing.
         property? unlocks_fail : Bool = false
 
-        # game_id: nil makes gameid lookups report "unrecognised ROM".
+        # Whether r=ping fails (request error) - the heartbeat must
+        # shrug it off and keep its schedule.
+        property? pings_fail : Bool = false
+
+        # game_id: nil makes gameid lookups report "unrecognised ROM" -
+        # writable mid-session so a fake can stop recognising the next
+        # ROM a test loads.
+        property game_id : Int64?
+
         # script: nil makes the game report no Rich Presence script.
         # achievements: the PatchData.Achievements entries, built with
         # .achievement. unlocked: the ids r=unlocks reports as already
@@ -93,7 +101,7 @@ module Gemba
           when "patch"            then patch_response
           when "unlocks"          then unlocks_response
           when "awardachievement" then award_response(params)
-          when "ping"             then {JSON.parse(%({"Success":true})), true}
+          when "ping"             then @pings_fail ? {nil, false} : {JSON.parse(%({"Success":true})), true}
           else                         {JSON.parse(%({"Success":false,"Error":"FakeRequester: unhandled request"})), true}
           end
         end

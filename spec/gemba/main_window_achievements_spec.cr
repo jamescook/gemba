@@ -123,7 +123,8 @@ private def cache_dir(dir : String) : String
 end
 
 private def ra_window(dir : String, fake : Gemba::Achievements::RetroAchievements::FakeRequester,
-                      retry_schedule = Gemba::Achievements::RetroAchievements::UnlockQueue::Schedule::DEFAULT) : Gemba::MainWindow
+                      retry_schedule = Gemba::Achievements::RetroAchievements::UnlockQueue::Schedule::DEFAULT,
+                      ping_interval_ms : Int32 = Gemba::MainWindow::RA_PING_INTERVAL_MS) : Gemba::MainWindow
   window = Gemba::MainWindow.new(
     rom_library_path: File.join(dir, "rom_library.json"),
     config_path: File.join(dir, "settings.json"),
@@ -131,6 +132,7 @@ private def ra_window(dir : String, fake : Gemba::Achievements::RetroAchievement
     ra_requester: fake.to_proc,
     ra_retry_schedule: retry_schedule,
     achievements_cache_dir: cache_dir(dir),
+    ra_ping_interval_ms: ping_interval_ms,
   )
   window.config.ra_enabled = true
   window.config.ra_rich_presence = false
@@ -487,6 +489,48 @@ describe Gemba::MainWindow do
 
           resynced = window.app.off_thread { Gemba::Achievements::Cache.read(rom_id, cache_dir(dir)) }.should_not be_nil
           resynced.all?(&.earned?).should be_true
+        ensure
+          stop_worker_then_destroy(window)
+        end
+      end
+    end
+  end
+end
+
+private def ping_count(fake : Gemba::Achievements::RetroAchievements::FakeRequester) : Int32
+  fake.requests.count { |request| request["r"]? == "ping" }
+end
+
+describe Gemba::MainWindow do
+  describe "rich presence heartbeat" do
+    it "keeps pinging on its interval, through failed pings, and stops when the ROM is swapped away" do
+      with_tempdir do |dir|
+        fake = Gemba::Achievements::RetroAchievements::FakeRequester.new(
+          game_id: 515_i64, script: "Display:\nIWRAM0 @Number(0xH0000)")
+        # 150ms rather than the real two minutes.
+        window = ra_window(dir, fake, ping_interval_ms: 150)
+        window.config.ra_rich_presence = true
+
+        begin
+          window.load_rom(FILL_ROM)
+          window.app.interp.wait_until(10.seconds) { ping_count(fake) >= 3 }
+          fake.requests.select { |request| request["r"]? == "ping" }.all? { |request| request["g"]? == "515" }.should be_true
+
+          # The site going away doesn't stop the schedule.
+          fake.pings_fail = true
+          failed_from = ping_count(fake)
+          window.app.interp.wait_until(5.seconds) { ping_count(fake) >= failed_from + 2 }
+          fake.pings_fail = false
+
+          # Unloading the game (swapping to another ROM) stops it: the
+          # count settles while the new game's own lookup runs against
+          # a fake that no longer recognises any ROM.
+          fake.game_id = nil
+          window.load_rom(FILL_ROM)
+          window.app.interp.wait_until(5.seconds) { fake.requests.count { |request| request["r"]? == "gameid" } >= 2 }
+          settled = ping_count(fake)
+          pump(window, 500.milliseconds)
+          ping_count(fake).should eq settled
         ensure
           stop_worker_then_destroy(window)
         end
