@@ -46,20 +46,24 @@ module Gemba
     # crisp); ffmpeg_args replaces the codec arguments wholesale for
     # callers that know exactly what they want. progress prints an
     # updating "Encoding: N/M" line to STDERR, ruby-style.
+    # ffmpeg_bin names the executable to invoke - the seam a spec (or
+    # an unusual install) swaps for a stand-in that records its argv,
+    # so the constructed command line is assertable without ffmpeg
+    # being installed or actually encoding anything.
     def self.decode(grec_path : String, output_path : String,
                     video_codec : String = DEFAULT_VIDEO_CODEC,
                     audio_codec : String = DEFAULT_AUDIO_CODEC,
                     scale : Int32? = nil, ffmpeg_args : Array(String)? = nil,
-                    progress : Bool = true) : Stats
+                    progress : Bool = true, ffmpeg_bin : String = "ffmpeg") : Stats
       new(grec_path, output_path, video_codec: video_codec, audio_codec: audio_codec,
-        scale: scale, ffmpeg_args: ffmpeg_args, progress: progress).decode
+        scale: scale, ffmpeg_args: ffmpeg_args, progress: progress, ffmpeg_bin: ffmpeg_bin).decode
     end
 
     def initialize(@grec_path : String, @output_path : String,
                    @video_codec : String = DEFAULT_VIDEO_CODEC,
                    @audio_codec : String = DEFAULT_AUDIO_CODEC,
                    @scale : Int32? = nil, @ffmpeg_args : Array(String)? = nil,
-                   @progress : Bool = true)
+                   @progress : Bool = true, @ffmpeg_bin : String = "ffmpeg")
     end
 
     # Pass 1 alone: header plus one change byte per frame, everything
@@ -84,9 +88,9 @@ module Gemba
     end
 
     private def check_ffmpeg! : Nil
-      Process.run("ffmpeg", ["-version"])
+      Process.run(@ffmpeg_bin, ["-version"])
     rescue IO::Error
-      raise FfmpegNotFound.new("ffmpeg not found in PATH")
+      raise FfmpegNotFound.new("#{@ffmpeg_bin} not found in PATH")
     end
 
     # The shared pass-1 walk: yields (io, audio_len) positioned at each
@@ -138,7 +142,7 @@ module Gemba
     # Pass 2: decode video frames one at a time and pipe raw BGRA to
     # ffmpeg's stdin, audio coming from the pass-1 tempfile.
     private def encode(info : Stats, audio_path : String) : Nil
-      process = Process.new("ffmpeg", ffmpeg_args(info, audio_path),
+      process = Process.new(@ffmpeg_bin, ffmpeg_args(info, audio_path),
         input: Process::Redirect::Pipe, output: Process::Redirect::Pipe,
         error: Process::Redirect::Pipe)
 

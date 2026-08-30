@@ -1,6 +1,8 @@
 require "./cli/play"
 require "./cli/version_cmd"
 require "./cli/config_cmd"
+require "./cli/record"
+require "./cli/decode"
 
 module Gemba
   # gemba's command-line front door - a port of ruby gemba's CLI shell
@@ -28,14 +30,16 @@ module Gemba
     record HelpPlan, text : String
     record UnimplementedPlan, command : String
 
-    alias Plan = HelpPlan | UnimplementedPlan | Play::Plan | VersionCmd::Plan | ConfigCmd::Plan
+    alias Plan = HelpPlan | UnimplementedPlan | Play::Plan | VersionCmd::Plan | ConfigCmd::Plan |
+                 Record::Plan | Decode::Plan
 
-    # io/input/config_path are spec seams (captured output, scripted
-    # confirmation, isolated settings file) - production callers pass
-    # only argv.
+    # io/input/config_path/recordings_dir are spec seams (captured
+    # output, scripted confirmation, isolated settings/recordings) -
+    # production callers pass only argv.
     def self.run(argv : Array(String) = ARGV, dry_run : Bool = false,
                  io : IO = STDOUT, input : IO = STDIN,
-                 config_path : String = Config.path) : Plan
+                 config_path : String = Config.path,
+                 recordings_dir : String = Paths.recordings_dir) : Plan
       args = argv.dup
 
       if args.first? == "--help" || args.first? == "-h"
@@ -49,9 +53,23 @@ module Gemba
       when "play"    then Play.new(args, dry_run: dry_run, io: io).call
       when "version" then VersionCmd.new(dry_run: dry_run, io: io).call
       when "config"  then ConfigCmd.new(args, dry_run: dry_run, io: io, input: input, config_path: config_path).call
+      when "record"  then Record.new(args, dry_run: dry_run, io: io).call
+      when "decode"  then Decode.new(args, dry_run: dry_run, io: io, recordings_dir: recordings_dir).call
       else
         io.puts "gemba #{command} is not implemented yet" unless dry_run
         UnimplementedPlan.new(command: command)
+      end
+    end
+
+    # 1.5 GB / 12.3 MB / 640.0 KB - ruby's format_size, shared by the
+    # record/decode reports.
+    def self.format_size(bytes : Int) : String
+      if bytes >= 1_073_741_824
+        sprintf("%.1f GB", bytes / 1_073_741_824.0)
+      elsif bytes >= 1_048_576
+        sprintf("%.1f MB", bytes / 1_048_576.0)
+      else
+        sprintf("%.1f KB", bytes / 1024.0)
       end
     end
 
