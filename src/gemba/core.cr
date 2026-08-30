@@ -232,14 +232,21 @@ module Gemba
       LibMgba.mCoreRewindRestore(@rewind_ctx, @core)
     end
 
+    # mGBA's busRead8/16 return uint32_t and can carry bits above the
+    # nominal width - a halfword loaded from an odd address comes back
+    # byte-rotated (GBA ROR semantics), and a load from unmapped space
+    # returns the CPU's 32-bit prefetch word (open bus). Every C caller
+    # truncates silently, so these use the wrapping to_u8!/to_u16!
+    # rather than the checked to_u8/to_u16, which raised OverflowError
+    # on exactly those reads (live, from the rcheevos peek callback).
     def bus_read8(address : UInt32) : UInt8
       raise_if_destroyed!
-      @core.value.bus_read8.call(cp, address).to_u8
+      @core.value.bus_read8.call(cp, address).to_u8!
     end
 
     def bus_read16(address : UInt32) : UInt16
       raise_if_destroyed!
-      @core.value.bus_read16.call(cp, address).to_u16
+      @core.value.bus_read16.call(cp, address).to_u16!
     end
 
     def bus_read32(address : UInt32) : UInt32

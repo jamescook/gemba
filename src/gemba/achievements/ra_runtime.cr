@@ -30,16 +30,21 @@ module Gemba
       end
 
       # RetroAchievements addresses a GBA as one flat space: IWRAM
-      # (32KB) first, then EWRAM from 0x8000 on. mGBA's bus wants the
-      # real addresses, so every peek goes through here.
+      # (32KB) first, then EWRAM (256KB) from 0x8000 on. mGBA's bus
+      # wants the real addresses, so every peek goes through here. nil
+      # for anything past the end of EWRAM - a script asking for memory
+      # the console doesn't have gets rcheevos' documented answer for an
+      # unreadable address (0, see EmulationWorker#ra_peek) rather than
+      # an open-bus read of whatever mGBA maps after it.
       IWRAM_BASE = 0x03000000_u32
       EWRAM_BASE = 0x02000000_u32
       IWRAM_SIZE =     0x8000_u32
+      EWRAM_SIZE =    0x40000_u32
 
-      def self.to_gba_address(ra_address : UInt32) : UInt32
+      def self.to_gba_address(ra_address : UInt32) : UInt32?
         if ra_address < IWRAM_SIZE
           IWRAM_BASE + ra_address
-        else
+        elsif ra_address < IWRAM_SIZE + EWRAM_SIZE
           EWRAM_BASE + (ra_address - IWRAM_SIZE)
         end
       end

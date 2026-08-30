@@ -66,6 +66,12 @@ describe "RetroAchievements address translation" do
   it "maps everything from 0x8000 up onto EWRAM, rebased" do
     Gemba::Achievements::RARuntime.to_gba_address(0x8000_u32).should eq 0x02000000_u32
     Gemba::Achievements::RARuntime.to_gba_address(0x8100_u32).should eq 0x02000100_u32
+    Gemba::Achievements::RARuntime.to_gba_address(0x47FFF_u32).should eq 0x0203FFFF_u32
+  end
+
+  it "is nil past the end of EWRAM rather than pointing at whatever mGBA maps next" do
+    Gemba::Achievements::RARuntime.to_gba_address(0x48000_u32).should be_nil
+    Gemba::Achievements::RARuntime.to_gba_address(UInt32::MAX).should be_nil
   end
 
   it "#richpresence_active? tracks activation and is cleared by #clear" do

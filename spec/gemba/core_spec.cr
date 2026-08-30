@@ -58,6 +58,27 @@ describe Gemba::Core do
     core.destroy
   end
 
+  # mGBA's busRead8/16 return uint32_t, and two kinds of read put bits
+  # above the nominal width: a halfword load at an odd address comes
+  # back byte-rotated (GBA ROR semantics), and a load from unmapped
+  # space returns the CPU's 32-bit prefetch word (open bus). C callers
+  # truncate silently; a checked Crystal narrowing raised OverflowError
+  # on both, live, from the rcheevos peek callback.
+  it "#bus_read16/8 truncate a rotated (misaligned) or open-bus value instead of raising" do
+    core = Gemba::Core.new(FILL_ROM)
+    core.run_frame
+    aligned = core.bus_read16(0x08000000)
+    rotated = core.bus_read16(0x08000001) # odd address: ROR by 8
+    rotated.should be_a(UInt16)
+    # The rotation is real, not a no-op: ROR by 8 leaves the aligned
+    # halfword's high byte as the low byte of what survives truncation
+    # (its low byte moved to bits 16-23 - the part that overflowed).
+    rotated.should eq(aligned >> 8)
+    core.bus_read16(0x10000000).should be_a(UInt16) # past every region: open bus
+    core.bus_read8(0x10000001).should be_a(UInt8)
+    core.destroy
+  end
+
   it "#checksum returns a non-zero CRC32 for a real ROM" do
     core = Gemba::Core.new(FILL_ROM)
     core.checksum.should be > 0

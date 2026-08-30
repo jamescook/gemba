@@ -389,15 +389,30 @@ module Gemba
     end
 
     # RA addresses are flat; mGBA's bus is not - see
-    # RARuntime.to_gba_address.
+    # RARuntime.to_gba_address. rcheevos asks for "num_bytes starting at
+    # address", little-endian, at any byte offset - but a GBA halfword/
+    # word load at a misaligned address doesn't do that, it returns the
+    # aligned value byte-rotated. So an aligned read goes straight to
+    # the bus, and a misaligned one is assembled from single bytes,
+    # which is the value the script actually meant. 0 for an address
+    # outside IWRAM/EWRAM, rcheevos' own convention for unreadable
+    # memory.
     private def ra_peek(core : Core, address : UInt32, num_bytes : UInt32) : UInt32
       gba = Achievements::RARuntime.to_gba_address(address)
+      return 0_u32 unless gba
+
       case num_bytes
       when 1 then core.bus_read8(gba).to_u32
-      when 2 then core.bus_read16(gba).to_u32
-      when 4 then core.bus_read32(gba)
+      when 2 then gba & 1 == 0 ? core.bus_read16(gba).to_u32 : ra_peek_bytes(core, gba, 2)
+      when 4 then gba & 3 == 0 ? core.bus_read32(gba) : ra_peek_bytes(core, gba, 4)
       else        0_u32
       end
+    end
+
+    private def ra_peek_bytes(core : Core, gba : UInt32, count : Int32) : UInt32
+      value = 0_u32
+      count.times { |i| value |= core.bus_read8(gba + i).to_u32 << (8 * i) }
+      value
     end
 
     # The RetroAchievements half of the worker's message channel, split
