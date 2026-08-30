@@ -18,6 +18,7 @@ require "./gemba/input_replayer"
 require "./gemba/frame_delta"
 require "./gemba/recorder"
 require "./gemba/recorder_decoder"
+require "./gemba/rom_patcher"
 require "./gemba/main_window"
 require "./gemba/cli"
 

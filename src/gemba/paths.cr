@@ -50,5 +50,11 @@ module Gemba
     def self.recordings_dir : String
       File.join(config_dir, "recordings")
     end
+
+    # Default output directory for patched ROMs - ruby gemba's
+    # Config.default_patches_dir.
+    def self.patches_dir : String
+      File.join(config_dir, "patches")
+    end
   end
 end
