@@ -281,6 +281,71 @@ describe Gemba::EmulationWorker do
     end
   end
 
+  # Replay mode: the worker takes its masks from a .gir instead of the
+  # "mask:" channel, plays exactly the recorded frames from the anchor
+  # state, reports replay_ended once, then idles rather than emulating
+  # on with no input.
+  it "replay_gir plays a recording's frames then idles with one replay_ended" do
+    with_tempdir do |tmp|
+      gir = File.join(tmp, "session.gir")
+      core = Gemba::Core.new(FILL_ROM)
+      recorder = Gemba::InputRecorder.new(gir, core, rom_path: FILL_ROM)
+      recorder.start
+      8.times do |i|
+        mask = (i % 4).to_u32
+        recorder.capture(mask)
+        core.keys = mask
+        core.run_frame
+      end
+      recorder.stop
+      core.destroy
+
+      app = Tryst::App.new(title: "emulation_worker_spec_replay")
+      worker = Gemba::EmulationWorker.new(app, FILL_ROM, replay_gir: gir)
+      messages = [] of String
+      frames = 0
+      worker.on_message { |text| messages << text }
+      worker.on_frame do |packet|
+        frames += 1
+        worker.release_frame(packet[:frame_num])
+      end
+
+      app.interp.wait_until(10.seconds) { messages.includes?("replay_ended:8") }
+      messages.count("replay_ended:8").should eq 1
+      frames.should eq 8
+
+      # Past the end: no further frames arrive.
+      app.interp.wait_until(500.milliseconds) { false }
+      frames.should eq 8
+
+      worker.stop
+      app.interp.wait_until(5.seconds) { worker.done? }
+      app.destroy
+    end
+  end
+
+  it "replay mode refuses a recording from a different ROM through on_error" do
+    with_tempdir do |tmp|
+      gir = File.join(tmp, "session.gir")
+      core = Gemba::Core.new(FILL_ROM)
+      recorder = Gemba::InputRecorder.new(gir, core, rom_path: FILL_ROM)
+      recorder.start
+      recorder.stop
+      core.destroy
+
+      app = Tryst::App.new(title: "emulation_worker_spec_replay_bad")
+      worker = Gemba::EmulationWorker.new(app, SPACE_BLAST_ROM, replay_gir: gir)
+      error = nil
+      worker.on_error { |text| error = text }
+
+      app.interp.wait_until(10.seconds) { !error.nil? }
+      error.to_s.should contain "ChecksumMismatch"
+
+      worker.stop
+      app.destroy
+    end
+  end
+
   # The correctness property FrameRing exists to guarantee: a packet the
   # main thread is still holding must never have its buffer contents
   # change out from under it, even once the worker has produced far more

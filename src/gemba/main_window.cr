@@ -29,6 +29,7 @@ require "./achievements/rom_hash"
 require "./achievements/retro_achievements/fake_requester"
 require "./rom_info_window"
 require "./help_window"
+require "./replay_window"
 require "./achievements_window"
 require "./settings_window"
 require "./save_state_picker"
@@ -157,6 +158,9 @@ module Gemba
     @ra_session = 0
     @pause_item : Tryst::UI::Handle?
 
+    # Lazily built on first open - see #replay_window.
+    @replay_window : ReplayWindow?
+
     # The menu bar itself, and the poll that watches it for the menu
     # closing again - see #watch_menu_bar.
     @menu_bar : Tryst::UI::Handle?
@@ -240,6 +244,10 @@ module Gemba
         geometry: "560x440", modal: false)
       @rom_info_window = RomInfoWindow.new(@session)
       @help_window = HelpWindow.new(@session, @hotkeys)
+      # Declared empty like Settings; ReplayWindow attaches its SDL
+      # viewport lazily on first open (needs a live App).
+      @replay_handle = @session.window(:gemba_replay, title: Locale.translate("replay.replay_player"),
+        resizable: false, modal: true)
 
       @menu_bar = @session.menu_bar do |bar|
         bar.menu(label: Locale.translate("menu.file")) do |file|
@@ -264,6 +272,7 @@ module Gemba
         bar.menu(label: Locale.translate("menu.view")) do |view|
           @rom_info_item = view.item(:rom_info, label: Locale.translate("menu.rom_info"), state: :disabled) { show_rom_info }
           view.item(:achievements, label: Locale.translate("menu.achievements")) { show_achievements }
+          view.item(:open_replay, label: Locale.translate("menu.open_replay_player")) { show_replay_player }
           view.item(:fullscreen, label: Locale.translate("menu.fullscreen"), shortcut: "F11") { toggle_fullscreen }
           view.separator
           view.item(:open_logs_dir, label: Locale.translate("menu.open_logs_dir")) { open_logs_dir }
@@ -1299,6 +1308,54 @@ module Gemba
       @modal_stack.push(:rom_info, @rom_info_window.handle)
     end
 
+    # File dialog -> #open_replay; the dialog starts in the recordings
+    # directory when it exists, like ruby's open_replay_dialog.
+    def show_replay_player : Nil
+      return if @modal_stack.active?
+
+      filetypes : Tryst::FileTypes = [{"Input Recordings", [".gir"]}, {"All Files", "*"}]
+      dir = @recordings_dir
+      path = @app.choose_open_file(filetypes: filetypes,
+        initialdir: Dir.exists?(dir) ? dir : nil,
+        title: Locale.translate("replay.open_recording").delete('…'))
+      open_replay(path) if path.is_a?(String)
+    end
+
+    # Opens gir_path in the replay viewer, pushed on the modal stack
+    # (which is also what pauses a running game, same as any other
+    # modal). Public so a spec (or a future CLI/drop handler) can skip
+    # the file dialog.
+    def open_replay(gir_path : String) : Nil
+      return if @modal_stack.active?
+
+      window = replay_window
+      if error = window.open(gir_path)
+        @app.message_box(error, title: Locale.translate("replay.replay_player"), icon: :error)
+        return
+      end
+
+      # auto_close: false - the WM close button must stop the worker,
+      # not just hide the window (ModalStack's default wiring only
+      # pops).
+      @modal_stack.push(:replay, window.handle, auto_close: false)
+      window.handle.on_close { |_args, _signal| close_replay }
+    end
+
+    # Built on first use - the SDL viewport inside can only attach to a
+    # live App, and most sessions never open a replay at all.
+    def replay_window : ReplayWindow
+      @replay_window ||= begin
+        window = ReplayWindow.new(@app, @replay_handle, @hotkeys, scale: @config.scale)
+        window.on_close_requested { close_replay }
+        window
+      end
+    end
+
+    private def close_replay : Nil
+      @replay_window.try(&.stop)
+      @modal_stack.pop
+    end
+
     def show_save_states : Nil
       return if @modal_stack.active?
 
@@ -1443,6 +1500,7 @@ module Gemba
     # one leaked 240x160x4 frame buffer).
     def destroy : Nil
       @emulator_frame.try(&.cleanup)
+      @replay_window.try(&.destroy)
       @ra_unlocks.shutdown
       @audio.destroy
       @app.destroy

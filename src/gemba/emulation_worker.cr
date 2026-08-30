@@ -6,6 +6,7 @@ require "./config"
 require "./achievements/ra_runtime"
 require "./achievements/achievement"
 require "./input_recorder"
+require "./input_replayer"
 require "./recorder"
 
 module Gemba
@@ -60,11 +61,22 @@ module Gemba
     # its rewind_entries (rounded to whole frames at GBA_FPS) - Config's
     # rewind buffer size only takes effect for a freshly-constructed
     # Core, not one already running.
+    #
+    # replay_gir puts the worker in REPLAY mode: instead of the live
+    # "mask:" messages, each frame's input comes from that .gir file
+    # (see InputReplayer), starting from its anchor save state - the
+    # only way a replay can be frame-exact, since a message-fed mask
+    # lands "sometime before a future frame", not on a specific one.
+    # Past the last recorded frame the worker sends
+    # "replay_ended:<frames>" once and idles (still answering
+    # messages) rather than running on with no input. A checksum
+    # mismatch or unloadable anchor reports through on_error.
     def initialize(app : Tryst::App, @rom_path : String, state_dir_override : String? = nil,
                    @quick_save_slot : Int32 = SaveStateManager::DEFAULT_QUICK_SAVE_SLOT,
                    @backup : Bool = SaveStateManager::DEFAULT_BACKUP,
                    @debounce : Time::Span = SaveStateManager::DEFAULT_DEBOUNCE,
-                   rewind_seconds : Int32 = Config::DEFAULT_REWIND_SECONDS)
+                   rewind_seconds : Int32 = Config::DEFAULT_REWIND_SECONDS,
+                   replay_gir : String? = nil)
       # Process-wide (BackgroundWork.drop_intermediate is a class_property,
       # not per-instance) - safe to set unconditionally since gemba's own
       # process has no other BackgroundWork use that would want dropping.
@@ -76,7 +88,7 @@ module Gemba
       rewind_entries = (rewind_seconds * GBA_FPS).round.to_i
 
       @background = Tryst::BackgroundWork(String, FramePacket).new(app, rom_path) do |task, path|
-        run(task, path, state_dir_override, @quick_save_slot, @backup, @debounce, rewind_entries)
+        run(task, path, state_dir_override, @quick_save_slot, @backup, @debounce, rewind_entries, replay_gir)
       end
     end
 
@@ -102,7 +114,8 @@ module Gemba
     # "input_record_result:stop:<frames>"
     # (#start_input_recording/#stop_input_recording), and
     # "record_result:start:<ok>[:<error>]"/"record_result:stop:<frames>"
-    # (#start_recording/#stop_recording).
+    # (#start_recording/#stop_recording), and "replay_ended:<frames>"
+    # (replay mode - see #initialize's replay_gir).
     def on_message(&block : String -> Nil) : self
       @background.on_message { |text| block.call(text) }
       self
@@ -298,6 +311,10 @@ module Gemba
       # The active .grec video recording, same arrangement.
       property recorder : Recorder?
 
+      # Replay mode's "past the last recorded frame" latch - set once,
+      # alongside the single replay_ended message.
+      property? replay_ended : Bool = false
+
       # Applies one message. Returns true if it was a Stop (the caller's
       # cue to break its loop) - every other kind updates state in place
       # and returns false.
@@ -365,8 +382,10 @@ module Gemba
     end
 
     private def run(task : Tryst::TaskContext(FramePacket), rom_path : String, state_dir_override : String?,
-                    quick_save_slot : Int32, backup : Bool, debounce : Time::Span, rewind_entries : Int32) : Nil
+                    quick_save_slot : Int32, backup : Bool, debounce : Time::Span, rewind_entries : Int32,
+                    replay_gir : String? = nil) : Nil
       core = Core.new(rom_path, rewind_entries: rewind_entries)
+      replayer = load_replay(replay_gir, core)
       task.send_message("rom_info:#{RomInfoData.from_core(core).to_json}")
       save_states = SaveStateManager.new(core, state_dir: state_dir_override,
         quick_save_slot: quick_save_slot, backup: backup, debounce: debounce)
@@ -388,11 +407,19 @@ module Gemba
         task.check_pause
         break if drain_messages(task, core, save_states, state, ring, ra_runtime)
 
-        core.keys = state.mask
+        mask = replayer ? replay_mask(replayer, frame_num, state, task) : state.mask
+        if mask.nil?
+          # Replay finished: idle (messages above still drain, pause
+          # still works) instead of emulating on with no input.
+          sleep 20.milliseconds
+          next
+        end
+
+        core.keys = mask
         # Captured HERE, not where the "mask:" message lands: this is
         # the mask this frame actually runs under, which is the whole
         # contract a .gir replay depends on.
-        state.input_recorder.try(&.capture(state.mask))
+        state.input_recorder.try(&.capture(mask))
 
         # Ported from mgba/core/thread.c's own _frameStarted: while
         # rewinding, restore the most recent snapshot instead of taking a
@@ -614,6 +641,34 @@ module Gemba
         return false
       end
       true
+    end
+
+    # Replay-mode setup: parse the .gir, prove it matches this ROM, and
+    # jump to its anchor state. Raising here surfaces through on_error,
+    # same as a bad ROM path.
+    private def load_replay(replay_gir : String?, core : Core) : InputReplayer?
+      return unless gir = replay_gir
+
+      replayer = InputReplayer.new(gir)
+      replayer.validate!(core)
+      unless core.load_state_from_file(replayer.anchor_state_path)
+        raise "cannot load replay anchor state: #{replayer.anchor_state_path}"
+      end
+      replayer
+    end
+
+    # The recorded mask for this frame, or nil once the recording is
+    # exhausted - sending the one replay_ended message on the way past
+    # the end.
+    private def replay_mask(replayer : InputReplayer, frame_num : Int32, state : WorkerState,
+                            task : Tryst::TaskContext(FramePacket)) : UInt32?
+      return replayer.bitmask_at(frame_num) if frame_num < replayer.frame_count
+
+      unless state.replay_ended?
+        state.replay_ended = true
+        task.send_message("replay_ended:#{replayer.frame_count}")
+      end
+      nil
     end
 
     # The input-recording half of the message channel - same split-out
