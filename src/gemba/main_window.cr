@@ -30,6 +30,7 @@ require "./achievements/retro_achievements/fake_requester"
 require "./rom_info_window"
 require "./help_window"
 require "./replay_window"
+require "./patcher_window"
 require "./achievements_window"
 require "./settings_window"
 require "./save_state_picker"
@@ -161,6 +162,9 @@ module Gemba
     # Lazily built on first open - see #replay_window.
     @replay_window : ReplayWindow?
 
+    # Lazily built on first View > Patch ROM - see #patcher_window.
+    @patcher_window : PatcherWindow?
+
     # The menu bar itself, and the poll that watches it for the menu
     # closing again - see #watch_menu_bar.
     @menu_bar : Tryst::UI::Handle?
@@ -256,6 +260,11 @@ module Gemba
       # viewport lazily on first open (needs a live App).
       @replay_handle = @session.window(:gemba_replay, title: Locale.translate("replay.replay_player"),
         resizable: false, modal: true)
+      # Non-modal like ruby's: patching while a game keeps running is
+      # fine. Declared empty; PatcherWindow adds its content on first
+      # View > Patch ROM.
+      @patcher_handle = @session.window(:gemba_patcher, title: Locale.translate("patcher.title"),
+        resizable: false, modal: false)
 
       @menu_bar = @session.menu_bar do |bar|
         bar.menu(label: Locale.translate("menu.file")) do |file|
@@ -280,6 +289,7 @@ module Gemba
         bar.menu(label: Locale.translate("menu.view")) do |view|
           @rom_info_item = view.item(:rom_info, label: Locale.translate("menu.rom_info"), state: :disabled) { show_rom_info }
           view.item(:achievements, label: Locale.translate("menu.achievements")) { show_achievements }
+          view.item(:patch_rom, label: Locale.translate("menu.patch_rom")) { show_patcher }
           view.item(:open_replay, label: Locale.translate("menu.open_replay_player")) { show_replay_player }
           view.item(:fullscreen, label: Locale.translate("menu.fullscreen"), shortcut: "F11") { toggle_fullscreen }
           view.separator
@@ -1288,6 +1298,16 @@ module Gemba
       @achievements_window.show(@current_rom_id, ra_achievements)
     end
 
+    def show_patcher : Nil
+      patcher_window.show
+    end
+
+    # Built on first use - most sessions never open the patcher. Public
+    # so a spec reaches the same instance the menu item shows.
+    def patcher_window : PatcherWindow
+      @patcher_window ||= PatcherWindow.new(@app, @patcher_handle, @session)
+    end
+
     # The '?' hotkey reference panel. Non-modal, so it isn't on
     # ModalStack, but it pauses the game the same way a modal does -
     # through AutoPause, which is what makes closing it restore the
@@ -1514,6 +1534,7 @@ module Gemba
     def destroy : Nil
       @emulator_frame.try(&.cleanup)
       @replay_window.try(&.destroy)
+      @patcher_window.try(&.destroy)
       @ra_unlocks.shutdown
       @audio.destroy
       @app.destroy

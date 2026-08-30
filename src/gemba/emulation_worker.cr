@@ -78,9 +78,10 @@ module Gemba
                    rewind_seconds : Int32 = Config::DEFAULT_REWIND_SECONDS,
                    replay_gir : String? = nil)
       # Process-wide (BackgroundWork.drop_intermediate is a class_property,
-      # not per-instance) - safe to set unconditionally since gemba's own
-      # process has no other BackgroundWork use that would want dropping.
-      # A dropped frame here means dropped audio, not a skipped progress
+      # not per-instance) - safe to set unconditionally since gemba's only
+      # other BackgroundWork use (PatcherWindow's patch worker) yields
+      # plain progress percentages, harmless to deliver in full. A
+      # dropped frame here means dropped audio, not a skipped progress
       # bar tick - the default (true) would produce an audible glitch
       # every time delivery falls behind by more than one frame.
       Tryst::BackgroundWork.drop_intermediate = false
