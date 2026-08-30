@@ -232,6 +232,55 @@ describe Gemba::EmulationWorker do
     end
   end
 
+  # .grec's worker-side twin of the .gir test above: recorder_spec.cr
+  # proves the byte format, this proves the cross-thread plumbing and
+  # that real emulator frames land in the file.
+  it "records video+audio to a .grec via #start_recording/#stop_recording" do
+    with_tempdir do |tmp|
+      app = Tryst::App.new(title: "emulation_worker_spec_grec")
+      worker = Gemba::EmulationWorker.new(app, FILL_ROM)
+
+      messages = [] of String
+      worker.on_message { |text| messages << text }
+      frames = 0
+      worker.on_frame { frames += 1 }
+
+      path = File.join(tmp, "captures", "clip.grec")
+      worker.start_recording(path)
+      app.interp.wait_until(5.seconds) { messages.includes?("record_result:start:true") }
+
+      baseline = frames
+      app.interp.wait_until(5.seconds) { frames >= baseline + 10 }
+      worker.stop_recording
+      app.interp.wait_until(5.seconds) { messages.any?(&.starts_with?("record_result:stop:")) }
+
+      reported = messages.find!(&.starts_with?("record_result:stop:"))
+        .lchop("record_result:stop:").to_i
+      reported.should be > 0
+
+      File.open(path, "rb") do |io|
+        magic = Bytes.new(8)
+        io.read_fully(magic)
+        String.new(magic).should eq "GEMBAREC"
+        io.read_byte.should eq 1_u8
+        io.read_bytes(UInt16, IO::ByteFormat::LittleEndian).should eq 240_u16
+        io.read_bytes(UInt16, IO::ByteFormat::LittleEndian).should eq 160_u16
+      end
+      # Footer carries the same count the stop result reported.
+      File.open(path, "rb") do |io|
+        io.seek(-8, IO::Seek::End)
+        io.read_bytes(UInt32, IO::ByteFormat::LittleEndian).should eq reported.to_u32
+        tail = Bytes.new(4)
+        io.read_fully(tail)
+        String.new(tail).should eq "GEND"
+      end
+
+      worker.stop
+      app.interp.wait_until(5.seconds) { worker.done? }
+      app.destroy
+    end
+  end
+
   # The correctness property FrameRing exists to guarantee: a packet the
   # main thread is still holding must never have its buffer contents
   # change out from under it, even once the worker has produced far more

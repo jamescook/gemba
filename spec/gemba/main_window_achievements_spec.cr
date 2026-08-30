@@ -33,7 +33,7 @@ describe Gemba::MainWindow do
           window.config.ra_username.should eq "someone"
           window.config.ra_token.should eq "tok123"
         ensure
-          window.app.destroy
+          window.destroy
         end
       end
     end
@@ -48,7 +48,7 @@ describe Gemba::MainWindow do
           window.config.ra_token.should eq ""
           window.config.ra_username.should eq ""
         ensure
-          window.app.destroy
+          window.destroy
         end
       end
     end
@@ -64,7 +64,7 @@ describe Gemba::MainWindow do
           window.config.ra_token.should eq ""
           window.config.ra_username.should eq "someone"
         ensure
-          window.app.destroy
+          window.destroy
         end
       end
     end
@@ -80,7 +80,7 @@ describe Gemba::MainWindow do
           window.config.ra_token.should eq ""
           window.config.ra_username.should eq ""
         ensure
-          window.app.destroy
+          window.destroy
         end
       end
     end
@@ -111,7 +111,7 @@ private def stop_worker_then_destroy(window : Gemba::MainWindow) : Nil
     worker.stop
     window.app.interp.wait_until(5.seconds) { worker.done? }
   end
-  window.app.destroy
+  window.destroy
 end
 
 private def index_of(fake : Gemba::Achievements::RetroAchievements::FakeRequester, r : String) : Int32
@@ -196,7 +196,7 @@ describe Gemba::MainWindow do
             worker.stop
             window.app.interp.wait_until(5.seconds) { worker.done? }
           end
-          window.app.destroy
+          window.destroy
         end
       end
     end
@@ -233,7 +233,7 @@ describe Gemba::MainWindow do
             worker.stop
             window.app.interp.wait_until(5.seconds) { worker.done? }
           end
-          window.app.destroy
+          window.destroy
         end
       end
     end

@@ -46,7 +46,7 @@ describe Gemba::MainWindow do
             window.gamepad_map.device.try(&.instance_id).should eq id
             window.settings_window.gamepad_tab.path # sanity: tab built fine
           ensure
-            window.app.destroy
+            window.destroy
           end
         ensure
           Tryst::SDL::Gamepad.detach_virtual
@@ -68,7 +68,7 @@ describe Gemba::MainWindow do
             Tryst::SDL::Gamepad.detach_virtual
           end
         ensure
-          window.app.destroy
+          window.destroy
         end
       end
     end
@@ -93,7 +93,7 @@ describe Gemba::MainWindow do
             Tryst::SDL::Gamepad.detach_virtual
           end
         ensure
-          window.app.destroy
+          window.destroy
         end
       end
     end
@@ -136,7 +136,7 @@ describe Gemba::MainWindow do
             seen.should eq [{Gemba::Button::A, "b"}]
             window.gamepad_map.labels[Gemba::Button::A].should eq :b
           ensure
-            window.app.destroy
+            window.destroy
           end
         ensure
           Tryst::SDL::Gamepad.detach_virtual

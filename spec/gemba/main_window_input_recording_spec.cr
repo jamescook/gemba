@@ -51,7 +51,7 @@ describe Gemba::MainWindow do
           replayer.frame_count.should eq replayer.header_frame_count
           File.exists?(replayer.anchor_state_path).should be_true
         ensure
-          window.app.destroy
+          window.destroy
         end
       end
     end
@@ -86,7 +86,7 @@ describe Gemba::MainWindow do
           replayer.frame_count.should be > 0
           replayer.header_frame_count.should eq replayer.frame_count
         ensure
-          window.app.destroy
+          window.destroy
         end
       end
     end

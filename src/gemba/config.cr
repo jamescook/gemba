@@ -142,6 +142,16 @@ module Gemba
       set("rewind_seconds", value.clamp(5, 30).to_i64)
     end
 
+    # Zlib level for .grec video recordings (see Recorder) - 1 (the
+    # default, fastest) through 9; ruby gemba's own key and clamp.
+    def recording_compression : Int32
+      int("recording_compression", 1)
+    end
+
+    def recording_compression=(value : Int32) : Int32
+      set("recording_compression", value.clamp(1, 9).to_i64)
+    end
+
     def ra_enabled? : Bool
       bool("ra_enabled", false)
     end

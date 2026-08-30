@@ -6,6 +6,7 @@ require "./config"
 require "./achievements/ra_runtime"
 require "./achievements/achievement"
 require "./input_recorder"
+require "./recorder"
 
 module Gemba
   # Runs one loaded ROM's Core on its own OS thread (Tryst::BackgroundWork)
@@ -99,7 +100,9 @@ module Gemba
     # (#activate_achievements/#take_achievement_screenshot), and
     # "input_record_result:start:<ok>[:<error>]"/
     # "input_record_result:stop:<frames>"
-    # (#start_input_recording/#stop_input_recording).
+    # (#start_input_recording/#stop_input_recording), and
+    # "record_result:start:<ok>[:<error>]"/"record_result:stop:<frames>"
+    # (#start_recording/#stop_recording).
     def on_message(&block : String -> Nil) : self
       @background.on_message { |text| block.call(text) }
       self
@@ -218,6 +221,24 @@ module Gemba
       @background.send_message("input_record_stop")
     end
 
+    # Starts recording video+audio to a .grec at path (see Recorder).
+    # Same shape as #start_input_recording, for the same reason: the
+    # frames being recorded only exist on the worker thread, so the
+    # recorder lives there too, and the caller's indicator flips on the
+    # confirmed "record_result:start:<ok>" - never optimistically.
+    # compression is a zlib level (Config#recording_compression).
+    def start_recording(path : String, compression : Int32 = 1) : Nil
+      @background.send_message("record_start:#{compression}:#{path}")
+    end
+
+    # Stops and finalizes the .grec (footer written, writer thread
+    # joined), reporting "record_result:stop:<frames>". A worker
+    # stopped mid-recording finalizes on its way out without a message,
+    # like input recording.
+    def stop_recording : Nil
+      @background.send_message("record_stop")
+    end
+
     # Hold-to-rewind: true while the hotkey is physically held (see
     # EmulatorFrame#on_frame, which polls key state every frame since
     # Tk only fires one KeyRelease for a held key, not a stream).
@@ -273,6 +294,9 @@ module Gemba
       # while the frame loop reads it. Worker-thread-only, like the
       # Core it snapshots its anchor state from.
       property input_recorder : InputRecorder?
+
+      # The active .grec video recording, same arrangement.
+      property recorder : Recorder?
 
       # Applies one message. Returns true if it was a Stop (the caller's
       # cue to break its loop) - every other kind updates state in place
@@ -393,6 +417,12 @@ module Gemba
         # result) so mGBA's internal buffer doesn't overflow between
         # kept frames.
         audio = core.audio_buffer
+        # Every frame's video AND audio, before the turbo keep/drop
+        # below - the recording stays full-rate even while turbo
+        # playback discards most audio (ruby's capture_frame does the
+        # same, returning the pcm so the play path reuses the one
+        # drain).
+        state.recorder.try(&.capture(core.video_buffer, audio))
         keep_audio = !state.turbo? || frame_num % TURBO_DIVISOR.to_i == 0
 
         video, packet_audio =
@@ -433,6 +463,7 @@ module Gemba
       # frame_count and an unflushed tail - the file should replay no
       # matter how the session ended.
       state.try(&.input_recorder).try(&.stop)
+      state.try(&.recorder).try(&.stop)
       ra_runtime.try(&.close)
       core.try(&.destroy)
     end
@@ -600,10 +631,36 @@ module Gemba
           state.input_recorder = nil
           task.send_message("input_record_result:stop:#{recorder.frame_count}")
         end
+      elsif payload = msg.lchop?("record_start:")
+        start_record(payload, task, core, state)
+      elsif msg == "record_stop"
+        if recorder = state.recorder
+          recorder.stop
+          state.recorder = nil
+          task.send_message("record_result:stop:#{recorder.frame_count}")
+        end
       else
         return false
       end
       true
+    end
+
+    # "<compression>:<path>" - split on the FIRST colon only, the path
+    # is free to contain more. Same failure/duplicate policy as
+    # #start_input_record: report, don't raise; ignore a start while
+    # one is already running.
+    private def start_record(payload : String, task : Tryst::TaskContext(FramePacket),
+                             core : Core, state : WorkerState) : Nil
+      return if state.recorder
+
+      compression, path = payload.split(':', 2)
+      Dir.mkdir_p(File.dirname(path))
+      recorder = Recorder.new(path, core.width, core.height, compression: compression.to_i)
+      recorder.start
+      state.recorder = recorder
+      task.send_message("record_result:start:true")
+    rescue ex
+      task.send_message("record_result:start:false:#{ex.message}")
     end
 
     # A failed start (most plausibly the anchor save state not writing -

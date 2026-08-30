@@ -15,6 +15,8 @@ require "./gemba/hotkey_map"
 require "./gemba/achievements/ra_runtime"
 require "./gemba/input_recorder"
 require "./gemba/input_replayer"
+require "./gemba/frame_delta"
+require "./gemba/recorder"
 require "./gemba/main_window"
 
 module Gemba

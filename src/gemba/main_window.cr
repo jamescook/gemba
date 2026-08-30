@@ -109,6 +109,7 @@ module Gemba
     getter quick_load_item : Tryst::UI::Handle?
     getter save_states_item : Tryst::UI::Handle?
     getter input_record_item : Tryst::UI::Handle?
+    getter record_item : Tryst::UI::Handle?
 
     def worker : EmulationWorker?
       @emulator_frame.try(&.worker)
@@ -279,8 +280,10 @@ module Gemba
           @save_states_item = emu.item(:save_states, label: Locale.translate("menu.save_states"),
             shortcut: "F6", state: :disabled) { show_save_states }
           emu.separator
-          # Relabeled Start <-> Stop as the state actually changes - see
-          # #update_input_recording_menu.
+          # Both relabeled Start <-> Stop as the state actually changes
+          # - see #update_recording_menu/#update_input_recording_menu.
+          @record_item = emu.item(:record, label: Locale.translate("menu.start_recording"),
+            shortcut: "F10", state: :disabled) { toggle_recording }
           @input_record_item = emu.item(:input_record, label: Locale.translate("menu.start_input_recording"),
             shortcut: "F4", state: :disabled) { toggle_input_recording }
         end
@@ -376,11 +379,12 @@ module Gemba
       frame = EmulatorFrame.new(@app, @video, @audio, @keyboard_map, @gamepad_map, @hotkeys, path,
         quick_save_slot: @config.quick_save_slot, backup: @config.save_state_backup?,
         debounce: @config.save_state_debounce.seconds, rewind_seconds: @config.rewind_seconds,
-        recordings_dir: @recordings_dir)
+        recordings_dir: @recordings_dir, recording_compression: @config.recording_compression)
       frame.on_error { |text| report_error(text) }
       frame.on_message { |text| handle_worker_message(text) }
       frame.on_rom_info { |data| update_rom_identity(path, data) }
       frame.on_input_recording_changed { |recording| update_input_recording_menu(recording) }
+      frame.on_recording_changed { |recording| update_recording_menu(recording) }
       @emulator_frame = frame
       @current_rom_id = nil
 
@@ -400,10 +404,12 @@ module Gemba
       @quick_load_item.try(&.enable)
       @save_states_item.try(&.enable)
       @input_record_item.try(&.enable)
+      @record_item.try(&.enable)
       # A recording running when the previous ROM was swapped out ends
       # with the old worker, with no stop message back (see
-      # EmulatorFrame#cleanup) - the label must not stay on "Stop".
+      # EmulatorFrame#cleanup) - the labels must not stay on "Stop".
       update_input_recording_menu(false)
+      update_recording_menu(false)
 
       start_ra_session(path)
     end
@@ -690,13 +696,19 @@ module Gemba
       @app.off_thread { @config.save! }
     end
 
-    # Only the actions with a real handler get bound - HotkeyMap's own
-    # defaults also name record (the .grec video capture), not
-    # implemented yet - binding it now would just be a dead key. rewind
-    # is implemented but deliberately NOT bound here: it's a hold-style
-    # action (see EmulatorFrame#poll_rewind), not a single-press toggle
-    # like every other hotkey #bind_hotkey wires up.
+    # Every HotkeyMap action except rewind, which is implemented but
+    # deliberately NOT bound here: it's a hold-style action (see
+    # EmulatorFrame#poll_rewind), not a single-press toggle like every
+    # other hotkey #bind_hotkey wires up.
     private def bind_hotkeys : Nil
+      # X11 Tk binds <F10> on `all` to tk::FirstMenu (menu-bar keyboard
+      # traversal), which posts the File menu - so a bare F10 press
+      # would BOTH toggle recording (the default :record hotkey, bound
+      # on "." below) and pop a menu, whose posted state then
+      # auto-pauses the game (#watch_menu_bar). Neutralize the
+      # traversal binding so hotkeys own the function keys; menus stay
+      # reachable by mouse, and Aqua never had this binding at all.
+      @app.tcl_eval("bind all <F10> {}")
       bind_hotkey(:quit) { quit }
       bind_hotkey(:pause) { toggle_pause }
       bind_hotkey(:fast_forward) { toggle_turbo }
@@ -707,6 +719,7 @@ module Gemba
       bind_hotkey(:screenshot) { take_screenshot }
       bind_hotkey(:show_fps) { toggle_show_fps }
       bind_hotkey(:input_record) { toggle_input_recording }
+      bind_hotkey(:record) { toggle_recording }
       # '?' isn't a HotkeyMap action (it's not rebindable - the panel
       # is how you find out what is). Bound on the panel too, since a
       # window manager may hand the panel focus on show and "." would
@@ -732,9 +745,19 @@ module Gemba
       @emulator_frame.try(&.toggle_input_recording)
     end
 
+    # .grec video capture's twin of #toggle_input_recording.
+    def toggle_recording : Nil
+      @emulator_frame.try(&.toggle_recording)
+    end
+
     private def update_input_recording_menu(recording : Bool) : Nil
       key = recording ? "menu.stop_input_recording" : "menu.start_input_recording"
       @input_record_item.try(&.configure(label: Locale.translate(key)))
+    end
+
+    private def update_recording_menu(recording : Bool) : Nil
+      key = recording ? "menu.stop_recording" : "menu.start_recording"
+      @record_item.try(&.configure(label: Locale.translate(key)))
     end
 
     # Ported from ruby's own AppController#gamepad_probe_tick/
@@ -1412,11 +1435,21 @@ module Gemba
       @frame_stack.current_frame.try(&.show)
     end
 
-    private def quit : Nil
+    # Full teardown: stops the emulator worker THREAD, not just the Tk
+    # side - public because a spec must use this (not a bare
+    # app.destroy) or the worker outlives the test, still emulating,
+    # and its allocations bleed into whatever example runs next (bit
+    # for real: an allocation-counting spec elsewhere failed by exactly
+    # one leaked 240x160x4 frame buffer).
+    def destroy : Nil
       @emulator_frame.try(&.cleanup)
       @ra_unlocks.shutdown
       @audio.destroy
       @app.destroy
+    end
+
+    private def quit : Nil
+      destroy
     end
   end
 end

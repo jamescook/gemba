@@ -49,12 +49,17 @@ module Gemba
     # the HUD dot must never show a recording that isn't real.
     getter? input_recording : Bool = false
 
+    # Whether a .grec video recording is running - same confirmed-only
+    # discipline as #input_recording?.
+    getter? recording : Bool = false
+
     @turbo : Bool = false
     @rewinding : Bool = false
     @saved_volume : Float64
     @on_message : (String -> Nil)?
     @on_rom_info : (RomInfoData -> Nil)?
     @on_input_recording_changed : (Bool -> Nil)?
+    @on_recording_changed : (Bool -> Nil)?
     @fps_count : Int32 = 0
     @fps_started_at : Time::Instant
 
@@ -65,7 +70,8 @@ module Gemba
                    backup : Bool = SaveStateManager::DEFAULT_BACKUP,
                    debounce : Time::Span = SaveStateManager::DEFAULT_DEBOUNCE,
                    rewind_seconds : Int32 = Config::DEFAULT_REWIND_SECONDS,
-                   @recordings_dir : String = Paths.recordings_dir)
+                   @recordings_dir : String = Paths.recordings_dir,
+                   @recording_compression : Int32 = 1)
       @rom_title = File.basename(rom_path).sub(/\.gba$/i, "")
       @saved_volume = @audio.volume
       @fps_started_at = Time.instant
@@ -105,6 +111,12 @@ module Gemba
       self
     end
 
+    # #recording?'s equivalent of #on_input_recording_changed.
+    def on_recording_changed(&block : Bool -> Nil) : self
+      @on_recording_changed = block
+      self
+    end
+
     # Fires once, the moment the "rom_info:..." message itself arrives
     # (not just whenever #rom_info happens to be queried afterward) - lets
     # a caller react right when game_code/checksum become known, e.g. to
@@ -131,6 +143,7 @@ module Gemba
     # next ROM.
     def cleanup : Nil
       @video.input_recording_dot = false
+      @video.recording_dot = false
       @worker.stop
     end
 
@@ -198,7 +211,17 @@ module Gemba
       if input_recording?
         @worker.stop_input_recording
       else
-        @worker.start_input_recording(next_recording_path)
+        @worker.start_input_recording(next_recording_path(".gir"))
+      end
+    end
+
+    # Same shape for .grec video capture (see Recorder / EmulationWorker
+    # #start_recording).
+    def toggle_recording : Nil
+      if recording?
+        @worker.stop_recording
+      else
+        @worker.start_recording(next_recording_path(".grec"), compression: @recording_compression)
       end
     end
 
@@ -283,6 +306,8 @@ module Gemba
         @on_rom_info.try(&.call(data))
       elsif tag == "input_record_result"
         handle_input_record_result(payload)
+      elsif tag == "record_result"
+        handle_record_result(payload)
       else
         @on_message.try(&.call(text))
       end
@@ -314,14 +339,38 @@ module Gemba
       @on_input_recording_changed.try(&.call(recording))
     end
 
+    # #handle_input_record_result's twin for .grec video capture.
+    private def handle_record_result(payload : String) : Nil
+      parts = payload.split(':', 3)
+
+      case parts[0]?
+      when "start"
+        if parts[1]? == "true"
+          set_recording(true)
+          @video.show_toast(Locale.translate("toast.recording_started"))
+        else
+          Gemba.log(SessionLogger::Level::Warn) { "Recording failed to start: #{parts[2]?}" }
+        end
+      when "stop"
+        set_recording(false)
+        @video.show_toast(Locale.translate("toast.recording_stopped", frames: parts[1]? || "0"))
+      end
+    end
+
+    private def set_recording(recording : Bool) : Nil
+      @recording = recording
+      @video.recording_dot = recording
+      @on_recording_changed.try(&.call(recording))
+    end
+
     # Same naming scheme as ruby gemba's start_input_recording, built
     # from #rom_title (the main thread's name for the ROM - Core's own
     # cart-header title lives on the worker thread) - consistent with
     # this port's screenshot filenames, which made the same swap.
-    private def next_recording_path : String
+    private def next_recording_path(extension : String) : String
       timestamp = Time.local.to_s("%Y%m%d_%H%M%S_%L")
       title = @rom_title.gsub(/[^a-zA-Z0-9_.-]/, "_")
-      File.join(@recordings_dir, "#{title}_#{timestamp}.gir")
+      File.join(@recordings_dir, "#{title}_#{timestamp}#{extension}")
     end
   end
 end

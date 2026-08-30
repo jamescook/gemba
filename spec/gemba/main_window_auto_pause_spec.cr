@@ -44,7 +44,7 @@ private def stop_and_destroy(window : Gemba::MainWindow) : Nil
     worker.stop
     window.app.interp.wait_until(5.seconds) { worker.done? }
   end
-  window.app.destroy
+  window.destroy
 end
 
 describe Gemba::MainWindow do
@@ -185,7 +185,7 @@ describe Gemba::MainWindow do
           app.interp.wait_until(5.seconds) { !window.auto_pause.held?(:menu) }
           window.auto_pause.active?.should be_false
         ensure
-          window.app.destroy
+          window.destroy
         end
       end
     end

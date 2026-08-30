@@ -68,7 +68,7 @@ describe Gemba::MainWindow do
       worker.done?.should be_false
 
       worker.stop
-      window.app.destroy
+      window.destroy
     end
   end
 
@@ -95,7 +95,7 @@ describe Gemba::MainWindow do
 
         window.worker.try(&.stop)
       ensure
-        window.app.destroy
+        window.destroy
       end
     end
   end
@@ -117,7 +117,7 @@ describe Gemba::MainWindow do
         window.modal_stack.pop
       end
 
-      window.app.destroy
+      window.destroy
     end
   end
 
@@ -144,7 +144,7 @@ describe Gemba::MainWindow do
       window.show_settings
       window.modal_stack.active?.should be_true
 
-      window.app.destroy
+      window.destroy
     end
   end
 
@@ -164,7 +164,7 @@ describe Gemba::MainWindow do
       window.show_settings
       window.modal_stack.active?.should be_true
 
-      window.app.destroy
+      window.destroy
     end
   end
 
@@ -186,7 +186,7 @@ describe Gemba::MainWindow do
       second_worker.should_not be(first_worker)
 
       second_worker.stop
-      window.app.destroy
+      window.destroy
     end
   end
 
@@ -240,7 +240,7 @@ describe Gemba::MainWindow do
 
       File.delete(path)
       window.worker.try(&.stop)
-      window.app.destroy
+      window.destroy
     end
   end
 
@@ -261,7 +261,7 @@ describe Gemba::MainWindow do
       window.save_states_item.try(&.options["state"]).should eq "normal"
 
       window.worker.try(&.stop)
-      window.app.destroy
+      window.destroy
     end
   end
 
@@ -286,7 +286,7 @@ describe Gemba::MainWindow do
       window.app.interp.wait_until(5.seconds) { File.exists?(Gemba::SaveStateManager.screenshot_path(state_dir, 1)) }
 
       window.worker.try(&.stop)
-      window.app.destroy
+      window.destroy
     end
   end
 
@@ -311,7 +311,7 @@ describe Gemba::MainWindow do
       frame.paused?.should_not eq paused_before
 
       window.worker.try(&.stop)
-      window.app.destroy
+      window.destroy
     end
   end
 
@@ -338,7 +338,7 @@ describe Gemba::MainWindow do
       frame.paused?.should_not eq paused_before
 
       window.worker.try(&.stop)
-      window.app.destroy
+      window.destroy
     end
   end
 end

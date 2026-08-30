@@ -140,4 +140,11 @@ COPY assets/ assets/
 ARG CACHEBUST=1
 RUN shards install
 
-CMD ["xvfb-run", "-a", "crystal", "spec"]
+# Sorted file list rather than bare `crystal spec`: the runner's own
+# glob returns files in readdir order, which reshuffles whenever a spec
+# file is added - and with it which example inherits which neighbor's
+# leftover state, turning any cross-spec leak into a moving target
+# (bit for real: a leaked worker thread's allocations landed in an
+# allocation-counting spec only under one particular ordering). Sorted
+# order keeps a failure reproducible run over run.
+CMD xvfb-run -a sh -c 'crystal spec $(find spec -name "*_spec.cr" | sort)'

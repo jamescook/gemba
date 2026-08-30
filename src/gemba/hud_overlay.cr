@@ -2,10 +2,9 @@ require "tryst-sdl"
 
 module Gemba
   # The FPS counter (top-right), fast-forward/turbo indicator
-  # (top-left) and the recording indicator dots (green while inputs are
-  # being recorded to a .gir; the .grec video recorder's red one will
-  # join it), drawn directly over the game frame with no background
-  # box.
+  # (top-left) and the recording indicator dots (red while video is
+  # being captured to a .grec, green while inputs are being recorded to
+  # a .gir), drawn directly over the game frame with no background box.
   #
   # White text through an inverse blend: wherever a text pixel is
   # opaque, the destination colour gets INVERTED rather than blended,
@@ -52,15 +51,17 @@ module Gemba
     # first and the input-recording green one shifted right of it when
     # both are on. Opaque rather than ruby's alpha-200 - close enough
     # visually, and it keeps the renderer's blend-mode state untouched.
+    RECORD_COLOR       = Tryst::SDL::Color.new(220, 30, 30)
     INPUT_RECORD_COLOR = Tryst::SDL::Color.new(30, 180, 30)
     DOT_RADIUS         =  5
     DOT_INSET          = 12
+    DOT_SPACING        = 14
 
     # FF label inset top-left of `dest`; FPS inset top-right; recording
     # dots top-left too (ruby overlaps them with the FF label the same
     # way - rare, and the inverse-blend text stays readable over a dot).
     def draw(dest : Tryst::SDL::Rect, show_fps : Bool = true, show_ff : Bool = false,
-             show_input_record : Bool = false) : Nil
+             show_input_record : Bool = false, show_record : Bool = false) : Nil
       if show_ff && (ff = @ff_texture)
         copy_cropped(ff, dest.x + 4, dest.y + 4)
       end
@@ -69,8 +70,13 @@ module Gemba
         copy_cropped(fps, dest.x + dest.w - fps.width - 6, dest.y + 4)
       end
 
+      dot_x = dest.x + DOT_INSET
+      if show_record
+        draw_filled_circle(dot_x, dest.y + DOT_INSET, DOT_RADIUS, RECORD_COLOR)
+        dot_x += DOT_SPACING
+      end
       if show_input_record
-        draw_filled_circle(dest.x + DOT_INSET, dest.y + DOT_INSET, DOT_RADIUS, INPUT_RECORD_COLOR)
+        draw_filled_circle(dot_x, dest.y + DOT_INSET, DOT_RADIUS, INPUT_RECORD_COLOR)
       end
     end
 

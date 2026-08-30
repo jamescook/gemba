@@ -36,7 +36,7 @@ private def stop_and_destroy(window : Gemba::MainWindow) : Nil
     worker.stop
     window.app.interp.wait_until(5.seconds) { worker.done? }
   end
-  window.app.destroy
+  window.destroy
 end
 
 private def press_question(window : Gemba::MainWindow) : Nil
