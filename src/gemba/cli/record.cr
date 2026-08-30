@@ -30,11 +30,7 @@ module Gemba
         end
 
         if error = plan.error
-          unless @dry_run
-            @err.puts "Error: #{error}"
-            @err.puts "Run 'gemba record --help' for usage"
-            exit 1
-          end
+          raise Error.new("#{error}\nRun 'gemba record --help' for usage") unless @dry_run
           return plan
         end
 

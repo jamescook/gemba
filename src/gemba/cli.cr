@@ -3,6 +3,7 @@ require "./cli/version_cmd"
 require "./cli/config_cmd"
 require "./cli/record"
 require "./cli/decode"
+require "./cli/replay"
 
 module Gemba
   # gemba's command-line front door - a port of ruby gemba's CLI shell
@@ -27,11 +28,17 @@ module Gemba
     # existing invocation does.
     SUBCOMMANDS = %w[play record decode replay config version patch ra]
 
+    # A command refusing to run (missing required argument, ROM not
+    # found, checksum mismatch...). Raised rather than exiting so specs
+    # can assert on it; gemba_app.cr catches it at the very top and
+    # turns it into the stderr message + exit 1 a CLI should produce.
+    class Error < Exception; end
+
     record HelpPlan, text : String
     record UnimplementedPlan, command : String
 
     alias Plan = HelpPlan | UnimplementedPlan | Play::Plan | VersionCmd::Plan | ConfigCmd::Plan |
-                 Record::Plan | Decode::Plan
+                 Record::Plan | Decode::Plan | Replay::Plan
 
     # io/input/config_path/recordings_dir are spec seams (captured
     # output, scripted confirmation, isolated settings/recordings) -
@@ -55,6 +62,7 @@ module Gemba
       when "config"  then ConfigCmd.new(args, dry_run: dry_run, io: io, input: input, config_path: config_path).call
       when "record"  then Record.new(args, dry_run: dry_run, io: io).call
       when "decode"  then Decode.new(args, dry_run: dry_run, io: io, recordings_dir: recordings_dir).call
+      when "replay"  then Replay.new(args, dry_run: dry_run, io: io, recordings_dir: recordings_dir).call
       else
         io.puts "gemba #{command} is not implemented yet" unless dry_run
         UnimplementedPlan.new(command: command)
