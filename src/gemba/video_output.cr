@@ -45,6 +45,7 @@ module Gemba
     # remembered so #redraw (no new frame data) can reproduce it rather
     # than silently dropping the indicator.
     @show_ff = false
+    @destroyed = false
 
     def initialize(app : Tryst::App, parent : String? = nil,
                    native_width : Int32 = 240, native_height : Int32 = 160, scale : Int32 = 3)
@@ -218,12 +219,24 @@ module Gemba
       @toast.draw(dest)
     end
 
+    # Idempotent. Also fine to call after Tk has already destroyed the
+    # viewport's frame (a root-window destroy does): the Viewport
+    # releases its SDL window on its own then, and SDL frees a
+    # renderer's textures/fonts with the renderer - this just settles
+    # the Crystal-side state.
     def destroy : Nil
+      return if @destroyed
+      @destroyed = true
+
       @hud.destroy
       @toast.destroy
       @font.destroy
       @texture.destroy
       @viewport.destroy
+    end
+
+    def destroyed? : Bool
+      @destroyed
     end
 
     private def dest_rect : Tryst::SDL::Rect

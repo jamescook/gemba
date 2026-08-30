@@ -254,4 +254,22 @@ describe Gemba::VideoOutput do
     output.destroy
     app.destroy
   end
+
+  # The root going away (every MainWindow spec's teardown, and closing
+  # the app) takes the viewport's frame with it; tryst-sdl's Viewport
+  # releases its SDL window on its own then. #destroy afterwards is the
+  # order every caller that never got round to it ends up in, so it has
+  # to be a clean no-op, not a raise.
+  it "#destroy after the root window has already gone is a no-op" do
+    app = Tryst::App.new(title: "video_output_spec_5")
+    app.show
+    output = Gemba::VideoOutput.new(app, native_width: 240, native_height: 160, scale: 1)
+
+    app.destroy
+    output.viewport.destroyed?.should be_true
+
+    output.destroy
+    output.destroy # idempotent
+    output.destroyed?.should be_true
+  end
 end
