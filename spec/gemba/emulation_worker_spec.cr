@@ -366,3 +366,52 @@ describe "achievements" do
     app.destroy
   end
 end
+
+describe "achievements across a save-state load" do
+  # Memory just jumped to an arbitrary saved state, so every achievement
+  # goes back through rcheevos' priming - including its hit count. A
+  # 120-frame target started before the save and loaded at ~frame 60
+  # must arrive ~120 frames AFTER the load, not ~60: without the reset
+  # the count would simply carry on and fire early.
+  it "restarts an achievement's progress when a state is loaded" do
+    with_tempdir do |tmp|
+      app = Tryst::App.new(title: "emulation_worker_spec_ach_load")
+      worker = Gemba::EmulationWorker.new(app, FILL_ROM, state_dir_override: tmp)
+
+      messages = [] of String
+      worker.on_message { |text| messages << text }
+      frames = 0
+      worker.on_frame { frames += 1 }
+
+      worker.activate_achievements([achievement(3_u32, "0xH0000>=0.120.")])
+      app.interp.wait_until(5.seconds) { frames >= 3 }
+      worker.quick_save
+      app.interp.wait_until(5.seconds) { messages.any?(&.starts_with?("save_result:true")) }
+
+      app.interp.wait_until(10.seconds) { frames >= 60 }
+      worker.quick_load
+      loaded_at = nil
+      app.interp.wait_until(5.seconds) do
+        loaded_at ||= frames if messages.any?(&.starts_with?("load_result:true"))
+        !loaded_at.nil?
+      end
+      messages.should_not contain "achievement_unlocked:3"
+
+      unlocked_at = nil
+      app.interp.wait_until(15.seconds) do
+        unlocked_at ||= frames if messages.includes?("achievement_unlocked:3")
+        !unlocked_at.nil?
+      end
+
+      # Frame counts are observed from the main thread, so allow slack
+      # either side - the point is "about 120 after the load", never
+      # "about 60".
+      (unlocked_at.should_not(be_nil) - loaded_at.should_not(be_nil)).should be >= 100
+      messages.count("achievement_unlocked:3").should eq 1
+
+      worker.stop
+      app.interp.wait_until(5.seconds) { worker.done? }
+      app.destroy
+    end
+  end
+end

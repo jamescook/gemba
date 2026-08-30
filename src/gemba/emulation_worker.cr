@@ -508,7 +508,8 @@ module Gemba
     # reason as #apply_ra_message: keeps #drain_messages' own dispatch
     # under the complexity limit. Returns true when msg was one of ours.
     private def apply_slot_message(msg, task : Tryst::TaskContext(FramePacket), core : Core,
-                                   save_states : SaveStateManager, ring : FrameRing) : Bool
+                                   save_states : SaveStateManager, ring : FrameRing,
+                                   ra_runtime : Achievements::RARuntime) : Bool
       return false unless msg.is_a?(String)
 
       if slot = msg.lchop?("save_slot:")
@@ -516,7 +517,7 @@ module Gemba
         task.send_message("save_result:#{ok}:#{slot}:#{text}")
       elsif slot = msg.lchop?("load_slot:")
         ok, text = save_states.load_state(core, slot.to_i)
-        task.send_message("load_result:#{ok}:#{slot}:#{text}")
+        finish_state_load(task, ra_runtime, ok, slot.to_i, text)
       elsif rom_title = msg.lchop?("screenshot:")
         ok, filename = take_screenshot(core, rom_title)
         task.send_message("screenshot_result:#{ok}:#{filename}")
@@ -530,6 +531,21 @@ module Gemba
         return false
       end
       true
+    end
+
+    # Reports a load's outcome and, if memory really did just jump to
+    # the saved state, sends every achievement back through rcheevos'
+    # priming: one whose condition happens to hold in the loaded memory
+    # would otherwise trigger on the very next frame - and be awarded,
+    # since the main thread submits any trigger it hasn't seen earned.
+    # Hit counts and delta/prior histories go too, same as ruby gemba's
+    # reset_runtime after a load. Rewind deliberately doesn't do this
+    # (ruby doesn't either): it steps one frame at a time, which the
+    # delta tracking copes with.
+    private def finish_state_load(task : Tryst::TaskContext(FramePacket), ra_runtime : Achievements::RARuntime,
+                                  ok : Bool, slot : Int32, text : String) : Nil
+      ra_runtime.reset_all if ok
+      task.send_message("load_result:#{ok}:#{slot}:#{text}")
     end
 
     # Applies every currently-queued message. Returns true for a Stop
@@ -546,9 +562,9 @@ module Gemba
           task.send_message("save_result:#{ok}:#{save_states.quick_save_slot}:#{text}")
         when "quick_load"
           ok, text = save_states.quick_load(core)
-          task.send_message("load_result:#{ok}:#{save_states.quick_save_slot}:#{text}")
+          finish_state_load(task, ra_runtime, ok, save_states.quick_save_slot, text)
         else
-          if apply_slot_message(msg, task, core, save_states, ring)
+          if apply_slot_message(msg, task, core, save_states, ring, ra_runtime)
             # handled
           elsif apply_ra_message(msg, task, ra_runtime)
             # handled
