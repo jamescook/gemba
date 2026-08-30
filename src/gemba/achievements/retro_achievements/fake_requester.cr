@@ -71,6 +71,12 @@ module Gemba
           @requests.select { |request| request["r"]? == "ping" }.map { |request| request["m"]? || "" }
         end
 
+        # The site recording an unlock that happened elsewhere (another
+        # emulator, the website) - what the next r=unlocks will report.
+        def mark_unlocked(id : Int64) : Nil
+          @unlocked << id unless @unlocked.includes?(id)
+        end
+
         # Every a= seen by an awardachievement, refused or not, in the
         # order they arrived.
         def awarded_ids : Array(Int64)

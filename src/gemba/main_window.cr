@@ -28,6 +28,7 @@ require "./achievements/retro_achievements/unlock_queue"
 require "./achievements/rom_hash"
 require "./achievements/retro_achievements/fake_requester"
 require "./rom_info_window"
+require "./achievements_window"
 require "./settings_window"
 require "./save_state_picker"
 
@@ -86,6 +87,7 @@ module Gemba
     getter modal_stack : ModalStack
     getter settings_window : SettingsWindow
     getter rom_info_window : RomInfoWindow
+    getter achievements_window : AchievementsWindow
     getter save_state_picker : SaveStatePicker
     getter game_picker : GamePickerFrame
     getter list_picker : ListPickerFrame
@@ -137,6 +139,11 @@ module Gemba
     # Outlives any one RA session - see its own class doc for why a
     # pending retry isn't tied to the game it was earned in.
     @ra_unlocks : Achievements::RetroAchievements::UnlockQueue
+
+    # The loaded ROM's RomLibrary rom_id - nil until the worker has
+    # reported its header (see #update_rom_identity), which is what the
+    # achievements window keys its game dropdown on.
+    @current_rom_id : String? = nil
 
     # Bumped by every #stop_ra_session. Starting a session is three
     # network round-trips, and the ROM can be swapped (or RA switched
@@ -217,6 +224,10 @@ module Gemba
         resizable: false, modal: true)
       @save_states_handle = @session.window(:gemba_save_states, title: Locale.translate("picker.title"),
         resizable: false, modal: true)
+      # Non-modal: browsing achievements while the game keeps running is
+      # the point. Content is added after run_async, like Settings.
+      @achievements_handle = @session.window(:gemba_achievements, title: Locale.translate("achievements.title"),
+        geometry: "560x440", modal: false)
       @rom_info_window = RomInfoWindow.new(@session)
 
       @menu_bar = @session.menu_bar do |bar|
@@ -241,6 +252,7 @@ module Gemba
 
         bar.menu(label: Locale.translate("menu.view")) do |view|
           @rom_info_item = view.item(:rom_info, label: Locale.translate("menu.rom_info"), state: :disabled) { show_rom_info }
+          view.item(:achievements, label: Locale.translate("menu.achievements")) { show_achievements }
           view.item(:fullscreen, label: Locale.translate("menu.fullscreen"), shortcut: "F11") { toggle_fullscreen }
           view.separator
           view.item(:open_logs_dir, label: Locale.translate("menu.open_logs_dir")) { open_logs_dir }
@@ -294,6 +306,7 @@ module Gemba
       @ra_unlocks = Achievements::RetroAchievements::UnlockQueue.new(@app, @ra_backend, ra_retry_schedule) do
         {@config.ra_username, @config.ra_token}
       end
+      @achievements_window = AchievementsWindow.new(@app, @achievements_handle, @session, @rom_library, @config, @rom_overrides)
 
       on_open_rom = -> { open_rom_dialog }
       on_select = ->(path : String) { load_rom(path) }
@@ -345,6 +358,7 @@ module Gemba
       frame.on_message { |text| handle_worker_message(text) }
       frame.on_rom_info { |data| update_rom_identity(path, data) }
       @emulator_frame = frame
+      @current_rom_id = nil
 
       if @frame_stack.current == :emulator
         @frame_stack.replace_current(frame)
@@ -447,6 +461,7 @@ module Gemba
         "RA: loaded #{@ra_achievements.size} achievements for game #{game_id}, " \
         "#{@ra_achievements.size - pending.size} already earned"
       end
+      refresh_achievements_window
 
       start_rich_presence(username, token, game_id) if @config.ra_rich_presence?
     end
@@ -502,6 +517,48 @@ module Gemba
       @ra_script = nil
       @ra_achievements.clear
       @emulator_frame.try(&.worker.clear_ra_runtime)
+      refresh_achievements_window
+    end
+
+    # Pulls the latest earned state for the running session (r=unlocks
+    # again) and merges it into the list - the achievements window's
+    # Sync button. Deliberately leaves the worker's runtime alone: an
+    # id newly earned elsewhere stays active there, and if it triggers
+    # later #on_achievement_unlocked's own earned check drops it, so a
+    # mid-game resync never resets anyone's hit counts.
+    private def sync_ra_achievements : Nil
+      unless ra_logged_in?
+        @achievements_window.logged_in = false
+        return
+      end
+      game_id = @ra_game_id
+      unless game_id
+        @achievements_window.sync_finished(false, :no_game)
+        return
+      end
+
+      @achievements_window.sync_started
+      Gemba.log { "RA: sync requested for game #{game_id}" }
+      @ra_backend.fetch_unlocks(@config.ra_username, @config.ra_token, game_id) do |earned|
+        if earned
+          earned.each do |id|
+            achievement = @ra_achievements[id]?
+            @ra_achievements[id] = achievement.earn if achievement && !achievement.earned?
+          end
+          refresh_achievements_window
+        else
+          Gemba.log(SessionLogger::Level::Warn) { "RA: sync failed for game #{game_id}" }
+        end
+        @achievements_window.sync_finished(!earned.nil?)
+      end
+    end
+
+    private def ra_logged_in? : Bool
+      !@config.ra_username.empty? && !@config.ra_token.empty?
+    end
+
+    private def refresh_achievements_window : Nil
+      @achievements_window.update(@current_rom_id, ra_achievements)
     end
 
     # An id the worker's runtime just saw trigger. Awarded once at
@@ -517,6 +574,7 @@ module Gemba
       @video.show_toast(Locale.translate("toast.achievement_unlocked", title: earned.title, points: earned.points))
       @emulator_frame.try(&.take_achievement_screenshot(id)) if @config.ra_screenshot_on_unlock?
       submit_unlock(id)
+      refresh_achievements_window
     end
 
     # Tells the site - and keeps telling it, on the queue's backoff
@@ -572,6 +630,8 @@ module Gemba
     # File.write).
     private def update_rom_identity(path : String, data : RomInfoData) : Nil
       @app.off_thread { @rom_library.update_identity(path, data.game_code, data.checksum) }
+      @current_rom_id = RomLibrary.rom_id(data.game_code, data.checksum)
+      refresh_achievements_window
     end
 
     # Swaps the active picker (@frame_stack's current entry, if a picker
@@ -820,6 +880,15 @@ module Gemba
         @config.ra_screenshot_on_unlock = enabled
         save_config
       end
+      @achievements_window.on_sync { sync_ra_achievements }
+      # The set of achievements itself changes, so the session is
+      # rebuilt from r=patch - unlike Sync, which only re-reads earned
+      # state.
+      @achievements_window.on_unofficial_changed do |include_unofficial|
+        @config.ra_unofficial = include_unofficial
+        save_config
+        @emulator_frame.try { |frame| start_ra_session(frame.worker.rom_path) }
+      end
 
       @events.ra_login_requested.connect do |username, password|
         @ra_backend.login_with_password(username, password) do |token, error|
@@ -828,6 +897,7 @@ module Gemba
             @config.ra_token = token
             save_config
             @settings_window.achievements_tab.login_succeeded(token)
+            @achievements_window.logged_in = true
           else
             @settings_window.achievements_tab.auth_failed(error.to_s)
           end
@@ -847,6 +917,7 @@ module Gemba
         @config.ra_token = ""
         save_config
         @settings_window.achievements_tab.logged_out
+        @achievements_window.logged_in = false
       end
       @events.ra_reset_requested.connect do
         @config.ra_username = ""
@@ -1101,6 +1172,13 @@ module Gemba
       refresh_gamepad_tab
       @settings_window.select_tab(tab)
       @modal_stack.push(:settings, @settings_window.handle)
+    end
+
+    # Non-modal, so it doesn't go through ModalStack - it can stay open
+    # while the game runs and while Settings is up.
+    def show_achievements : Nil
+      @achievements_window.logged_in = ra_logged_in?
+      @achievements_window.show(@current_rom_id, ra_achievements)
     end
 
     def show_rom_info : Nil

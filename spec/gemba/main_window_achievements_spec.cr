@@ -353,3 +353,104 @@ describe Gemba::MainWindow do
     end
   end
 end
+
+private OTHER_ROM_ID = "AGB-OTHR-22222222"
+
+describe Gemba::MainWindow do
+  describe "achievements window" do
+    it "lists the loaded game's achievements, and Sync picks up an unlock the site recorded elsewhere" do
+      with_tempdir do |dir|
+        fake = Gemba::Achievements::RetroAchievements::FakeRequester.new(
+          game_id: 515_i64, script: nil,
+          achievements: [fake_achievement(1_i64, "Someday", frames: 100_000), fake_achievement(2_i64, "Already mine")],
+          unlocked: [2_i64])
+        window = ra_window(dir, fake)
+        achievements = window.achievements_window
+
+        begin
+          window.load_rom(FILL_ROM)
+          window.app.interp.wait_until(15.seconds) { window.ra_achievements.size == 2 }
+          window.show_achievements
+          # The dropdown lands on the loaded game once the worker has
+          # reported its header.
+          window.app.interp.wait_until(5.seconds) { achievements.selected_game.try(&.path) == FILL_ROM }
+
+          achievements.rows.map(&.[0]).should eq ["Already mine", "Someday"]
+          achievements.status_text.should eq "1 / 2 earned"
+
+          fake.mark_unlocked(1_i64)
+          unlocks_before = fake.requests.count { |request| request["r"]? == "unlocks" }
+          window.app.tcl_invoke(achievements.sync_button.path, "invoke")
+          window.app.interp.wait_until(5.seconds) { achievements.status_text == "2 / 2 earned" }
+
+          fake.requests.count { |request| request["r"]? == "unlocks" }.should eq unlocks_before + 1
+          window.ra_achievements.all?(&.earned?).should be_true
+          # A sync only reads earned state - it never awards anything.
+          fake.awarded_ids.should be_empty
+        ensure
+          stop_worker_then_destroy(window)
+        end
+      end
+    end
+
+    it "switching the dropdown to another library game shows the empty state, and back shows the list" do
+      with_tempdir do |dir|
+        library = Gemba::RomLibrary.new(File.join(dir, "rom_library.json"))
+        library.remember("Other Game", "/roms/other.gba", "2026-01-01T00:00:00Z")
+        library.update_identity("/roms/other.gba", "AGB-OTHR", 0x22222222_u32)
+
+        fake = Gemba::Achievements::RetroAchievements::FakeRequester.new(
+          game_id: 515_i64, script: nil, achievements: [fake_achievement(1_i64, "Someday", frames: 100_000)])
+        window = ra_window(dir, fake)
+        achievements = window.achievements_window
+
+        begin
+          window.load_rom(FILL_ROM)
+          window.app.interp.wait_until(15.seconds) { window.ra_achievements.size == 1 }
+          window.show_achievements
+          window.app.interp.wait_until(5.seconds) { achievements.selected_game.try(&.path) == FILL_ROM }
+          loaded_id = achievements.selected_game.should_not(be_nil).rom_id
+          achievements.rows.size.should eq 1
+
+          achievements.select_game(OTHER_ROM_ID).should be_true
+          achievements.rows.should be_empty
+          achievements.status_text.should eq "No achievements loaded"
+
+          achievements.select_game(loaded_id).should be_true
+          achievements.rows.map(&.[0]).should eq ["Someday"]
+        ensure
+          stop_worker_then_destroy(window)
+        end
+      end
+    end
+
+    it "Include Unofficial re-fetches the game with the unofficial set included and persists the choice" do
+      with_tempdir do |dir|
+        unofficial = Gemba::Achievements::RetroAchievements::FakeRequester.achievement(
+          2_i64, "0xH0000>=0.100000.", title: "Unofficial one", flags: Gemba::Achievements::Achievement::UNOFFICIAL.to_i64)
+        fake = Gemba::Achievements::RetroAchievements::FakeRequester.new(
+          game_id: 515_i64, script: nil, achievements: [fake_achievement(1_i64, "Someday", frames: 100_000), unofficial])
+        window = ra_window(dir, fake)
+        achievements = window.achievements_window
+
+        begin
+          window.load_rom(FILL_ROM)
+          window.app.interp.wait_until(15.seconds) { window.ra_achievements.size == 1 }
+          window.show_achievements
+          window.app.interp.wait_until(5.seconds) { achievements.selected_game.try(&.path) == FILL_ROM }
+          achievements.rows.map(&.[0]).should eq ["Someday"]
+
+          window.app.tcl_invoke(achievements.unofficial_checkbox.path, "invoke")
+          window.app.interp.wait_until(15.seconds) { window.ra_achievements.size == 2 }
+          window.app.interp.wait_until(5.seconds) { achievements.rows.size == 2 }
+
+          window.config.ra_unofficial?.should be_true
+          achievements.rows.map(&.[0]).should eq ["Someday", "Unofficial one"]
+          fake.requests.count { |request| request["r"]? == "patch" }.should eq 2
+        ensure
+          stop_worker_then_destroy(window)
+        end
+      end
+    end
+  end
+end
