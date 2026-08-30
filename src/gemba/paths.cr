@@ -38,5 +38,11 @@ module Gemba
     def self.logs_dir : String
       File.join(config_dir, "logs")
     end
+
+    # Per-ROM achievement lists (see Achievements::Cache) - the same
+    # directory ruby gemba writes its own to.
+    def self.achievements_cache_dir : String
+      File.join(config_dir, "achievements")
+    end
   end
 end

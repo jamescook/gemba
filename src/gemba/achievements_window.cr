@@ -1,6 +1,7 @@
 require "tryst"
 require "tryst/ui"
 require "./achievements/achievement"
+require "./achievements/cache"
 require "./rom_library"
 require "./rom_info"
 require "./rom_overrides"
@@ -12,17 +13,17 @@ module Gemba
   # points / earned date, a game dropdown over the library, a Sync
   # button and the Include Unofficial switch. Non-modal, reached from
   # View > Achievements. Ports ruby gemba's AchievementsWindow, minus
-  # the parts that need its on-disk cache (bulk re-sync of every library
-  # game, seeding a non-loaded game from cache) and the description
-  # tooltip.
+  # the bulk re-sync of every library game and the description tooltip.
   #
   # Holds no RetroAchievements state of its own: MainWindow owns the
   # session and hands the list in through #update whenever it changes
   # (session up, an unlock, ROM swapped), and the toolbar's actions go
   # back out through #on_sync / #on_unofficial_changed. Only the loaded
-  # game has live data - picking another library game in the dropdown
-  # shows the empty state, which is what the offline cache will fill in
-  # later.
+  # game has live data; any other library game shows what
+  # Achievements::Cache last saw for it (MainWindow writes that cache
+  # after every load/sync/unlock), and so does the loaded game itself
+  # while its live list is empty - offline, or RA switched off. Live
+  # data always wins over the cache when both exist.
   #
   # Built through the Tryst::UI DSL (Session#add into the window handle
   # MainWindow declared), so the widgets are ordinary nodes; the table's
@@ -59,8 +60,12 @@ module Gemba
     @logged_in = false
     @syncing = false
 
+    # cache_dir: where Achievements::Cache keeps its per-ROM files
+    # (Paths.achievements_cache_dir in production; a spec passes a
+    # tempdir).
     def initialize(@app : Tryst::App, @handle : Tryst::UI::Handle, session : Tryst::UI::Session,
-                   @rom_library : RomLibrary, @config : Config, @overrides : RomOverrides?)
+                   @rom_library : RomLibrary, @config : Config, @overrides : RomOverrides?,
+                   @cache_dir : String)
       status_var = nil
       game_var = nil
       unofficial_var = nil
@@ -226,12 +231,19 @@ module Gemba
       populate(list_for_selected)
     end
 
-    # Only the loaded game has data; anything else is the empty state.
+    # The loaded game's live list when it has one; otherwise whatever
+    # the cache holds for the selected game (nothing, for a game never
+    # synced - or one the worker hasn't identified yet, which has no
+    # rom_id to look up). The read goes through #off_thread like every
+    # other file access in this app; a per-ROM file is small enough
+    # that blocking a dropdown pick on it is fine.
     private def list_for_selected : Array(Achievements::Achievement)
       selected = selected_game
-      return [] of Achievements::Achievement unless selected && selected.rom_id == @current_rom_id
+      return [] of Achievements::Achievement unless selected
+      return @live_list if selected.rom_id == @current_rom_id && !@live_list.empty?
+      return [] of Achievements::Achievement if selected.rom_id.empty?
 
-      @live_list
+      @app.off_thread { Achievements::Cache.read(selected.rom_id, @cache_dir) } || [] of Achievements::Achievement
     end
 
     private def populate(list : Array(Achievements::Achievement)) : Nil

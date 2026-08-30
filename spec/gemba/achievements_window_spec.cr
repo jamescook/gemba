@@ -6,10 +6,12 @@ private alias Achievement = Gemba::Achievements::Achievement
 private ALPHA = "AGB-ALPH-11111111"
 private BETA  = "AGB-BETA-22222222"
 
-private record Built, app : Tryst::App, window : Gemba::AchievementsWindow, config : Gemba::Config
+private record Built, app : Tryst::App, window : Gemba::AchievementsWindow, config : Gemba::Config, cache_dir : String
 
 # A two-game library, the window declared the way MainWindow declares
-# it, and the window's own content added after run_async.
+# it, and the window's own content added after run_async. The cache
+# dir is a subdirectory of the tempdir that nothing creates until a
+# test writes to it.
 private def build(dir : String, title : String) : Built
   library = Gemba::RomLibrary.new(File.join(dir, "rom_library.json"))
   library.remember("Alpha Quest", "/roms/alpha.gba", "2026-01-01T00:00:00Z")
@@ -21,8 +23,9 @@ private def build(dir : String, title : String) : Built
   session = Tryst::UI::Session.new(title: title)
   handle = session.window(:gemba_achievements, title: "Achievements", modal: false)
   app = session.run_async.app
-  window = Gemba::AchievementsWindow.new(app, handle, session, library, config, nil)
-  Built.new(app, window, config)
+  cache_dir = File.join(dir, "achievements")
+  window = Gemba::AchievementsWindow.new(app, handle, session, library, config, nil, cache_dir)
+  Built.new(app, window, config, cache_dir)
 end
 
 private def with_window(title : String, &)
@@ -170,6 +173,48 @@ describe Gemba::AchievementsWindow do
 
       built.window.sync_finished(true)
       built.window.status_text.should eq "2 / 3 earned"
+    end
+  end
+end
+
+describe Gemba::AchievementsWindow, "offline cache" do
+  it "shows the cached list for a library game other than the loaded one" do
+    with_window("achievements_window_spec_7") do |built|
+      cached = [Achievement.new(9_u32, "Beta Only", "", 50, "0xH0000=1", Achievement::CORE, Time.utc(2026, 3, 1))]
+      built.app.off_thread { Gemba::Achievements::Cache.write(BETA, cached, built.cache_dir) }
+      built.window.update(ALPHA, sample)
+
+      built.window.select_game(BETA).should be_true
+      built.window.rows.should eq [{"Beta Only", "50", shown(Time.utc(2026, 3, 1))}]
+      built.window.status_text.should eq "1 / 1 earned"
+
+      built.window.select_game(ALPHA).should be_true
+      names(built).should eq ["Mango", "Apple", "Zed"]
+    end
+  end
+
+  it "prefers the loaded game's live list over a stale cache entry for the same rom_id" do
+    with_window("achievements_window_spec_8") do |built|
+      stale = [Achievement.new(1_u32, "Zed", "", 10, "0xH0000=1", Achievement::CORE)]
+      built.app.off_thread { Gemba::Achievements::Cache.write(ALPHA, stale, built.cache_dir) }
+
+      built.window.update(ALPHA, sample)
+      names(built).should eq ["Mango", "Apple", "Zed"]
+      built.window.status_text.should eq "2 / 3 earned"
+    end
+  end
+
+  it "falls back to the loaded game's own cache while its live list is empty" do
+    with_window("achievements_window_spec_9") do |built|
+      built.app.off_thread { Gemba::Achievements::Cache.write(ALPHA, sample, built.cache_dir) }
+
+      built.window.update(ALPHA, [] of Achievement)
+      names(built).should eq ["Mango", "Apple", "Zed"]
+
+      # Nothing cached for Beta, and nothing live either.
+      built.window.select_game(BETA).should be_true
+      built.window.rows.should be_empty
+      built.window.status_text.should eq "No achievements loaded"
     end
   end
 end

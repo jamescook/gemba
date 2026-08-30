@@ -195,7 +195,8 @@ module Gemba
                    ra_requester : Proc(Hash(String, String), {JSON::Any?, Bool})? = nil,
                    ra_retry_schedule : Achievements::RetroAchievements::UnlockQueue::Schedule = Achievements::RetroAchievements::UnlockQueue::Schedule::DEFAULT,
                    focus_probe : Proc(Bool)? = nil,
-                   logs_dir : String? = nil)
+                   logs_dir : String? = nil,
+                   achievements_cache_dir : String? = nil)
       @config = config_path ? Config.new(config_path) : Config.new
       Locale.load(@config.locale)
       GameIndex.preload!
@@ -309,7 +310,11 @@ module Gemba
       @ra_unlocks = Achievements::RetroAchievements::UnlockQueue.new(@app, @ra_backend, ra_retry_schedule) do
         {@config.ra_username, @config.ra_token}
       end
-      @achievements_window = AchievementsWindow.new(@app, @achievements_handle, @session, @rom_library, @config, @rom_overrides)
+      # achievements_cache_dir: same isolation story as boxart_cache_dir
+      # - a spec's ROM load must never write a real user cache file.
+      @achievements_cache_dir = achievements_cache_dir || Paths.achievements_cache_dir
+      @achievements_window = AchievementsWindow.new(@app, @achievements_handle, @session, @rom_library, @config,
+        @rom_overrides, @achievements_cache_dir)
 
       on_open_rom = -> { open_rom_dialog }
       on_select = ->(path : String) { load_rom(path) }
@@ -560,8 +565,18 @@ module Gemba
       !@config.ra_username.empty? && !@config.ra_token.empty?
     end
 
+    # Every change to the list goes through here - session up, an
+    # unlock, a sync, the ROM identified or swapped - so this is also
+    # where the on-disk cache gets written: whenever there's a list AND
+    # a rom_id to file it under (the worker reports the header
+    # independently of the site's replies, so either can land first).
+    # An empty list is never written - it would overwrite a good cache
+    # with nothing every time RA is off or offline.
     private def refresh_achievements_window : Nil
-      @achievements_window.update(@current_rom_id, ra_achievements)
+      rom_id = @current_rom_id
+      list = ra_achievements
+      @app.off_thread { Achievements::Cache.write(rom_id, list, @achievements_cache_dir) } if rom_id && !list.empty?
+      @achievements_window.update(rom_id, list)
     end
 
     # An id the worker's runtime just saw trigger. Awarded once at

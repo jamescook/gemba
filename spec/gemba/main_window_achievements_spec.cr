@@ -118,6 +118,10 @@ private def index_of(fake : Gemba::Achievements::RetroAchievements::FakeRequeste
   fake.requests.index { |request| request["r"]? == r } || -1
 end
 
+private def cache_dir(dir : String) : String
+  File.join(dir, "achievements")
+end
+
 private def ra_window(dir : String, fake : Gemba::Achievements::RetroAchievements::FakeRequester,
                       retry_schedule = Gemba::Achievements::RetroAchievements::UnlockQueue::Schedule::DEFAULT) : Gemba::MainWindow
   window = Gemba::MainWindow.new(
@@ -126,6 +130,7 @@ private def ra_window(dir : String, fake : Gemba::Achievements::RetroAchievement
     gamepad_polling: false,
     ra_requester: fake.to_proc,
     ra_retry_schedule: retry_schedule,
+    achievements_cache_dir: cache_dir(dir),
   )
   window.config.ra_enabled = true
   window.config.ra_rich_presence = false
@@ -447,6 +452,41 @@ describe Gemba::MainWindow do
           window.config.ra_unofficial?.should be_true
           achievements.rows.map(&.[0]).should eq ["Someday", "Unofficial one"]
           fake.requests.count { |request| request["r"]? == "patch" }.should eq 2
+        ensure
+          stop_worker_then_destroy(window)
+        end
+      end
+    end
+  end
+end
+
+describe Gemba::MainWindow do
+  describe "achievements cache" do
+    it "writes the loaded game's list to the cache once the session is up, and again after a sync" do
+      with_tempdir do |dir|
+        fake = Gemba::Achievements::RetroAchievements::FakeRequester.new(
+          game_id: 515_i64, script: nil,
+          achievements: [fake_achievement(1_i64, "Someday", frames: 100_000), fake_achievement(2_i64, "Already mine")],
+          unlocked: [2_i64])
+        window = ra_window(dir, fake)
+        achievements = window.achievements_window
+
+        begin
+          window.load_rom(FILL_ROM)
+          window.app.interp.wait_until(15.seconds) { window.ra_achievements.size == 2 }
+          window.show_achievements
+          window.app.interp.wait_until(5.seconds) { achievements.selected_game.try(&.path) == FILL_ROM }
+          rom_id = achievements.selected_game.should_not(be_nil).rom_id
+
+          cached = window.app.off_thread { Gemba::Achievements::Cache.read(rom_id, cache_dir(dir)) }.should_not be_nil
+          cached.map { |achievement| {achievement.title, achievement.earned?} }.should eq [{"Someday", false}, {"Already mine", true}]
+
+          fake.mark_unlocked(1_i64)
+          window.app.tcl_invoke(achievements.sync_button.path, "invoke")
+          window.app.interp.wait_until(5.seconds) { achievements.status_text == "2 / 2 earned" }
+
+          resynced = window.app.off_thread { Gemba::Achievements::Cache.read(rom_id, cache_dir(dir)) }.should_not be_nil
+          resynced.all?(&.earned?).should be_true
         ensure
           stop_worker_then_destroy(window)
         end
