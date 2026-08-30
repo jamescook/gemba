@@ -28,6 +28,7 @@ require "./achievements/retro_achievements/unlock_queue"
 require "./achievements/rom_hash"
 require "./achievements/retro_achievements/fake_requester"
 require "./rom_info_window"
+require "./help_window"
 require "./achievements_window"
 require "./settings_window"
 require "./save_state_picker"
@@ -87,6 +88,7 @@ module Gemba
     getter modal_stack : ModalStack
     getter settings_window : SettingsWindow
     getter rom_info_window : RomInfoWindow
+    getter help_window : HelpWindow
     getter achievements_window : AchievementsWindow
     getter save_state_picker : SaveStatePicker
     getter game_picker : GamePickerFrame
@@ -233,6 +235,7 @@ module Gemba
       @achievements_handle = @session.window(:gemba_achievements, title: Locale.translate("achievements.title"),
         geometry: "560x440", modal: false)
       @rom_info_window = RomInfoWindow.new(@session)
+      @help_window = HelpWindow.new(@session, @hotkeys)
 
       @menu_bar = @session.menu_bar do |bar|
         bar.menu(label: Locale.translate("menu.file")) do |file|
@@ -335,6 +338,7 @@ module Gemba
         on_exit: -> { exit_modal },
       )
       @rom_info_window.on_close { @modal_stack.pop }
+      @help_window.on_close { toggle_help }
       @save_state_picker.on_close { @modal_stack.pop }
       @save_state_picker.on_save { |slot| @emulator_frame.try(&.save_slot(slot)) }
       @save_state_picker.on_load { |slot| @emulator_frame.try(&.load_slot(slot)) }
@@ -683,6 +687,12 @@ module Gemba
       bind_hotkey(:save_states) { show_save_states }
       bind_hotkey(:screenshot) { take_screenshot }
       bind_hotkey(:show_fps) { toggle_show_fps }
+      # '?' isn't a HotkeyMap action (it's not rebindable - the panel
+      # is how you find out what is). Bound on the panel too, since a
+      # window manager may hand the panel focus on show and "." would
+      # never see the second press.
+      @session.on_key("question") { |_args, _signal| toggle_help }
+      @help_window.handle.on_key("question") { |_args, _signal| toggle_help }
     end
 
     private def bind_hotkey(action : Symbol, &block : -> Nil) : Nil
@@ -1199,6 +1209,25 @@ module Gemba
       @achievements_window.show(@current_rom_id, ra_achievements)
     end
 
+    # The '?' hotkey reference panel. Non-modal, so it isn't on
+    # ModalStack, but it pauses the game the same way a modal does -
+    # through AutoPause, which is what makes closing it restore the
+    # PRIOR state rather than blindly resuming: a game the user had
+    # paused stays paused. Opening is refused under a modal (its hotkey
+    # wouldn't reach "." anyway) and in fullscreen (a floating panel has
+    # nowhere sensible to sit); closing is always allowed.
+    def toggle_help : Nil
+      if @help_window.visible?
+        @help_window.hide
+        release_auto_pause(:help)
+      else
+        return if fullscreen? || @modal_stack.active?
+
+        hold_auto_pause(:help)
+        @help_window.show
+      end
+    end
+
     def show_rom_info : Nil
       return if @modal_stack.active?
 
@@ -1228,7 +1257,8 @@ module Gemba
 
     # Reasons in use: :modal (a settings/ROM-info/save-state dialog is
     # up), :focus_loss (the app stopped being the active one), :menu (a
-    # menu bar cascade is posted). AutoPause decides whether this
+    # menu bar cascade is posted), :help (the '?' hotkey panel is
+    # showing). AutoPause decides whether this
     # particular hold/release is the one that actually flips the
     # emulator, so overlapping causes nest correctly.
     private def hold_auto_pause(reason : Symbol) : Nil
