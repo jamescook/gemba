@@ -34,7 +34,7 @@ describe Gemba::CLI do
     end
 
     it "reserved-but-unported subcommands say so instead of becoming ROM paths" do
-      %w[patch ra].each do |command|
+      %w[patch].each do |command|
         plan = Gemba::CLI.run([command], dry_run: true)
         plan.should eq Gemba::CLI::UnimplementedPlan.new(command: command)
       end

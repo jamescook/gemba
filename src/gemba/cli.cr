@@ -4,6 +4,7 @@ require "./cli/config_cmd"
 require "./cli/record"
 require "./cli/decode"
 require "./cli/replay"
+require "./cli/ra"
 
 module Gemba
   # gemba's command-line front door - a port of ruby gemba's CLI shell
@@ -38,7 +39,7 @@ module Gemba
     record UnimplementedPlan, command : String
 
     alias Plan = HelpPlan | UnimplementedPlan | Play::Plan | VersionCmd::Plan | ConfigCmd::Plan |
-                 Record::Plan | Decode::Plan | Replay::Plan
+                 Record::Plan | Decode::Plan | Replay::Plan | Ra::Plan
 
     # io/input/config_path/recordings_dir are spec seams (captured
     # output, scripted confirmation, isolated settings/recordings) -
@@ -55,7 +56,12 @@ module Gemba
       end
 
       command = SUBCOMMANDS.includes?(args.first?) ? args.shift : "play"
+      dispatch(command, args, dry_run, io, input, config_path, recordings_dir)
+    end
 
+    private def self.dispatch(command : String, args : Array(String), dry_run : Bool,
+                              io : IO, input : IO, config_path : String,
+                              recordings_dir : String) : Plan
       case command
       when "play"    then Play.new(args, dry_run: dry_run, io: io).call
       when "version" then VersionCmd.new(dry_run: dry_run, io: io).call
@@ -63,6 +69,7 @@ module Gemba
       when "record"  then Record.new(args, dry_run: dry_run, io: io).call
       when "decode"  then Decode.new(args, dry_run: dry_run, io: io, recordings_dir: recordings_dir).call
       when "replay"  then Replay.new(args, dry_run: dry_run, io: io, recordings_dir: recordings_dir).call
+      when "ra"      then Ra.new(args, dry_run: dry_run, io: io, input: input, config_path: config_path).call
       else
         io.puts "gemba #{command} is not implemented yet" unless dry_run
         UnimplementedPlan.new(command: command)
