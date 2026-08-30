@@ -59,11 +59,6 @@ module Gemba
     # ever writes one of these back.
     REWIND_OPTIONS = [5, 10, 20, 30]
 
-    # The notebook's own DSL name - GamepadTab/AchievementsTab each add
-    # their own tab to it via their own Session#add(NOTEBOOK_NAME) call,
-    # rather than being inlined into this class's own #initialize.
-    NOTEBOOK_NAME = :gemba_settings_notebook
-
     @notebook : String
     @general_tab : String
     @video_tab : String
@@ -97,8 +92,8 @@ module Gemba
       gameplay_tab_handle = nil
       rewind_row_handle = nil
 
-      @session.add(handle_name!) do |session|
-        notebook_handle = session.tabs(NOTEBOOK_NAME, pad: 12) do |notebook|
+      @session.add(@handle) do |session|
+        notebook_handle = session.tabs(pad: 12) do |notebook|
           general_tab_handle = notebook.tab(Locale.translate("settings.general"), :general_tab, pad: 12) do |tab|
             screenshot_scale_row_handle = tab.row(:screenshot_scale_row, gap: 8) do |row|
               row.label(text: Locale.translate("settings.screenshot_scale"))
@@ -118,7 +113,8 @@ module Gemba
         end
       end
 
-      @notebook = realized!(notebook_handle, "notebook").path
+      notebook = realized!(notebook_handle, "notebook")
+      @notebook = notebook.path
       general = @general_tab = realized!(general_tab_handle, "general_tab").path
       video = @video_tab = realized!(video_tab_handle, "video_tab").path
       audio = @audio_tab = realized!(audio_tab_handle, "audio_tab").path
@@ -188,11 +184,11 @@ module Gemba
       @rewind_buffer_control.on_action { |value| @events.rewind_seconds_changed.emit(value.rstrip('s').to_i) }
 
       # -- Gamepad tab --
-      @gamepad_tab = Settings::GamepadTab.new(@app, @session, NOTEBOOK_NAME, @path, @events,
+      @gamepad_tab = Settings::GamepadTab.new(@app, @session, notebook, @path, @events,
         validate_keyboard_mapping: ->(keysym : String) { validate_kb_mapping(keysym) })
 
       # -- Achievements tab --
-      @achievements_tab = Settings::AchievementsTab.new(@app, @session, NOTEBOOK_NAME, @path, @events)
+      @achievements_tab = Settings::AchievementsTab.new(@app, @session, notebook, @path, @events)
     end
 
     def handle : Tryst::UI::Handle
@@ -287,14 +283,6 @@ module Gemba
     # to the closest preset the control can actually display.
     private def nearest_rewind_option(seconds : Int32) : Int32
       REWIND_OPTIONS.min_by { |option| (option - seconds).abs }
-    end
-
-    # @handle was always constructed with an explicit name (see
-    # MainWindow's own @session.window(:gemba_settings, ...)) - this is
-    # a real invariant, not a possible-nil to defend against, but
-    # #add's own signature still wants a bare Symbol.
-    private def handle_name! : Symbol
-      @handle.name || raise "SettingsWindow's own window handle has no name - can't Session#add into it"
     end
 
     # #add's block builds the whole subtree before anything realizes

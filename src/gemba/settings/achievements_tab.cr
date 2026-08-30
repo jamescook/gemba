@@ -12,9 +12,10 @@ module Gemba
     # there) isn't ported here, since nothing in this port reads a BIOS
     # path yet.
     #
-    # Built through the Tryst::UI DSL (Session#add, targeting
-    # SettingsWindow's shared notebook by name) - see its own class
-    # comment, and GamepadTab's for the general pattern. The readonly
+    # Built through the Tryst::UI DSL (Session#add against SettingsWindow's
+    # shared notebook Handle, inside this tab's own ui.component so its
+    # widget names stay local to it) - see its own class comment, and
+    # GamepadTab's for the general pattern. The readonly
     # gray-background credential fields (@username_ro/@token_ro) are the
     # one piece with no DSL-native equivalent: :text_box always creates
     # ttk::entry, but the readonly display variant needs classic
@@ -43,7 +44,7 @@ module Gemba
       @reset_btn : String
       @feedback_lbl : String
 
-      def initialize(@app : Tryst::App, @session : Tryst::UI::Session, notebook_name : Symbol,
+      def initialize(@app : Tryst::App, @session : Tryst::UI::Session, notebook : Tryst::UI::Handle,
                      @toplevel_path : String, @events : Events)
         @username_var = "::gemba_ra_username"
         @password_var = "::gemba_ra_password"
@@ -60,43 +61,44 @@ module Gemba
         reset_btn_handle = nil
         feedback_lbl_handle = nil
 
-        @session.add(notebook_name) do |session|
-          frame_handle = session.tab(Locale.translate("settings.retroachievements"), :achievements_tab, pad: 12) do |tab|
-            creds_row_handle = tab.row(gap: 4, pad: 4) do |row|
-              row.label(text: Locale.translate("settings.ra_username_placeholder"))
-              username_entry_handle = row.text_box(textvariable: @username_var, width: 18)
-              token_lbl_handle = row.label(text: Locale.translate("settings.ra_token_placeholder"))
-              token_entry_handle = row.text_box(textvariable: @password_var, show: "*", width: 18)
-            end
+        @session.add(notebook) do |session|
+          session.component(:achievements) do |scope|
+            frame_handle = scope.tab(Locale.translate("settings.retroachievements"), :tab, pad: 12) do |tab|
+              creds_row_handle = tab.row(:credentials_row, gap: 4, pad: 4) do |row|
+                row.label(text: Locale.translate("settings.ra_username_placeholder"))
+                username_entry_handle = row.text_box(:username, textvariable: @username_var, width: 18)
+                token_lbl_handle = row.label(:token_label, text: Locale.translate("settings.ra_token_placeholder"))
+                token_entry_handle = row.text_box(:token, textvariable: @password_var, show: "*", width: 18)
+              end
 
-            # The readonly tk::entry variants aren't DSL nodes (see class
-            # comment) - #raw defers its block to link time, by which
-            # every sibling above (creds_row_handle included) is already
-            # realized, so closing over that local (rather than looking
-            # it up by name) is safe here.
-            tab.raw do |app_contract|
-              row_path = realized!(creds_row_handle).path
-              app_contract.command("entry", "#{row_path}.username_ro", textvariable: @username_var,
-                state: :readonly, readonlybackground: "#cccccc", relief: :sunken, width: 18)
-              app_contract.command("entry", "#{row_path}.token_ro",
-                state: :readonly, readonlybackground: "#cccccc", relief: :sunken, width: 18)
-            end
+              # The readonly tk::entry variants aren't DSL nodes (see class
+              # comment) - #raw defers its block to link time, by which
+              # every sibling above (creds_row_handle included) is already
+              # realized, so closing over that local is safe here.
+              tab.raw do |app_contract|
+                row_path = realized!(creds_row_handle).path
+                app_contract.command("entry", "#{row_path}.username_ro", textvariable: @username_var,
+                  state: :readonly, readonlybackground: "#cccccc", relief: :sunken, width: 18)
+                app_contract.command("entry", "#{row_path}.token_ro",
+                  state: :readonly, readonlybackground: "#cccccc", relief: :sunken, width: 18)
+              end
 
-            tab.row(gap: 6, pad: 4) do |row|
-              login_btn_handle = row.button(text: Locale.translate("settings.ra_login"), state: :disabled,
-                command: ->(_values : Array(String), _signal : Tryst::CallbackSignal) {
-                  @events.ra_login_requested.emit(@app.get_variable(@username_var).strip, @app.get_variable(@password_var))
-                  nil
-                })
-              verify_btn_handle = row.button(text: Locale.translate("settings.ra_verify"), state: :disabled,
-                command: ->(_values : Array(String), _signal : Tryst::CallbackSignal) { @events.ra_verify_requested.emit; nil })
-              logout_btn_handle = row.button(text: Locale.translate("settings.ra_logout"), state: :disabled,
-                command: ->(_values : Array(String), _signal : Tryst::CallbackSignal) { @events.ra_logout_requested.emit; nil })
-              reset_btn_handle = row.button(text: Locale.translate("settings.ra_reset"), state: :disabled,
-                command: ->(_values : Array(String), _signal : Tryst::CallbackSignal) { confirm_reset; nil })
-            end
+              tab.row(:actions_row, gap: 6, pad: 4) do |row|
+                login_btn_handle = row.button(:login, text: Locale.translate("settings.ra_login"), state: :disabled,
+                  command: ->(_values : Array(String), _signal : Tryst::CallbackSignal) {
+                    @events.ra_login_requested.emit(@app.get_variable(@username_var).strip, @app.get_variable(@password_var))
+                    nil
+                  })
+                verify_btn_handle = row.button(:verify, text: Locale.translate("settings.ra_verify"), state: :disabled,
+                  command: ->(_values : Array(String), _signal : Tryst::CallbackSignal) { @events.ra_verify_requested.emit; nil })
+                logout_btn_handle = row.button(:logout, text: Locale.translate("settings.ra_logout"), state: :disabled,
+                  command: ->(_values : Array(String), _signal : Tryst::CallbackSignal) { @events.ra_logout_requested.emit; nil })
+                reset_btn_handle = row.button(:reset, text: Locale.translate("settings.ra_reset"), state: :disabled,
+                  command: ->(_values : Array(String), _signal : Tryst::CallbackSignal) { confirm_reset; nil })
+              end
 
-            feedback_lbl_handle = tab.label(text: "", anchor: :w, pad: 4)
+              feedback_lbl_handle = tab.label(:feedback, text: "", anchor: :w, pad: 4)
+            end
           end
         end
 
