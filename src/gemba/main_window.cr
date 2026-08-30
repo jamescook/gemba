@@ -24,6 +24,7 @@ require "./boxart_fetcher"
 require "./boxart_fetcher/libretro_backend"
 require "./rom_overrides"
 require "./achievements/retro_achievements/backend"
+require "./achievements/retro_achievements/unlock_queue"
 require "./achievements/rom_hash"
 require "./achievements/retro_achievements/fake_requester"
 require "./rom_info_window"
@@ -133,6 +134,10 @@ module Gemba
     @ra_rich_presence : String = ""
     @ra_ping_timer : Tryst::RepeatingTimer? = nil
 
+    # Outlives any one RA session - see its own class doc for why a
+    # pending retry isn't tied to the game it was earned in.
+    @ra_unlocks : Achievements::RetroAchievements::UnlockQueue
+
     # Bumped by every #stop_ra_session. Starting a session is three
     # network round-trips, and the ROM can be swapped (or RA switched
     # off) while one is in flight - a reply carrying an older number is
@@ -181,6 +186,7 @@ module Gemba
                    rom_overrides_path : String? = nil, boxart_cache_dir : String? = nil,
                    @gamepad_polling : Bool = true,
                    ra_requester : Proc(Hash(String, String), {JSON::Any?, Bool})? = nil,
+                   ra_retry_schedule : Achievements::RetroAchievements::UnlockQueue::Schedule = Achievements::RetroAchievements::UnlockQueue::Schedule::DEFAULT,
                    focus_probe : Proc(Bool)? = nil,
                    logs_dir : String? = nil)
       @config = config_path ? Config.new(config_path) : Config.new
@@ -283,6 +289,11 @@ module Gemba
       @rom_overrides = @app.off_thread { RomOverrides.new(rom_overrides_path || RomOverrides.path, boxart_dir: boxart_dir) }
       Gemba.logger ||= @app.off_thread { SessionLogger.new(logs_dir || Paths.logs_dir) }
       @ra_backend = ra_requester ? Achievements::RetroAchievements::Backend.new(@app, ra_requester) : Achievements::RetroAchievements::Backend.new(@app)
+      # ra_retry_schedule: a spec passes millisecond delays so a retry
+      # can be watched without the real 30s wait.
+      @ra_unlocks = Achievements::RetroAchievements::UnlockQueue.new(@app, @ra_backend, ra_retry_schedule) do
+        {@config.ra_username, @config.ra_token}
+      end
 
       on_open_rom = -> { open_rom_dialog }
       on_select = ->(path : String) { load_rom(path) }
@@ -508,12 +519,15 @@ module Gemba
       submit_unlock(id)
     end
 
-    # Tells the site. The backend logs both outcomes; a submission the
-    # site didn't accept is currently just that log line - retrying it
-    # later is separate work, and this callback's ok is where it hooks
-    # in.
+    # Tells the site - and keeps telling it, on the queue's backoff
+    # schedule, if the site doesn't answer.
     private def submit_unlock(id : UInt32) : Nil
-      @ra_backend.award_achievement(@config.ra_username, @config.ra_token, id, hardcore: false) { |_ok| }
+      @ra_unlocks.submit(id, hardcore: false)
+    end
+
+    # Ids the site has yet to confirm - see UnlockQueue#pending_ids.
+    def ra_pending_unlocks : Array(UInt32)
+      @ra_unlocks.pending_ids
     end
 
     # The RetroAchievements half of #handle_worker_message. Returns true
@@ -1240,6 +1254,7 @@ module Gemba
 
     private def quit : Nil
       @emulator_frame.try(&.cleanup)
+      @ra_unlocks.shutdown
       @audio.destroy
       @app.destroy
     end

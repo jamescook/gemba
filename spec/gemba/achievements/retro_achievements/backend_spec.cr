@@ -201,7 +201,7 @@ describe "rich presence requests" do
     end
 
     ok = nil
-    backend.award_achievement("someone", "tok", 42_u32) { |success| ok = success }
+    backend.award_achievement("someone", "tok", 42_u32) { |success, _error| ok = success }
     app.interp.wait_until(5.seconds) { !ok.nil? }
 
     ok.should be_true
@@ -220,7 +220,7 @@ describe "rich presence requests" do
     end
 
     ok = nil
-    backend.award_achievement("someone", "tok", 42_u32, hardcore: true) { |success| ok = success }
+    backend.award_achievement("someone", "tok", 42_u32, hardcore: true) { |success, _error| ok = success }
     app.interp.wait_until(5.seconds) { !ok.nil? }
 
     sent.should_not(be_nil).["h"].should eq "1"
@@ -231,7 +231,7 @@ describe "rich presence requests" do
     app, backend = build { |_params| {JSON.parse(%({"Success":false,"Error":"Achievement not found"})), true} }
 
     ok = nil
-    backend.award_achievement("someone", "tok", 42_u32) { |success| ok = success }
+    backend.award_achievement("someone", "tok", 42_u32) { |success, _error| ok = success }
     app.interp.wait_until(5.seconds) { !ok.nil? }
 
     ok.should be_false
@@ -242,7 +242,7 @@ describe "rich presence requests" do
     app, backend = build { |_params| {nil, false} }
 
     ok = nil
-    backend.award_achievement("someone", "tok", 42_u32) { |success| ok = success }
+    backend.award_achievement("someone", "tok", 42_u32) { |success, _error| ok = success }
     app.interp.wait_until(5.seconds) { !ok.nil? }
 
     ok.should be_false

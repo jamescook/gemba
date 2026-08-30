@@ -106,25 +106,18 @@ module Gemba
         end
 
         # r=awardachievement - tells the site the player just earned
-        # achievement `id`. on_done gets whether the server accepted it
-        # (Success=true); anything else - a refusal, an HTTP failure, no
-        # network - is false, so the caller can decide what to do about
-        # an unlock the site never recorded. Both outcomes reach the
-        # log: an unconfirmed unlock is exactly the thing a user will
-        # come asking about later.
+        # achievement `id`. on_done gets (accepted, error): accepted is
+        # whether the server said Success=true; anything else - a
+        # refusal, an HTTP failure, no network - is false with a
+        # human-readable error, so the caller can decide what to do
+        # about an unlock the site never recorded (UnlockQueue retries
+        # it, and owns the logging of both outcomes).
         def award_achievement(username : String, token : String, id : UInt32, hardcore : Bool = false,
-                              &on_done : Bool -> Nil) : Nil
+                              &on_done : Bool, String? -> Nil) : Nil
           ra_request({"r" => "awardachievement", "u" => username, "t" => token,
                       "a" => id.to_s, "h" => hardcore ? "1" : "0"}) do |json, request_ok|
             success = !!(json && request_ok && json["Success"]?.try(&.as_bool?))
-            if success
-              Gemba.log { "RA: submitted unlock for achievement #{id}" }
-            else
-              Gemba.log(SessionLogger::Level::Warn) do
-                "RA: unlock submission failed for achievement #{id}: #{error_message(json, request_ok)}"
-              end
-            end
-            on_done.call(success)
+            on_done.call(success, success ? nil : error_message(json, request_ok))
           end
         end
 

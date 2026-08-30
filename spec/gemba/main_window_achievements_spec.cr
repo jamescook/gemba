@@ -118,12 +118,14 @@ private def index_of(fake : Gemba::Achievements::RetroAchievements::FakeRequeste
   fake.requests.index { |request| request["r"]? == r } || -1
 end
 
-private def ra_window(dir : String, fake : Gemba::Achievements::RetroAchievements::FakeRequester) : Gemba::MainWindow
+private def ra_window(dir : String, fake : Gemba::Achievements::RetroAchievements::FakeRequester,
+                      retry_schedule = Gemba::Achievements::RetroAchievements::UnlockQueue::Schedule::DEFAULT) : Gemba::MainWindow
   window = Gemba::MainWindow.new(
     rom_library_path: File.join(dir, "rom_library.json"),
     config_path: File.join(dir, "settings.json"),
     gamepad_polling: false,
     ra_requester: fake.to_proc,
+    ra_retry_schedule: retry_schedule,
   )
   window.config.ra_enabled = true
   window.config.ra_rich_presence = false
@@ -293,22 +295,27 @@ describe Gemba::MainWindow do
       end
     end
 
-    it "still reports an unlock the site refused, so a caller can see the failure" do
+    it "keeps an unlock the site refused and resubmits it until the site accepts" do
       with_tempdir do |dir|
         fake = Gemba::Achievements::RetroAchievements::FakeRequester.new(
           game_id: 515_i64, script: nil, achievements: [fake_achievement(1_i64, "Refused", frames: 5)])
         fake.award_fails = true
-        window = ra_window(dir, fake)
+        window = ra_window(dir, fake, Gemba::Achievements::RetroAchievements::UnlockQueue::Schedule.new(50.milliseconds, 200.milliseconds, 10))
 
         begin
           window.load_rom(FILL_ROM)
-          window.app.interp.wait_until(15.seconds) { !fake.awarded_ids.empty? }
-          pump(window, 500.milliseconds)
+          window.app.interp.wait_until(15.seconds) { window.ra_pending_unlocks == [1_u32] }
 
           # Marked earned locally regardless - the player DID earn it;
-          # only the site's record is missing. Not re-submitted here:
-          # retrying is separate work.
-          fake.awarded_ids.should eq [1_i64]
+          # only the site's record is missing, and the queue keeps
+          # after that.
+          window.ra_achievements[0].earned?.should be_true
+
+          fake.award_fails = false
+          window.app.interp.wait_until(5.seconds) { window.ra_pending_unlocks.empty? }
+          pump(window, 500.milliseconds)
+
+          fake.awarded_ids.should eq [1_i64, 1_i64]
           window.ra_achievements[0].earned?.should be_true
         ensure
           stop_worker_then_destroy(window)
