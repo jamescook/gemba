@@ -19,6 +19,7 @@ require "./gemba/frame_delta"
 require "./gemba/recorder"
 require "./gemba/recorder_decoder"
 require "./gemba/main_window"
+require "./gemba/cli"
 
 module Gemba
   VERSION = "0.1.0"

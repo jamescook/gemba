@@ -1,3 +1,3 @@
 require "./gemba"
 
-Gemba::MainWindow.new.run
+Gemba::CLI.run(ARGV)
