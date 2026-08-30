@@ -33,17 +33,6 @@ describe Gemba::CLI do
       Gemba::CLI.run(["-h"], dry_run: true).should be_a(Gemba::CLI::HelpPlan)
     end
 
-    it "reserved-but-unported subcommands say so instead of becoming ROM paths" do
-      %w[patch].each do |command|
-        plan = Gemba::CLI.run([command], dry_run: true)
-        plan.should eq Gemba::CLI::UnimplementedPlan.new(command: command)
-      end
-
-      io = IO::Memory.new
-      Gemba::CLI.run(["patch"], io: io)
-      io.to_s.should contain "not implemented yet"
-    end
-
     it "play -h prints play's own usage without opening a window" do
       io = IO::Memory.new
       plan = Gemba::CLI.run(["play", "-h"], io: io).as(Gemba::CLI::Play::Plan)

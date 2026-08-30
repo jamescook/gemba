@@ -5,6 +5,7 @@ require "./cli/record"
 require "./cli/decode"
 require "./cli/replay"
 require "./cli/ra"
+require "./cli/patch"
 
 module Gemba
   # gemba's command-line front door - a port of ruby gemba's CLI shell
@@ -39,7 +40,7 @@ module Gemba
     record UnimplementedPlan, command : String
 
     alias Plan = HelpPlan | UnimplementedPlan | Play::Plan | VersionCmd::Plan | ConfigCmd::Plan |
-                 Record::Plan | Decode::Plan | Replay::Plan | Ra::Plan
+                 Record::Plan | Decode::Plan | Replay::Plan | Ra::Plan | Patch::Plan
 
     # io/input/config_path/recordings_dir are spec seams (captured
     # output, scripted confirmation, isolated settings/recordings) -
@@ -70,6 +71,7 @@ module Gemba
       when "decode"  then Decode.new(args, dry_run: dry_run, io: io, recordings_dir: recordings_dir).call
       when "replay"  then Replay.new(args, dry_run: dry_run, io: io, recordings_dir: recordings_dir).call
       when "ra"      then Ra.new(args, dry_run: dry_run, io: io, input: input, config_path: config_path).call
+      when "patch"   then Patch.new(args, dry_run: dry_run, io: io).call
       else
         io.puts "gemba #{command} is not implemented yet" unless dry_run
         UnimplementedPlan.new(command: command)

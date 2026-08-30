@@ -34,22 +34,24 @@ module Gemba
     #   90-100% write output
     #
     # Returns out_path. Raises Error on unknown format, truncation or
-    # checksum failure.
+    # checksum failure. format: :ips/:bps/:ups forces a parser instead
+    # of magic-byte auto-detection (the CLI's --format override).
     def self.patch(rom_path : String, patch_path : String, out_path : String,
-                   on_progress : Progress? = nil) : String
+                   on_progress : Progress? = nil, format : Symbol? = nil) : String
       rom = read_chunked(rom_path, 0.0, 0.15, on_progress)
       patch = read_chunked(patch_path, 0.15, 0.25, on_progress)
 
-      format = detect_format(patch) ||
+      chosen = format || detect_format(patch) ||
                raise Error.new("Unknown patch format (expected IPS/BPS/UPS magic)")
 
       apply_cb = on_progress.try do |progress|
         ->(pct : Float64) { progress.call(0.25 + pct * 0.65) }
       end
-      result = case format
+      result = case chosen
                when :ips then IPS.apply(rom, patch, on_progress: apply_cb)
                when :bps then BPS.apply(rom, patch, on_progress: apply_cb)
-               else           UPS.apply(rom, patch, on_progress: apply_cb)
+               when :ups then UPS.apply(rom, patch, on_progress: apply_cb)
+               else           raise Error.new("Unknown patch format: #{chosen}")
                end
       on_progress.try(&.call(0.90))
 
