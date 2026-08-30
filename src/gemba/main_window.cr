@@ -206,8 +206,16 @@ module Gemba
                    logs_dir : String? = nil,
                    achievements_cache_dir : String? = nil,
                    recordings_dir : String? = nil,
-                   @ra_ping_interval_ms : Int32 = RA_PING_INTERVAL_MS)
-      @config = config_path ? Config.new(config_path) : Config.new
+                   @ra_ping_interval_ms : Int32 = RA_PING_INTERVAL_MS,
+                   config : Config? = nil)
+      # config: a pre-built (possibly pre-mutated) Config instance wins
+      # over config_path - the seam CLI play flags use for session-only
+      # overrides: values applied in memory before construction, never
+      # save!d here, exactly ruby's user_config semantics. (A CLASS
+      # method: an instance method can't be called before every ivar is
+      # assigned - see the menu-build comment below - and it also keeps
+      # the branches off initialize's own complexity budget.)
+      @config = MainWindow.resolve_config(config, config_path)
       Locale.load(@config.locale)
       GameIndex.preload!
       @events = Events.new
@@ -375,6 +383,11 @@ module Gemba
       watch_menu_bar
       init_gamepad_subsystem if @gamepad_polling
       @app.bring_to_front
+    end
+
+    # See the comment at its call site in #initialize.
+    protected def self.resolve_config(config : Config?, config_path : String?) : Config
+      config || Config.new(config_path || Config.path)
     end
 
     # Enters the Tk event loop. Blocks until the window closes.

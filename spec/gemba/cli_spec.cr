@@ -48,7 +48,7 @@ describe Gemba::CLI do
       io = IO::Memory.new
       plan = Gemba::CLI.run(["play", "-h"], io: io).as(Gemba::CLI::Play::Plan)
       plan.help.should be_true
-      io.to_s.should contain "Usage: gemba [play] [ROM_FILE]"
+      io.to_s.should contain "Usage: gemba [play] [options] [ROM_FILE]"
     end
   end
 
