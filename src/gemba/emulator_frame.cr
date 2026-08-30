@@ -131,6 +131,12 @@ module Gemba
       @worker.take_screenshot(@rom_title)
     end
 
+    # The automatic screenshot an achievement unlock takes (see
+    # EmulationWorker#take_achievement_screenshot).
+    def take_achievement_screenshot(achievement_id : UInt32) : Nil
+      @worker.take_achievement_screenshot(achievement_id, @rom_title)
+    end
+
     # The per-ROM save-state directory (states/<game>-<crc>/, computed
     # from the cached #rom_info) - what the save-state picker lists
     # slots/thumbnails from. nil until the "rom_info:" message arrives

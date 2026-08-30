@@ -1,6 +1,7 @@
 require "http/client"
 require "json"
 require "../../session_logger"
+require "../achievement"
 
 module Gemba
   module Achievements
@@ -51,13 +52,79 @@ module Gemba
           end
         end
 
-        # Achievement data comes back in the same response, but nothing
-        # here reads it yet.
-        def fetch_rich_presence_script(username : String, token : String, game_id : Int64,
-                                       &on_done : String? -> Nil) : Nil
+        # What r=patch hands back for one game: the achievement
+        # definitions (already filtered, see Achievement.from_patch) and
+        # the Rich Presence script, nil when the game has none.
+        record Patch, achievements : Array(Achievement), script : String?
+
+        # r=patch - the achievement definitions and presence script for a
+        # game. on_done gets nil when the request fails; a game with no
+        # achievements and no script is a Patch with an empty list and a
+        # nil script, which is a perfectly good answer.
+        #
+        # Does NOT activate anything: the runtime only learns about
+        # achievements once #fetch_unlocks has said which are already
+        # earned, so nothing can be awarded in the window between the
+        # two replies. Same ordering as ruby gemba's fetch_patch_data
+        # -> fetch_unlocks -> activate.
+        def fetch_patch(username : String, token : String, game_id : Int64, include_unofficial : Bool = false,
+                        &on_done : Patch? -> Nil) : Nil
           ra_request({"r" => "patch", "u" => username, "t" => token, "g" => game_id.to_s}) do |json, request_ok|
-            script = json.try(&.["PatchData"]?.try(&.["RichPresencePatch"]?.try(&.as_s?))) if request_ok
-            on_done.call(script.presence)
+            data = json.try(&.["PatchData"]?) if request_ok
+            unless data
+              on_done.call(nil)
+              next
+            end
+
+            achievements = Achievement.from_patch(data["Achievements"]?, include_unofficial)
+            script = data["RichPresencePatch"]?.try(&.as_s?).presence
+            on_done.call(Patch.new(achievements, script))
+          end
+        end
+
+        # r=unlocks with h=0 (softcore - gemba has no hardcore mode) -
+        # the ids the player has already earned for this game, so they
+        # are never activated or awarded again. on_done gets nil when
+        # the request fails or the server says Success=false; a caller
+        # must then NOT activate anything, since it cannot tell a fresh
+        # game from one already fully earned.
+        def fetch_unlocks(username : String, token : String, game_id : Int64,
+                          &on_done : Set(UInt32)? -> Nil) : Nil
+          ra_request({"r" => "unlocks", "u" => username, "t" => token, "g" => game_id.to_s, "h" => "0"}) do |json, request_ok|
+            unless json && request_ok && json["Success"]?.try(&.as_bool?)
+              on_done.call(nil)
+              next
+            end
+
+            ids = Set(UInt32).new
+            json["UserUnlocks"]?.try(&.as_a?).try &.each do |value|
+              id = value.as_i64? || value.as_s?.try(&.to_i64?)
+              ids << id.to_u32 if id && id > 0
+            end
+            on_done.call(ids)
+          end
+        end
+
+        # r=awardachievement - tells the site the player just earned
+        # achievement `id`. on_done gets whether the server accepted it
+        # (Success=true); anything else - a refusal, an HTTP failure, no
+        # network - is false, so the caller can decide what to do about
+        # an unlock the site never recorded. Both outcomes reach the
+        # log: an unconfirmed unlock is exactly the thing a user will
+        # come asking about later.
+        def award_achievement(username : String, token : String, id : UInt32, hardcore : Bool = false,
+                              &on_done : Bool -> Nil) : Nil
+          ra_request({"r" => "awardachievement", "u" => username, "t" => token,
+                      "a" => id.to_s, "h" => hardcore ? "1" : "0"}) do |json, request_ok|
+            success = !!(json && request_ok && json["Success"]?.try(&.as_bool?))
+            if success
+              Gemba.log { "RA: submitted unlock for achievement #{id}" }
+            else
+              Gemba.log(SessionLogger::Level::Warn) do
+                "RA: unlock submission failed for achievement #{id}: #{error_message(json, request_ok)}"
+              end
+            end
+            on_done.call(success)
           end
         end
 
@@ -73,7 +140,7 @@ module Gemba
 
         private def error_message(json : JSON::Any?, request_ok : Bool) : String
           return "Could not connect to RetroAchievements" unless request_ok
-          json.try(&.["Error"]?.try(&.as_s?)) || "Login failed"
+          json.try(&.["Error"]?.try(&.as_s?)) || "Request failed"
         end
 
         private def ra_request(params : Hash(String, String), &on_done : JSON::Any?, Bool -> Nil) : Nil

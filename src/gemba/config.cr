@@ -182,6 +182,18 @@ module Gemba
       set("ra_screenshot_on_unlock", value)
     end
 
+    # Whether achievements still in RA's unofficial set (Flags 5) are
+    # activated alongside the published ones. Same key ruby gemba
+    # persists; no settings control yet - the achievements window is
+    # where ruby exposes it.
+    def ra_unofficial? : Bool
+      bool("ra_unofficial", false)
+    end
+
+    def ra_unofficial=(value : Bool) : Bool
+      set("ra_unofficial", value)
+    end
+
     # "auto", or a two-letter code ("en", "ja").
     def locale : String
       str("locale", "auto")

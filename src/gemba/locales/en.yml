@@ -34,6 +34,7 @@ toast:
   created_sav: "Created {name}"
   screenshot_saved: "Screenshot saved: {name}"
   screenshot_failed: "Screenshot failed"
+  achievement_unlocked: "{title} ({points}pts)"
   rewound: "Rewound"
   no_rewind: "No rewind data"
   paused: "Paused"

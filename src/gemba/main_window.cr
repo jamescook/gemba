@@ -121,12 +121,24 @@ module Gemba
     getter auto_pause = AutoPause.new
 
     # RetroAchievements session for the ROM currently loaded: the game
-    # id resolved from its hash, and the latest presence string the
-    # worker has evaluated. Both nil/empty until a ROM with RA support
-    # is running and the user is logged in.
+    # id resolved from its hash, its achievements (earned or not - the
+    # earned-state bookkeeping lives HERE, the worker's runtime only
+    # ever holds the ones still to be earned), its presence script and
+    # the latest presence string the worker has evaluated. All
+    # nil/empty until a ROM with RA support is running and the user is
+    # logged in.
     @ra_game_id : Int64? = nil
+    @ra_script : String? = nil
+    @ra_achievements = {} of UInt32 => Achievements::Achievement
     @ra_rich_presence : String = ""
     @ra_ping_timer : Tryst::RepeatingTimer? = nil
+
+    # Bumped by every #stop_ra_session. Starting a session is three
+    # network round-trips, and the ROM can be swapped (or RA switched
+    # off) while one is in flight - a reply carrying an older number is
+    # from a session that no longer exists, and is dropped rather than
+    # loading the previous game's achievements onto the new worker.
+    @ra_session = 0
     @pause_item : Tryst::UI::Handle?
 
     # The menu bar itself, and the poll that watches it for the menu
@@ -339,46 +351,108 @@ module Gemba
       @quick_load_item.try(&.enable)
       @save_states_item.try(&.enable)
 
-      start_rich_presence(path)
+      start_ra_session(path)
+    end
+
+    # This game's achievements as RetroAchievements defines them, with
+    # earned state - empty until a session is up (see #start_ra_session).
+    def ra_achievements : Array(Achievements::Achievement)
+      @ra_achievements.values
     end
 
     # Resolves this ROM against RetroAchievements and, if it's a known
-    # game with a Rich Presence script, hands the script to the worker
-    # and starts the heartbeat that makes the site show what's being
-    # played. Every step is a no-op unless the user is logged in and has
-    # rich presence switched on, and any failure just leaves presence
-    # off - nothing here is worth interrupting play over.
-    private def start_rich_presence(rom_path : String) : Nil
-      stop_rich_presence
+    # game, loads its achievements: r=gameid for the id, r=patch for
+    # the definitions, r=unlocks for what's already earned, and only
+    # THEN activates the rest on the worker - the unlocks reply has to
+    # land before anything is evaluated, or a condition that happens to
+    # hold could award something the player earned years ago. Rich
+    # presence (script + ping heartbeat) starts on top if switched on.
+    # Every step is a no-op unless the user is logged in, and any
+    # failure just leaves achievements off for this game - nothing here
+    # is worth interrupting play over.
+    private def start_ra_session(rom_path : String) : Nil
+      stop_ra_session
 
-      return unless @config.ra_enabled? && @config.ra_rich_presence?
+      return unless @config.ra_enabled?
       return if @config.ra_username.empty? || @config.ra_token.empty?
 
       username, token = @config.ra_username, @config.ra_token
+      include_unofficial = @config.ra_unofficial?
+      session = @ra_session
 
       spawn do
         md5 = @app.off_thread(new_thread: true) { Achievements::RomHash.for_file(rom_path) }
-        Gemba.log { "RA: rich presence lookup for #{File.basename(rom_path)} md5=#{md5[0, 8]}…" }
+        Gemba.log { "RA: lookup for #{File.basename(rom_path)} md5=#{md5[0, 8]}…" }
 
         @ra_backend.lookup_game_id(md5) do |game_id|
+          next unless session == @ra_session
           unless game_id
-            Gemba.log { "RA: no RetroAchievements game matches this ROM - rich presence off" }
+            Gemba.log { "RA: no RetroAchievements game matches this ROM" }
             next
           end
 
-          @ra_backend.fetch_rich_presence_script(username, token, game_id) do |script|
-            unless script
-              Gemba.log { "RA: game #{game_id} has no rich presence script" }
+          @ra_backend.fetch_patch(username, token, game_id, include_unofficial: include_unofficial) do |patch|
+            next unless session == @ra_session
+            unless patch
+              Gemba.log(SessionLogger::Level::Warn) { "RA: failed to fetch patch data for game #{game_id} - achievements off" }
               next
             end
 
-            @ra_game_id = game_id
-            @emulator_frame.try(&.worker.activate_rich_presence(script))
-            start_ping_timer(username, token, game_id)
-            Gemba.log { "RA: rich presence active for game #{game_id}" }
+            @ra_backend.fetch_unlocks(username, token, game_id) do |earned|
+              next unless session == @ra_session
+              unless earned
+                Gemba.log(SessionLogger::Level::Warn) { "RA: failed to fetch unlocks for game #{game_id} - achievements off" }
+                next
+              end
+
+              begin_ra_session(game_id, patch, earned, username, token)
+            end
           end
         end
       end
+    end
+
+    # The synchronous tail of #start_ra_session, once everything the
+    # site has to say about this game is in hand.
+    private def begin_ra_session(game_id : Int64, patch : Achievements::RetroAchievements::Backend::Patch,
+                                 earned : Set(UInt32), username : String, token : String) : Nil
+      @ra_game_id = game_id
+      @ra_script = patch.script
+      @ra_achievements.clear
+      pending = [] of Achievements::Achievement
+      patch.achievements.each do |achievement|
+        if earned.includes?(achievement.id)
+          # The site only says WHICH ids are earned, not when - marked
+          # as of now, same as ruby gemba does.
+          @ra_achievements[achievement.id] = achievement.earn
+        else
+          @ra_achievements[achievement.id] = achievement
+          pending << achievement
+        end
+      end
+
+      @emulator_frame.try(&.worker.activate_achievements(pending))
+      Gemba.log do
+        "RA: loaded #{@ra_achievements.size} achievements for game #{game_id}, " \
+        "#{@ra_achievements.size - pending.size} already earned"
+      end
+
+      start_rich_presence(username, token, game_id) if @config.ra_rich_presence?
+    end
+
+    # Hands the presence script to the worker and starts the heartbeat
+    # that makes the site show what's being played. Needs a session
+    # (#begin_ra_session) to already be up.
+    private def start_rich_presence(username : String, token : String, game_id : Int64) : Nil
+      script = @ra_script
+      unless script
+        Gemba.log { "RA: game #{game_id} has no rich presence script" }
+        return
+      end
+
+      @emulator_frame.try(&.worker.activate_rich_presence(script))
+      start_ping_timer(username, token, game_id)
+      Gemba.log { "RA: rich presence active for game #{game_id}" }
     end
 
     private def start_ping_timer(username : String, token : String, game_id : Int64) : Nil
@@ -400,12 +474,79 @@ module Gemba
       end
     end
 
+    # Stops the heartbeat and forgets the presence string. The worker
+    # keeps evaluating the script - the string only ever goes out with
+    # a ping, so with no ping it's inert, and switching presence back
+    # on doesn't have to re-fetch anything.
     private def stop_rich_presence : Nil
       @ra_ping_timer.try(&.cancel)
       @ra_ping_timer = nil
-      @ra_game_id = nil
       @ra_rich_presence = ""
-      @emulator_frame.try(&.worker.clear_rich_presence)
+    end
+
+    private def stop_ra_session : Nil
+      stop_rich_presence
+      @ra_session += 1
+      @ra_game_id = nil
+      @ra_script = nil
+      @ra_achievements.clear
+      @emulator_frame.try(&.worker.clear_ra_runtime)
+    end
+
+    # An id the worker's runtime just saw trigger. Awarded once at
+    # most: the worker knows nothing about earned state, so an id not
+    # in this game's list, or already earned, stops here.
+    private def on_achievement_unlocked(id : UInt32) : Nil
+      achievement = @ra_achievements[id]?
+      return if achievement.nil? || achievement.earned?
+
+      earned = achievement.earn
+      @ra_achievements[id] = earned
+      Gemba.log { "RA: unlocked achievement #{id} #{earned.title.inspect} (#{earned.points}pts)" }
+      @video.show_toast(Locale.translate("toast.achievement_unlocked", title: earned.title, points: earned.points))
+      @emulator_frame.try(&.take_achievement_screenshot(id)) if @config.ra_screenshot_on_unlock?
+      submit_unlock(id)
+    end
+
+    # Tells the site. The backend logs both outcomes; a submission the
+    # site didn't accept is currently just that log line - retrying it
+    # later is separate work, and this callback's ok is where it hooks
+    # in.
+    private def submit_unlock(id : UInt32) : Nil
+      @ra_backend.award_achievement(@config.ra_username, @config.ra_token, id, hardcore: false) { |_ok| }
+    end
+
+    # The RetroAchievements half of #handle_worker_message. Returns true
+    # when text was one of ours.
+    private def handle_ra_message(text : String) : Bool
+      if presence = text.lchop?("rich_presence:")
+        @ra_rich_presence = presence
+        Gemba.log { "RA: rich presence = #{presence}" }
+      elsif id = text.lchop?("achievement_unlocked:")
+        on_achievement_unlocked(id.to_u32)
+      elsif payload = text.lchop?("achievement_rejected:")
+        id, reason = payload.split(':', 2)
+        Gemba.log(SessionLogger::Level::Warn) { "RA: skipping achievement #{id} - #{reason}" }
+      elsif payload = text.lchop?("achievement_screenshot_result:")
+        finish_achievement_screenshot(payload)
+      else
+        return false
+      end
+      true
+    end
+
+    # Same upscale as a requested screenshot gets, minus the toast: the
+    # unlock's own toast is the one the player should be reading.
+    private def finish_achievement_screenshot(payload : String) : Nil
+      ok, filename = payload.split(':', 2)
+      unless ok == "true"
+        Gemba.log(SessionLogger::Level::Warn) { "RA: unlock screenshot failed" }
+        return
+      end
+
+      scale = @config.screenshot_scale
+      upscale_screenshot(File.join(Paths.screenshots_dir, filename.to_s), scale) if scale > 1
+      Gemba.log { "RA: unlock screenshot saved: #{filename}" }
     end
 
     # Patches game_code/rom_id onto the RomLibrary entry #remember just
@@ -639,17 +780,24 @@ module Gemba
         save_config
       end
 
+      # Both switches take effect on the ROM already running, rather
+      # than only on the next load.
       @events.ra_enabled_changed.connect do |enabled|
         @config.ra_enabled = enabled
         save_config
+        if enabled
+          @emulator_frame.try { |frame| start_ra_session(frame.worker.rom_path) }
+        else
+          stop_ra_session
+        end
       end
       @events.ra_rich_presence_changed.connect do |enabled|
         @config.ra_rich_presence = enabled
         save_config
-        # Takes effect on the ROM already running, rather than only on
-        # the next load.
         if enabled
-          @emulator_frame.try { |frame| start_rich_presence(frame.worker.rom_path) }
+          # Only once a session is up; if one is still being resolved,
+          # #begin_ra_session reads the switch itself when it lands.
+          @ra_game_id.try { |game_id| start_rich_presence(@config.ra_username, @config.ra_token, game_id) }
         else
           stop_rich_presence
         end
@@ -775,12 +923,8 @@ module Gemba
     private def handle_worker_message(text : String) : Nil
       # Handled before the 4-part split below, which would raise on a
       # message this shape (a presence string has no slot/ok fields, and
-      # can itself contain colons).
-      if presence = text.lchop?("rich_presence:")
-        @ra_rich_presence = presence
-        Gemba.log { "RA: rich presence = #{presence}" }
-        return
-      end
+      # can itself contain colons; an unlock is a bare id).
+      return if handle_ra_message(text)
 
       # Also handled up front: screenshot_result:<ok>:<filename> only
       # has 3 fields, not the 4 save_result/load_result carry - the

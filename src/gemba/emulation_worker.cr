@@ -4,6 +4,7 @@ require "./save_state_manager"
 require "./rom_info_data"
 require "./config"
 require "./achievements/ra_runtime"
+require "./achievements/achievement"
 
 module Gemba
   # Runs one loaded ROM's Core on its own OS thread (Tryst::BackgroundWork)
@@ -89,8 +90,12 @@ module Gemba
 
     # Fires for a non-frame message the worker sends back - currently
     # "save_result:<ok>:<slot>:<text>"/"load_result:<ok>:<slot>:<text>"/
-    # "screenshot_result:<ok>:<filename>", see
-    # #quick_save/#quick_load/#save_slot/#load_slot/#take_screenshot.
+    # "screenshot_result:<ok>:<filename>" (see #quick_save/#quick_load/
+    # #save_slot/#load_slot/#take_screenshot), "rich_presence:<text>"
+    # (#activate_rich_presence) and "achievement_unlocked:<id>"/
+    # "achievement_rejected:<id>:<reason>"/
+    # "achievement_screenshot_result:<ok>:<filename>"
+    # (#activate_achievements/#take_achievement_screenshot).
     def on_message(&block : String -> Nil) : self
       @background.on_message { |text| block.call(text) }
       self
@@ -126,6 +131,17 @@ module Gemba
       @background.send_message("screenshot:#{rom_title}")
     end
 
+    # The screenshot an achievement unlock takes automatically (see
+    # MainWindow's handling of "achievement_unlocked:"): same PNG as
+    # #take_screenshot, named <title>_achievement_<id>_<timestamp>.png
+    # so it's findable among ordinary screenshots, reported back as
+    # "achievement_screenshot_result:<ok>:<filename>" - its own tag
+    # because, unlike a screenshot the player asked for, this one
+    # shouldn't push a "Screenshot saved" toast over the unlock's own.
+    def take_achievement_screenshot(achievement_id : UInt32, rom_title : String) : Nil
+      @background.send_message("achievement_screenshot:#{achievement_id}:#{rom_title}")
+    end
+
     # Hands the game's Rich Presence script to the worker, which is
     # where the rcheevos runtime lives. Once loaded, the worker reports
     # the evaluated string back through #on_message as
@@ -134,7 +150,27 @@ module Gemba
       @background.send_message("ra_script:#{script}")
     end
 
-    def clear_rich_presence : Nil
+    # Loads achievements into the worker's rcheevos runtime, one
+    # message each (a memaddr can be long, and a single message per
+    # achievement keeps one rejected condition from taking the rest
+    # down with it). From then on every emulated frame evaluates them
+    # against live memory, and an id whose condition is met comes back
+    # through #on_message as "achievement_unlocked:<id>" - once per
+    # activation, rcheevos leaves a triggered achievement in its
+    # triggered state rather than re-firing it. One rcheevos rejects
+    # comes back as "achievement_rejected:<id>:<reason>" instead.
+    #
+    # Only ever hand this the achievements NOT already earned: the
+    # worker has no idea what the player has, and an earned one
+    # activated here would fire again as soon as its condition held.
+    def activate_achievements(achievements : Array(Achievements::Achievement)) : Nil
+      achievements.each do |achievement|
+        @background.send_message("ra_activate:#{achievement.id}:#{achievement.memaddr}")
+      end
+    end
+
+    # Drops every achievement and the presence script from the runtime.
+    def clear_ra_runtime : Nil
       @background.send_message("ra_clear")
     end
 
@@ -284,8 +320,10 @@ module Gemba
 
       # Lives on THIS thread, not the main one: evaluating conditions
       # means reading emulator memory through core.bus_read*, and Core
-      # is worker-thread-only. Only the resulting string crosses back,
-      # as a plain message.
+      # is worker-thread-only. Only the results cross back - the
+      # presence string and triggered achievement ids - as plain
+      # messages; which ids are already earned, and telling the site
+      # about a new one, is the main thread's business.
       ra_runtime = Achievements::RARuntime.new
       rich_presence = ""
 
@@ -305,7 +343,7 @@ module Gemba
         core.rewind_append unless state.rewind? && core.rewind_restore
         core.run_frame
 
-        rich_presence = evaluate_rich_presence(task, core, ra_runtime, frame_num, rich_presence)
+        rich_presence = evaluate_achievements(task, core, ra_runtime, frame_num, rich_presence)
 
         # Turbo runs ~TURBO_DIVISOR emulated frames per real-time frame
         # slot, but mGBA generates audio at its own fixed rate regardless
@@ -362,23 +400,28 @@ module Gemba
       view
     end
 
-    # Applies every currently-queued message. Returns true for a Stop
-    # control message (the caller's cue to break its frame loop) - pulled
-    # out of #run so the save/load-slot dispatch doesn't count against
-    # its own cyclomatic complexity.
-    # Steps the rcheevos runtime for this frame and, every
-    # RP_EVAL_INTERVAL frames, samples the presence string - sending it
+    # Steps the rcheevos runtime for this frame - reporting any
+    # achievement whose condition was just met - and, every
+    # RP_EVAL_INTERVAL frames, samples the presence string, sending it
     # to the main thread only when it actually changed. Returns the
     # current string so the caller can carry it to the next frame.
-    private def evaluate_rich_presence(task : Tryst::TaskContext(FramePacket), core : Core,
-                                       ra_runtime : Achievements::RARuntime,
-                                       frame_num : Int32, previous : String) : String
-      return previous unless ra_runtime.richpresence_active?
+    #
+    # No "skip when there are no achievements" guard on the presence
+    # half (ruby gemba has one, `return if @achievements.empty?`): a
+    # game with a presence script but no achievements is a real thing,
+    # and that guard would silently switch its presence off.
+    private def evaluate_achievements(task : Tryst::TaskContext(FramePacket), core : Core,
+                                      ra_runtime : Achievements::RARuntime,
+                                      frame_num : Int32, previous : String) : String
+      return previous unless ra_runtime.count > 0 || ra_runtime.richpresence_active?
 
       # do_frame is what refreshes rcheevos' cached memory values -
       # get_richpresence alone reads stale ones, so this runs every
       # frame even though the string is only sampled periodically.
-      ra_runtime.do_frame { |address, num_bytes| ra_peek(core, address, num_bytes) }
+      triggered = ra_runtime.do_frame { |address, num_bytes| ra_peek(core, address, num_bytes) }
+      triggered.each { |id| task.send_message("achievement_unlocked:#{id}") }
+
+      return previous unless ra_runtime.richpresence_active?
       return previous unless frame_num % RP_EVAL_INTERVAL == 0
 
       message = ra_runtime.get_richpresence { |address, num_bytes| ra_peek(core, address, num_bytes) }
@@ -418,18 +461,32 @@ module Gemba
     # The RetroAchievements half of the worker's message channel, split
     # out so #drain_messages' own dispatch stays under the complexity
     # limit. Returns true when msg was one of ours.
-    private def apply_ra_message(msg, ra_runtime : Achievements::RARuntime) : Bool
+    private def apply_ra_message(msg, task : Tryst::TaskContext(FramePacket),
+                                 ra_runtime : Achievements::RARuntime) : Bool
       return false unless msg.is_a?(String)
 
       if script = msg.lchop?("ra_script:")
         ra_runtime.activate_richpresence(script)
-        true
+      elsif payload = msg.lchop?("ra_activate:")
+        activate_achievement(payload, task, ra_runtime)
       elsif msg == "ra_clear"
         ra_runtime.clear
-        true
       else
-        false
+        return false
       end
+      true
+    end
+
+    # "<id>:<memaddr>" - split on the FIRST colon only, a condition
+    # string is free to contain more. A condition rcheevos won't parse
+    # is reported rather than raised: it's one bad row in the site's
+    # data, not a reason to stop emulating.
+    private def activate_achievement(payload : String, task : Tryst::TaskContext(FramePacket),
+                                     ra_runtime : Achievements::RARuntime) : Nil
+      id, memaddr = payload.split(':', 2)
+      ra_runtime.activate(id.to_u32, memaddr || "")
+    rescue ex : ArgumentError
+      task.send_message("achievement_rejected:#{id}:#{ex.message}")
     end
 
     # Writes Paths.screenshots_dir/<title>_<timestamp>.png straight from
@@ -463,6 +520,10 @@ module Gemba
       elsif rom_title = msg.lchop?("screenshot:")
         ok, filename = take_screenshot(core, rom_title)
         task.send_message("screenshot_result:#{ok}:#{filename}")
+      elsif payload = msg.lchop?("achievement_screenshot:")
+        achievement_id, rom_title = payload.split(':', 2)
+        ok, filename = take_screenshot(core, "#{rom_title}_achievement_#{achievement_id}")
+        task.send_message("achievement_screenshot_result:#{ok}:#{filename}")
       elsif frame_num = msg.lchop?("frame_done:")
         ring.release(frame_num.to_i)
       else
@@ -471,6 +532,10 @@ module Gemba
       true
     end
 
+    # Applies every currently-queued message. Returns true for a Stop
+    # control message (the caller's cue to break its frame loop) - the
+    # save/load-slot and RA dispatch live in their own methods so they
+    # don't count against this one's cyclomatic complexity.
     private def drain_messages(task : Tryst::TaskContext(FramePacket), core : Core,
                                save_states : SaveStateManager, state : WorkerState, ring : FrameRing,
                                ra_runtime : Achievements::RARuntime) : Bool
@@ -485,7 +550,7 @@ module Gemba
         else
           if apply_slot_message(msg, task, core, save_states, ring)
             # handled
-          elsif apply_ra_message(msg, ra_runtime)
+          elsif apply_ra_message(msg, task, ra_runtime)
             # handled
           elsif state.apply(msg)
             return true

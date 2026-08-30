@@ -297,3 +297,72 @@ describe "rich presence" do
     app.destroy
   end
 end
+
+private def achievement(id : UInt32, memaddr : String) : Gemba::Achievements::Achievement
+  Gemba::Achievements::Achievement.new(id: id, title: "Achievement #{id}", description: "", points: 5,
+    memaddr: memaddr, flags: Gemba::Achievements::Achievement::CORE)
+end
+
+describe "achievements" do
+  # A hit-count target (see ra_runtime_spec's own note on WAITING) so
+  # the condition is met after a known number of frames regardless of
+  # what the ROM keeps at that address.
+  it "reports an activated achievement's id once its condition is met, and only once" do
+    app = Tryst::App.new(title: "emulation_worker_spec_ach")
+    worker = Gemba::EmulationWorker.new(app, FILL_ROM)
+
+    messages = [] of String
+    worker.on_message { |text| messages << text }
+    frames = 0
+    worker.on_frame { frames += 1 }
+
+    worker.activate_achievements([achievement(9_u32, "0xH0000>=0.30.")])
+
+    app.interp.wait_until(15.seconds) { messages.includes?("achievement_unlocked:9") }
+
+    # Keep emulating well past the trigger: a triggered achievement
+    # stays triggered in rcheevos, it does not fire every frame after.
+    seen_at = frames
+    app.interp.wait_until(15.seconds) { frames >= seen_at + 60 }
+    messages.count("achievement_unlocked:9").should eq 1
+
+    worker.stop
+    app.interp.wait_until(5.seconds) { worker.done? }
+    app.destroy
+  end
+
+  it "reports a condition rcheevos rejects rather than dying on it, and keeps the rest" do
+    app = Tryst::App.new(title: "emulation_worker_spec_ach_bad")
+    worker = Gemba::EmulationWorker.new(app, FILL_ROM)
+
+    messages = [] of String
+    worker.on_message { |text| messages << text }
+
+    worker.activate_achievements([achievement(5_u32, "not a valid condition ((("), achievement(6_u32, "0xH0000>=0.3.")])
+
+    app.interp.wait_until(15.seconds) { messages.includes?("achievement_unlocked:6") }
+    rejected = messages.find(&.starts_with?("achievement_rejected:5:")).should_not be_nil
+    rejected.should contain "rcheevos rejected"
+    messages.should_not contain "achievement_unlocked:5"
+
+    worker.stop
+    app.interp.wait_until(5.seconds) { worker.done? }
+    app.destroy
+  end
+
+  it "keeps evaluating a presence script for a game with no achievements at all" do
+    app = Tryst::App.new(title: "emulation_worker_spec_ach_rp_only")
+    worker = Gemba::EmulationWorker.new(app, FILL_ROM)
+
+    messages = [] of String
+    worker.on_message { |text| messages << text }
+    worker.activate_rich_presence("Display:\nIWRAM0 @Number(0xH0000)")
+
+    app.interp.wait_until(15.seconds) { messages.any?(&.starts_with?("rich_presence:")) }
+    messages.none?(&.starts_with?("achievement_unlocked:")).should be_true
+
+    worker.stop
+    app.interp.wait_until(5.seconds) { worker.done? }
+    app.destroy
+  end
+end

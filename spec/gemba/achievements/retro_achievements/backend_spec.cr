@@ -107,29 +107,145 @@ describe "rich presence requests" do
     app.destroy
   end
 
-  it "#fetch_rich_presence_script pulls PatchData.RichPresencePatch" do
-    app, backend = build do |_params|
-      {JSON.parse(%({"PatchData":{"RichPresencePatch":"Display:\\nIn Littleroot Town"}})), true}
-    end
+  it "#fetch_patch pulls the script and the filtered achievement list out of PatchData" do
+    patch_json = <<-'JSON'
+      {"PatchData":{"RichPresencePatch":"Display:\nIn Littleroot Town","Achievements":[
+        {"ID":1,"Title":"First","Description":"d","Points":5,"MemAddr":"0xH0000=1","Flags":3},
+        {"ID":2,"Title":"Unofficial","Points":1,"MemAddr":"0xH0001=1","Flags":5}
+      ]}}
+      JSON
+    app, backend = build { |_params| {JSON.parse(patch_json), true} }
 
-    script = nil
+    patch = nil
     done = false
-    backend.fetch_rich_presence_script("someone", "tok", 515_i64) { |got| script = got; done = true }
+    backend.fetch_patch("someone", "tok", 515_i64) { |got| patch = got; done = true }
     app.interp.wait_until(5.seconds) { done }
 
-    script.should eq "Display:\nIn Littleroot Town"
+    got = patch.should_not be_nil
+    got.script.should eq "Display:\nIn Littleroot Town"
+    got.achievements.map(&.id).should eq [1_u32]
+    got.achievements[0].title.should eq "First"
+    got.achievements[0].memaddr.should eq "0xH0000=1"
     app.destroy
   end
 
-  it "#fetch_rich_presence_script yields nil when the game has no script" do
-    app, backend = build { |_params| {JSON.parse(%({"PatchData":{"RichPresencePatch":""}})), true} }
+  it "#fetch_patch include_unofficial: true keeps the Flags 5 entries too" do
+    patch_json = <<-JSON
+      {"PatchData":{"RichPresencePatch":"","Achievements":[
+        {"ID":1,"Title":"First","Points":5,"MemAddr":"0xH0000=1","Flags":3},
+        {"ID":2,"Title":"Unofficial","Points":1,"MemAddr":"0xH0001=1","Flags":5}
+      ]}}
+      JSON
+    app, backend = build { |_params| {JSON.parse(patch_json), true} }
 
-    script = "unset"
+    patch = nil
     done = false
-    backend.fetch_rich_presence_script("someone", "tok", 515_i64) { |got| script = got; done = true }
+    backend.fetch_patch("someone", "tok", 515_i64, include_unofficial: true) { |got| patch = got; done = true }
     app.interp.wait_until(5.seconds) { done }
 
-    script.should be_nil
+    got = patch.should_not be_nil
+    got.script.should be_nil
+    got.achievements.map(&.id).should eq [1_u32, 2_u32]
+    app.destroy
+  end
+
+  it "#fetch_patch yields nil when the request fails" do
+    app, backend = build { |_params| {nil, false} }
+
+    patch = "unset".as((Gemba::Achievements::RetroAchievements::Backend::Patch | String)?)
+    done = false
+    backend.fetch_patch("someone", "tok", 515_i64) { |got| patch = got; done = true }
+    app.interp.wait_until(5.seconds) { done }
+
+    patch.should be_nil
+    app.destroy
+  end
+
+  it "#fetch_unlocks sends h=0 and yields the already-earned ids" do
+    sent = nil
+    app, backend = build do |params|
+      sent = params
+      {JSON.parse(%({"Success":true,"GameID":515,"UserUnlocks":[3,"7"]})), true}
+    end
+
+    earned = nil
+    done = false
+    backend.fetch_unlocks("someone", "tok", 515_i64) { |got| earned = got; done = true }
+    app.interp.wait_until(5.seconds) { done }
+
+    earned.should eq Set{3_u32, 7_u32}
+    params = sent.should_not be_nil
+    params["r"].should eq "unlocks"
+    params["g"].should eq "515"
+    params["h"].should eq "0"
+    app.destroy
+  end
+
+  it "#fetch_unlocks yields nil (not an empty set) when the server refuses" do
+    app, backend = build { |_params| {JSON.parse(%({"Success":false,"Error":"Invalid token."})), true} }
+
+    earned = Set{1_u32}.as(Set(UInt32)?)
+    done = false
+    backend.fetch_unlocks("someone", "tok", 515_i64) { |got| earned = got; done = true }
+    app.interp.wait_until(5.seconds) { done }
+
+    earned.should be_nil
+    app.destroy
+  end
+
+  it "#award_achievement posts a=<id> h=0 and reports the server's acceptance" do
+    sent = nil
+    app, backend = build do |params|
+      sent = params
+      {JSON.parse(%({"Success":true,"AchievementID":42,"Score":1234})), true}
+    end
+
+    ok = nil
+    backend.award_achievement("someone", "tok", 42_u32) { |success| ok = success }
+    app.interp.wait_until(5.seconds) { !ok.nil? }
+
+    ok.should be_true
+    params = sent.should_not be_nil
+    params["r"].should eq "awardachievement"
+    params["a"].should eq "42"
+    params["h"].should eq "0"
+    app.destroy
+  end
+
+  it "#award_achievement hardcore: true sends h=1" do
+    sent = nil
+    app, backend = build do |params|
+      sent = params
+      {JSON.parse(%({"Success":true})), true}
+    end
+
+    ok = nil
+    backend.award_achievement("someone", "tok", 42_u32, hardcore: true) { |success| ok = success }
+    app.interp.wait_until(5.seconds) { !ok.nil? }
+
+    sent.should_not(be_nil).["h"].should eq "1"
+    app.destroy
+  end
+
+  it "#award_achievement reports false when the server refuses the unlock" do
+    app, backend = build { |_params| {JSON.parse(%({"Success":false,"Error":"Achievement not found"})), true} }
+
+    ok = nil
+    backend.award_achievement("someone", "tok", 42_u32) { |success| ok = success }
+    app.interp.wait_until(5.seconds) { !ok.nil? }
+
+    ok.should be_false
+    app.destroy
+  end
+
+  it "#award_achievement reports false when the request itself fails" do
+    app, backend = build { |_params| {nil, false} }
+
+    ok = nil
+    backend.award_achievement("someone", "tok", 42_u32) { |success| ok = success }
+    app.interp.wait_until(5.seconds) { !ok.nil? }
+
+    ok.should be_false
     app.destroy
   end
 

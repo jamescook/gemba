@@ -12,6 +12,25 @@ describe Gemba::Achievements::RARuntime do
     runtime.do_frame { |_addr, _nbytes| mem }.should eq [7_u32]
   end
 
+  # rcheevos starts a freshly-activated achievement WAITING if its
+  # condition already holds, and only arms it once the condition has
+  # been false (so loading a state where it holds can't award it). A
+  # hit-count target sidesteps that: `>=0.3.` is "true on 3 frames",
+  # unmet at activation no matter what memory holds, so it arms at once
+  # and fires deterministically 3 frames later - the shape the worker
+  # and window specs rely on to trigger something without knowing a
+  # ROM's RAM layout.
+  it "a hit-count target arms immediately and fires once the count is reached" do
+    runtime = Gemba::Achievements::RARuntime.new
+    runtime.activate(9_u32, "0xH0000>=0.3.")
+
+    runtime.do_frame { |_addr, _nbytes| 0_u32 }.should be_empty
+    runtime.do_frame { |_addr, _nbytes| 0_u32 }.should be_empty
+    runtime.do_frame { |_addr, _nbytes| 0_u32 }.should eq [9_u32]
+    # Stays triggered rather than firing again every frame.
+    runtime.do_frame { |_addr, _nbytes| 0_u32 }.should be_empty
+  end
+
   it "#activate raises ArgumentError for a memaddr rcheevos rejects" do
     runtime = Gemba::Achievements::RARuntime.new
     expect_raises(ArgumentError) { runtime.activate(1_u32, "not a valid condition (((") }

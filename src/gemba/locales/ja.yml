@@ -34,6 +34,7 @@ toast:
   created_sav: "{name}を作成しました"
   screenshot_saved: "スクリーンショットを保存: {name}"
   screenshot_failed: "スクリーンショットに失敗しました"
+  achievement_unlocked: "{title}（{points}pt）"
   rewound: "巻き戻しました"
   no_rewind: "巻き戻しデータがありません"
   paused: "一時停止"

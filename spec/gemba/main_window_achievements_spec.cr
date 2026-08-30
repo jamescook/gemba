@@ -89,6 +89,56 @@ end
 
 private FILL_ROM = File.join(__DIR__, "..", "fixtures", "fill.gba")
 
+# Keeps Tk and the spawned request/worker-message fibers serviced for
+# a while - for asserting that something does NOT happen, where there
+# is nothing to wait_until on.
+private def pump(window : Gemba::MainWindow, duration : Time::Span) : Nil
+  deadline = Time.monotonic + duration
+  while Time.monotonic < deadline
+    window.app.update
+    sleep 20.milliseconds
+  end
+end
+
+# #stop only sends the worker a Stop message - asynchronous, per
+# BackgroundWork#close - so it has to be awaited via #done? before
+# destroying the app out from under it. Skipping this raced the
+# worker's per-frame evaluation against Tk/SDL viewport teardown often
+# enough to segfault under Docker/Xvfb - not a flake, reproduced every
+# time a window spec ran after any other window in the same process.
+private def stop_worker_then_destroy(window : Gemba::MainWindow) : Nil
+  if worker = window.worker
+    worker.stop
+    window.app.interp.wait_until(5.seconds) { worker.done? }
+  end
+  window.app.destroy
+end
+
+private def index_of(fake : Gemba::Achievements::RetroAchievements::FakeRequester, r : String) : Int32
+  fake.requests.index { |request| request["r"]? == r } || -1
+end
+
+private def ra_window(dir : String, fake : Gemba::Achievements::RetroAchievements::FakeRequester) : Gemba::MainWindow
+  window = Gemba::MainWindow.new(
+    rom_library_path: File.join(dir, "rom_library.json"),
+    config_path: File.join(dir, "settings.json"),
+    gamepad_polling: false,
+    ra_requester: fake.to_proc,
+  )
+  window.config.ra_enabled = true
+  window.config.ra_rich_presence = false
+  window.config.ra_screenshot_on_unlock = false
+  window.config.ra_username = "someone"
+  window.config.ra_token = "tok123"
+  window
+end
+
+# A hit-count target - met after N frames whatever the ROM keeps at
+# that address; see ra_runtime_spec's note on rcheevos' WAITING state.
+private def fake_achievement(id : Int64, title : String, frames : Int32 = 30) : JSON::Any
+  Gemba::Achievements::RetroAchievements::FakeRequester.achievement(id, "0xH0000>=0.#{frames}.", title: title)
+end
+
 describe Gemba::MainWindow do
   describe "rich presence" do
     # Orchestration only: hash -> gameid -> patch -> first ping. That
@@ -142,7 +192,7 @@ describe Gemba::MainWindow do
       end
     end
 
-    it "stays off when the rich presence switch is disabled" do
+    it "stays off when the rich presence switch is disabled, while achievements still load" do
       with_tempdir do |dir|
         fake = Gemba::Achievements::RetroAchievements::FakeRequester.new
 
@@ -160,10 +210,12 @@ describe Gemba::MainWindow do
           window.config.ra_token = "tok123"
 
           window.load_rom(FILL_ROM)
-          sleep 500.milliseconds
-          window.app.update
+          window.app.interp.wait_until(10.seconds) do
+            fake.requests.any? { |request| request["r"]? == "unlocks" }
+          end
+          pump(window, 500.milliseconds)
 
-          fake.requests.any? { |request| request["r"]? == "gameid" }.should be_false
+          fake.requests.any? { |request| request["r"]? == "ping" }.should be_false
         ensure
           # See the "starts the ping heartbeat" test above: #stop is
           # async, so it has to be awaited via #done? before destroying
@@ -173,6 +225,122 @@ describe Gemba::MainWindow do
             window.app.interp.wait_until(5.seconds) { worker.done? }
           end
           window.app.destroy
+        end
+      end
+    end
+  end
+end
+
+describe Gemba::MainWindow do
+  describe "achievement unlocks" do
+    it "awards a triggered achievement exactly once, after unlocks are known, and never one already earned" do
+      with_tempdir do |dir|
+        fake = Gemba::Achievements::RetroAchievements::FakeRequester.new(
+          game_id: 515_i64, script: nil,
+          achievements: [fake_achievement(1_i64, "Thirty frames"), fake_achievement(2_i64, "Already mine")],
+          unlocked: [2_i64])
+        window = ra_window(dir, fake)
+
+        begin
+          window.load_rom(FILL_ROM)
+          window.app.interp.wait_until(15.seconds) { !fake.awarded_ids.empty? }
+          # Both conditions are identical and both would have fired by
+          # now if #2 had been activated too.
+          pump(window, 1.second)
+
+          fake.awarded_ids.should eq [1_i64]
+          award = fake.requests.find { |request| request["r"]? == "awardachievement" }.should_not be_nil
+          award["a"].should eq "1"
+          award["h"].should eq "0"
+          award["u"].should eq "someone"
+
+          # The site is asked in this order, and nothing is activated
+          # (so nothing can trigger) until the unlocks reply is in.
+          index_of(fake, "gameid").should be < index_of(fake, "patch")
+          index_of(fake, "patch").should be < index_of(fake, "unlocks")
+          index_of(fake, "unlocks").should be < index_of(fake, "awardachievement")
+
+          by_id = window.ra_achievements.to_h { |achievement| {achievement.id, achievement} }
+          by_id[1_u32].earned?.should be_true
+          by_id[2_u32].earned?.should be_true
+          by_id[1_u32].title.should eq "Thirty frames"
+
+          # No rich presence, no heartbeat - achievements alone don't ping.
+          fake.requests.any? { |request| request["r"]? == "ping" }.should be_false
+        ensure
+          stop_worker_then_destroy(window)
+        end
+      end
+    end
+
+    it "activates nothing when the unlocks reply fails - it cannot tell what is already earned" do
+      with_tempdir do |dir|
+        fake = Gemba::Achievements::RetroAchievements::FakeRequester.new(
+          game_id: 515_i64, script: nil, achievements: [fake_achievement(1_i64, "Would fire", frames: 5)])
+        fake.unlocks_fail = true
+        window = ra_window(dir, fake)
+
+        begin
+          window.load_rom(FILL_ROM)
+          window.app.interp.wait_until(15.seconds) { index_of(fake, "unlocks") >= 0 }
+          pump(window, 1.second)
+
+          fake.awarded_ids.should be_empty
+          window.ra_achievements.should be_empty
+        ensure
+          stop_worker_then_destroy(window)
+        end
+      end
+    end
+
+    it "still reports an unlock the site refused, so a caller can see the failure" do
+      with_tempdir do |dir|
+        fake = Gemba::Achievements::RetroAchievements::FakeRequester.new(
+          game_id: 515_i64, script: nil, achievements: [fake_achievement(1_i64, "Refused", frames: 5)])
+        fake.award_fails = true
+        window = ra_window(dir, fake)
+
+        begin
+          window.load_rom(FILL_ROM)
+          window.app.interp.wait_until(15.seconds) { !fake.awarded_ids.empty? }
+          pump(window, 500.milliseconds)
+
+          # Marked earned locally regardless - the player DID earn it;
+          # only the site's record is missing. Not re-submitted here:
+          # retrying is separate work.
+          fake.awarded_ids.should eq [1_i64]
+          window.ra_achievements[0].earned?.should be_true
+        ensure
+          stop_worker_then_destroy(window)
+        end
+      end
+    end
+
+    # Writes into the real screenshots dir, same as main_window_spec's
+    # own #take_screenshot test and for the same reason (see there);
+    # cleaned up in ensure.
+    it "takes the unlock screenshot when the setting is on" do
+      with_tempdir do |dir|
+        fake = Gemba::Achievements::RetroAchievements::FakeRequester.new(
+          game_id: 515_i64, script: nil, achievements: [fake_achievement(7_i64, "Snapped", frames: 5)])
+        window = ra_window(dir, fake)
+        window.config.ra_screenshot_on_unlock = true
+        before = Dir.exists?(Gemba::Paths.screenshots_dir) ? Dir.children(Gemba::Paths.screenshots_dir) : [] of String
+        new_files = [] of String
+
+        begin
+          window.load_rom(FILL_ROM)
+          window.app.interp.wait_until(15.seconds) do
+            new_files = Dir.exists?(Gemba::Paths.screenshots_dir) ? Dir.children(Gemba::Paths.screenshots_dir) - before : [] of String
+            new_files.size == 1
+          end
+          pump(window, 500.milliseconds)
+
+          new_files.first.should start_with "fill_achievement_7_"
+          new_files.first.should end_with ".png"
+        ensure
+          stop_worker_then_destroy(window)
+          new_files.each { |name| File.delete?(File.join(Gemba::Paths.screenshots_dir, name)) }
         end
       end
     end
