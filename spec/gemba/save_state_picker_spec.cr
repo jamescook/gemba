@@ -62,11 +62,12 @@ describe Gemba::SaveStatePicker do
     end
   end
 
-  it "#refresh loads a real thumbnail PNG, subsampled to thumbnail size" do
+  it "#refresh loads the thumbnail straight from a PNG state file, subsampled to thumbnail size" do
     with_tempdir do |dir|
       app, picker = build("save_state_picker_spec_2")
-      File.write(Gemba::SaveStateManager.state_path(dir, 3), "fake state")
-      write_fixture_png(app, Gemba::SaveStateManager.screenshot_path(dir, 3))
+      # mgba writes states as real PNGs (see Core#save_state_to_file);
+      # a Tk-written PNG at the state path stands in for one here.
+      write_fixture_png(app, Gemba::SaveStateManager.state_path(dir, 3))
 
       picker.refresh(dir, quick_slot: 1)
 
@@ -76,6 +77,22 @@ describe Gemba::SaveStatePicker do
       image_name.should_not be_empty
       app.tcl_invoke("image", "width", image_name).to_i.should eq Gemba::SaveStatePicker::THUMB_W
       app.tcl_invoke("image", "height", image_name).to_i.should eq Gemba::SaveStatePicker::THUMB_H
+
+      app.destroy
+    end
+  end
+
+  it "#refresh falls back to the legacy state<slot>.png beside a non-PNG state file" do
+    with_tempdir do |dir|
+      app, picker = build("save_state_picker_spec_8")
+      File.write(Gemba::SaveStateManager.state_path(dir, 3), "fake state")
+      write_fixture_png(app, Gemba::SaveStateManager.screenshot_path(dir, 3))
+
+      picker.refresh(dir, quick_slot: 1)
+
+      thumb3 = "#{cell_path(picker, 3)}.thumb"
+      app.command(thumb3, :cget, "-text").should eq ""
+      app.command(thumb3, :cget, "-image").should_not be_empty
 
       app.destroy
     end

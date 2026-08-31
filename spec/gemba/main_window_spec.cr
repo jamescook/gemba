@@ -265,7 +265,7 @@ describe Gemba::MainWindow do
     end
   end
 
-  it "double-clicking an empty slot in the real, wired-up picker saves a state and writes its thumbnail" do
+  it "double-clicking an empty slot in the real, wired-up picker saves a state that is its own thumbnail" do
     with_tempdir do |dir|
       window = new_window(dir)
       window.load_rom(SPACE_BLAST_ROM)
@@ -282,8 +282,17 @@ describe Gemba::MainWindow do
       raise "expected an emulator frame after load_rom" unless frame
       state_dir = frame.state_dir
       raise "expected a state_dir once show_save_states has succeeded" unless state_dir
-      window.app.interp.wait_until(5.seconds) { File.exists?(Gemba::SaveStateManager.state_path(state_dir, 1)) }
-      window.app.interp.wait_until(5.seconds) { File.exists?(Gemba::SaveStateManager.screenshot_path(state_dir, 1)) }
+      state_path = Gemba::SaveStateManager.state_path(state_dir, 1)
+      window.app.interp.wait_until(5.seconds) { File.exists?(state_path) }
+      # No separate thumbnail PNG anymore: the state file itself is a
+      # PNG whose visible image is the screenshot (see
+      # Core#save_state_to_file), and the picker loads it directly.
+      png_magic = Bytes[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
+      window.app.interp.wait_until(5.seconds) do
+        File.size(state_path) >= png_magic.size &&
+          File.read(state_path).to_slice[0, png_magic.size] == png_magic
+      end
+      File.exists?(Gemba::SaveStateManager.screenshot_path(state_dir, 1)).should be_false
 
       window.worker.try(&.stop)
       window.destroy

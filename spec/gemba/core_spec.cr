@@ -121,6 +121,12 @@ describe Gemba::Core do
       10.times { core.run_frame }
       core.save_state_to_file(path).should be_true
 
+      # The state file is a real PNG (screenshot as the visible image,
+      # state in private chunks) - what SaveStatePicker's direct
+      # .ss-as-thumbnail loading relies on. See Core#save_state_to_file.
+      png_magic = Bytes[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
+      File.read(path).to_slice[0, png_magic.size].should eq png_magic
+
       core.run_frame
       frame_after_save = core.video_buffer.dup
 

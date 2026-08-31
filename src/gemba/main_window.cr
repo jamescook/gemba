@@ -1150,7 +1150,6 @@ module Gemba
       when "save_result"
         if ok == "true"
           @video.show_toast(Locale.translate("toast.state_saved", slot: slot))
-          write_state_thumbnail(slot.to_i)
         else
           STDERR.puts "[Gemba] #{message}"
         end
@@ -1169,30 +1168,9 @@ module Gemba
       end
     end
 
-    # Writes the current frame as this slot's thumbnail PNG - the
-    # state_dir/state<slot>.ss the worker just wrote to already exists
-    # (SaveStateManager#save_state creates it before saving), so this
-    # never needs its own mkdir_p.
-    private def write_state_thumbnail(slot : Int32) : Nil
-      bytes = @video.last_frame_argb
-      return unless bytes
-
-      dir = @emulator_frame.try(&.state_dir)
-      return unless dir
-
-      path = SaveStateManager.screenshot_path(dir, slot)
-      photo = Tryst::Photo.new(@app, width: @video.native_width, height: @video.native_height)
-      begin
-        photo.put_zoomed_block(bytes, @video.native_width, @video.native_height, format: Tryst::PixelFormat::ARGB)
-        photo.command(:write, path, format: "png")
-      ensure
-        photo.delete
-      end
-    end
-
     # Rewrites path in place at scale x its native size, via Tk::Photo's
-    # own PNG codec (same as #write_state_thumbnail) rather than a
-    # Crystal-side one. Runs on the Tk thread, same as every other Photo
+    # own PNG codec rather than a Crystal-side one. Runs on the Tk
+    # thread, same as every other Photo
     # write in this class - the file is tiny (native 240x160 GBA
     # resolution), so this is a fast local round-trip, not a real
     # blocking-syscall concern.
@@ -1215,12 +1193,10 @@ module Gemba
     end
 
     # Takes the RAW emulator frame straight from the core (see
-    # Core#take_screenshot_to_file) - deliberately NOT the same
-    # post-color-correction/frame-blending frame VideoOutput displays
-    # (that's what write_state_thumbnail uses for save-state thumbnails,
-    # where matching what's on screen actually matters). The core's own
-    # PNG encoder is the canonical screenshot and needs no Tk::Photo
-    # round-trip; runs on the worker thread since Core is
+    # Core#take_screenshot_to_file) - deliberately NOT the
+    # post-color-correction/frame-blending frame VideoOutput displays.
+    # The core's own PNG encoder is the canonical screenshot and needs
+    # no Tk::Photo round-trip; runs on the worker thread since Core is
     # worker-thread-only, reporting back through handle_worker_message.
     def take_screenshot : Nil
       @emulator_frame.try(&.take_screenshot)

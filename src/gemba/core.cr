@@ -31,9 +31,10 @@ module Gemba
 
     # mgba/core/serialize.h's SAVESTATE_* flags - a real @[Flags] enum
     # rather than the header's own bare numbers, so ALL (what
-    # save_state_to_file/load_state_from_file always pass) is the OR of
-    # every flag, computed by Crystal, not a magic 31 copied down.
-    # Declaration order matches the header's own bit order exactly.
+    # save_state_to_file passes; load passes a narrower set - see its
+    # doc comment) is the OR of every flag, computed by Crystal, not a
+    # magic 31 copied down. Declaration order matches the header's own
+    # bit order exactly.
     @[Flags]
     enum SaveStateFlags
       Screenshot
@@ -255,11 +256,15 @@ module Gemba
     end
 
     # Saves the complete emulator state (SAVESTATE_ALL: screenshot,
-    # save data, cheats, RTC, metadata) to path. Returns false rather
-    # than raising if libmgba itself reports failure (a full disk, a
-    # permissions problem) - matches gemba-core's own C ext, which
-    # never had access to a real path-writability check ahead of time
-    # either.
+    # save data, cheats, RTC, metadata) to path. With the Screenshot
+    # flag set, mgba (the vendored build has USE_PNG on) writes the
+    # state file as a real PNG: the screenshot is the visible image and
+    # the emulator state rides in private gbAs/gbAx chunks any PNG
+    # decoder ignores - which is what lets SaveStatePicker load .ss
+    # files directly as thumbnails. Returns false rather than raising
+    # if libmgba itself reports failure (a full disk, a permissions
+    # problem) - matches gemba-core's own C ext, which never had access
+    # to a real path-writability check ahead of time either.
     def save_state_to_file(path : String) : Bool
       raise_if_destroyed!
       vf = LibMgba.VFileOpen(path, LibC::O_CREAT | LibC::O_TRUNC | LibC::O_WRONLY)
@@ -269,19 +274,32 @@ module Gemba
       ok
     end
 
+    # Loads with mGBA Qt's own default LOAD flags (Screenshot | Rtc),
+    # not SAVESTATE_ALL like saving - a deliberate divergence from
+    # ruby gemba's C ext, which passed ALL both ways. On load the flags
+    # only gate extdata SIDE EFFECTS: the state blob itself (CPU,
+    # memory, video) always restores in full, and embedded savedata
+    # still restores into RAM either way (serialize.c passes
+    # `flags & SAVESTATE_SAVEDATA` to savedataRestore only as its
+    # write-back bool). Omitting SaveData means loading an old state
+    # never clobbers the on-disk .sav with the stale copy inside the
+    # state - an in-game save made since the state survives; omitting
+    # Cheats means a state can't resurrect cheats (no cheat UI here
+    # anyway). Screenshot paints the state's embedded frame immediately
+    # rather than leaving the pre-load frame up.
     def load_state_from_file(path : String) : Bool
       raise_if_destroyed!
       vf = LibMgba.VFileOpen(path, LibC::O_RDONLY)
       return false if vf.null?
-      ok = LibMgba.mCoreLoadStateNamed(@core, vf.as(Void*), SaveStateFlags::All.value)
+      flags = SaveStateFlags::Screenshot | SaveStateFlags::Rtc
+      ok = LibMgba.mCoreLoadStateNamed(@core, vf.as(Void*), flags.value)
       vf.value.close.call(vf.as(Void*))
       ok
     end
 
     # Writes the RAW current frame (pre color-correction/frame-blending -
     # the canonical screenshot) straight to a PNG at path via libmgba's
-    # own encoder. No Crystal-side Tk::Photo round-trip needed, unlike
-    # the save-state thumbnails in MainWindow#write_state_thumbnail.
+    # own encoder. No Crystal-side Tk::Photo round-trip needed.
     def take_screenshot_to_file(path : String) : Bool
       raise_if_destroyed!
       vf = LibMgba.VFileOpen(path, LibC::O_CREAT | LibC::O_TRUNC | LibC::O_WRONLY)

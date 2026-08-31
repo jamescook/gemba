@@ -119,11 +119,28 @@ module Gemba
     private def scan(state_dir : String) : Array(SlotInfo)
       (1..SLOTS).map do |slot|
         ss = SaveStateManager.state_path(state_dir, slot)
-        png = SaveStateManager.screenshot_path(state_dir, slot)
         populated = File.exists?(ss)
         mtime = populated ? File.info(ss).modification_time.to_local.to_s("%b %d %H:%M") : ""
-        SlotInfo.new(populated, populated && File.exists?(png), mtime)
+        has_thumb = populated &&
+                    (png_file?(ss) || File.exists?(SaveStateManager.screenshot_path(state_dir, slot)))
+        SlotInfo.new(populated, has_thumb, mtime)
       end
+    end
+
+    PNG_MAGIC = Bytes[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
+
+    # mgba (built with USE_PNG, as the vendored build is) writes states
+    # saved with the Screenshot flag as real PNG files - the screenshot
+    # is the visible image, the emulator state rides in private
+    # gbAs/gbAx chunks Tk's PNG codec ignores. So the state file IS its
+    # own thumbnail (see Core#save_state_to_file). Blocking I/O - runs
+    # inside #scan's off_thread hop, same as its File.exists? calls.
+    private def png_file?(path : String) : Bool
+      header = Bytes.new(PNG_MAGIC.size)
+      read = File.open(path, &.read(header))
+      read == PNG_MAGIC.size && header == PNG_MAGIC
+    rescue IO::Error
+      false
     end
 
     private def update_cell(slot : Int32, info : SlotInfo) : Nil
@@ -144,19 +161,28 @@ module Gemba
         relief: highlighted ? "solid" : "groove", borderwidth: highlighted ? 3 : 2)
     end
 
-    # Returns nil (leaving the blank placeholder up) if the PNG is
-    # missing or unreadable, rather than raising - a corrupt/half-written
-    # thumbnail shouldn't take the whole picker down.
+    # The state file itself first (it's a PNG with the screenshot as its
+    # visible image - see #png_file?), then the legacy separate
+    # state<slot>.png older sessions wrote. Returns nil (leaving the
+    # blank placeholder up) if neither loads.
     private def load_thumbnail(slot : Int32) : Tryst::Photo?
-      cell = @cells[slot - 1]
-      png_path = SaveStateManager.screenshot_path(@state_dir, slot)
+      thumb = photo_thumb(SaveStateManager.state_path(@state_dir, slot)) ||
+              photo_thumb(SaveStateManager.screenshot_path(@state_dir, slot))
+      return unless thumb
 
-      source = Tryst::Photo.new(@app, file: png_path)
+      cell = @cells[slot - 1]
+      @app.command(cell.thumb, :configure, image: thumb.name, compound: :none, text: "")
+      thumb
+    end
+
+    # Returns nil if the file is missing or Tk can't decode it, rather
+    # than raising - a corrupt/half-written file shouldn't take the
+    # whole picker down.
+    private def photo_thumb(path : String) : Tryst::Photo?
+      source = Tryst::Photo.new(@app, file: path)
       thumb = Tryst::Photo.new(@app, width: THUMB_W, height: THUMB_H)
       thumb.command(:copy, source.name, subsample: 2)
       source.delete
-
-      @app.command(cell.thumb, :configure, image: thumb.name, compound: :none, text: "")
       thumb
     rescue Tryst::TclError
       nil

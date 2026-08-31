@@ -47,9 +47,12 @@ module Gemba
       File.join(state_dir, "state#{slot}.ss")
     end
 
-    # The per-slot thumbnail PNG's path - written by the main thread
-    # (VideoOutput#last_frame_argb, see MainWindow) once a save succeeds,
-    # not by this class - see the class comment on why.
+    # LEGACY per-slot thumbnail PNG's path. Older sessions wrote a
+    # separate state<slot>.png beside each save; nothing writes these
+    # anymore - the state file itself is a PNG whose visible image is
+    # the screenshot (see Core#save_state_to_file) and the picker loads
+    # it directly. Kept only as SaveStatePicker's read fallback for
+    # states saved before that change.
     def self.screenshot_path(state_dir : String, slot : Int32) : String
       File.join(state_dir, "state#{slot}.png")
     end
