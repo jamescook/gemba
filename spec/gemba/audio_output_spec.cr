@@ -27,12 +27,16 @@ describe Gemba::AudioOutput do
     output.destroy
   end
 
+  # Muting drops the stream's gain to 0.0 rather than stopping the
+  # queue, so the samples still go in - EmulationWorker paces off
+  # #fill_ratio, and a muted run must pace exactly like an unmuted one.
   it "#muted= silences without changing the queued byte count" do
     muted = Gemba::AudioOutput.new
     muted.muted = true
     samples = Slice(Int16).new(4410 * 2, 1000_i16)
     muted.queue(samples)
     muted.fill_ratio.should be > 0.0
+    muted.@stream.gain.should eq 0.0_f32
     muted.destroy
   end
 
@@ -52,50 +56,56 @@ describe Gemba::AudioOutput do
     output.destroy
   end
 
-  # #queue's scaled/muted paths reuse one scratch buffer instead of
-  # allocating a fresh one every frame - this is the actual perf fix
-  # under test. Warms the scratch buffer at this frame size first, then
-  # measures a steady run of same-size frames.
-  it "#queue allocates nothing at steady frame size, scaled or muted" do
+  # #queue hands SDL a zero-copy reinterpret of the caller's slice at
+  # EVERY volume, since the stream's gain does the scaling - so there is
+  # no scaled path to allocate for, and no warm-up needed to prove it.
+  it "#queue allocates nothing, at any volume and muted" do
     output = Gemba::AudioOutput.new
     output.volume = 0.5
     samples = Slice(Int16).new(4410 * 2, 1000_i16)
 
-    output.queue(samples) # warm up (first call at this size may allocate)
     GC.collect
     before = GC.stats.total_bytes
     50.times { output.queue(samples) }
-    after = GC.stats.total_bytes
-    (after - before).should eq 0
+    (GC.stats.total_bytes - before).should eq 0
 
     output.muted = true
-    output.queue(samples) # warm up the muted path too
     GC.collect
     before_muted = GC.stats.total_bytes
     50.times { output.queue(samples) }
-    after_muted = GC.stats.total_bytes
-    (after_muted - before_muted).should eq 0
+    (GC.stats.total_bytes - before_muted).should eq 0
 
     output.destroy
   end
 
-  # Volume/mute alternating on the SAME AudioOutput (so the same reused
-  # scratch buffer is involved every time) shouldn't misbehave or crash -
-  # guards against the reused buffer leaking stale content across calls
-  # with different settings.
-  it "alternating volume/mute on the same instance keeps queueing correctly" do
+  # Mute and volume both drive one stream gain, so the order they are
+  # set in matters: muting must not lose the volume underneath it, and
+  # unmuting must restore that volume rather than jumping to 1.0.
+  it "alternating volume/mute keeps the two in the right order" do
     output = Gemba::AudioOutput.new
     samples = Slice(Int16).new(4410 * 2, 1000_i16)
 
     output.volume = 1.0
     output.queue(samples)
+    output.@stream.gain.should eq 1.0_f32
+
     output.volume = 0.5
     output.queue(samples)
+    output.@stream.gain.should be_close(0.5, 0.0001)
+
     output.muted = true
     output.queue(samples)
+    output.@stream.gain.should eq 0.0_f32
+    # The volume underneath is remembered, not overwritten by the mute.
+    output.volume.should eq 0.5
+
+    # Setting volume while muted stays silent rather than un-muting.
+    output.volume = 0.75
+    output.@stream.gain.should eq 0.0_f32
+
     output.muted = false
-    output.volume = 1.0
     output.queue(samples)
+    output.@stream.gain.should be_close(0.75, 0.0001)
 
     output.fill_ratio.should be > 0.0
     output.destroy
