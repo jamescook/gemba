@@ -123,13 +123,18 @@ module Gemba
         # -- Enable / per-game switches -- not DSL nodes (see
         # SettingsWindow's own class comment), packed directly under the
         # tab frame the same as before.
-        @enabled_switch = Tryst::Switch.new(@app, text: Locale.translate("settings.ra_enabled"), parent: @frame)
+        # animate_set: false for the same reason as every control in
+        # SettingsWindow - see the comment at its own first switch.
+        @enabled_switch = Tryst::Switch.new(@app, text: Locale.translate("settings.ra_enabled"),
+          animate_set: false, parent: @frame)
         @enabled_switch.pack(anchor: :w, pady: 8)
 
-        @rich_presence_switch = Tryst::Switch.new(@app, text: Locale.translate("settings.ra_rich_presence"), parent: @frame)
+        @rich_presence_switch = Tryst::Switch.new(@app, text: Locale.translate("settings.ra_rich_presence"),
+          animate_set: false, parent: @frame)
         @rich_presence_switch.pack(anchor: :w, pady: [0, 4])
 
-        @screenshot_switch = Tryst::Switch.new(@app, text: Locale.translate("settings.ra_screenshot_on_unlock"), parent: @frame)
+        @screenshot_switch = Tryst::Switch.new(@app, text: Locale.translate("settings.ra_screenshot_on_unlock"),
+          animate_set: false, parent: @frame)
         @screenshot_switch.pack(anchor: :w, pady: [0, 4])
 
         # -- Wiring (deferred until every ivar above is assigned) --

@@ -41,6 +41,48 @@ describe Gemba::SettingsWindow do
     app.destroy
   end
 
+  # Every control here is built with animate_set: false. MainWindow
+  # calls #load_from_config during its own construction, before the
+  # event loop is running, so an animated set would arm a 16ms tween per
+  # control to slide a window that isn't on screen yet - and each of
+  # those tweens then reports the rest of startup as timer lateness.
+  # Asserting on the tween rather than the drawn result because the
+  # tween IS the cost; the final position is the same either way.
+  it "#load_from_config arms no tween on any control" do
+    app, window, _events = build("settings_window_spec_1a")
+    config = Gemba::Config.new(File.tempname("settings_window_spec", ".json"))
+    # Every value here differs from the control's CONSTRUCTED state (a
+    # Switch starts false, each SegmentedControl at its selected:), so
+    # every set is a real change. Set one to what the control already
+    # holds and Switch#set_value's own no-op guard returns before it
+    # would ever reach a tween - passing this test for the wrong reason.
+    config.pause_on_focus_loss = true
+    config.keep_aspect_ratio = true
+    config.integer_scale = true
+    config.color_correction = true
+    config.frame_blending = true
+    config.muted = true
+    config.scale = 1
+    config.screenshot_scale = 4
+    config.pixel_filter = "linear"
+    config.rewind_seconds = 20
+
+    window.load_from_config(config)
+
+    window.pause_on_focus_loss_switch.@toggle_tween.should be_nil
+    window.aspect_switch.@toggle_tween.should be_nil
+    window.integer_scale_switch.@toggle_tween.should be_nil
+    window.color_correction_switch.@toggle_tween.should be_nil
+    window.frame_blending_switch.@toggle_tween.should be_nil
+    window.mute_switch.@toggle_tween.should be_nil
+    window.screenshot_scale_control.@highlight_tween.should be_nil
+    window.scale_control.@highlight_tween.should be_nil
+    window.filter_control.@highlight_tween.should be_nil
+    window.rewind_buffer_control.@highlight_tween.should be_nil
+
+    app.destroy
+  end
+
   it "#load_from_config snaps a non-preset rewind_seconds to the nearest option" do
     app, window, _events = build("settings_window_spec_1b")
     config = Gemba::Config.new(File.tempname("settings_window_spec", ".json"))

@@ -135,41 +135,52 @@ module Gemba
       # #add's own realize) rather than before it, unlike the switch's
       # old raw-command position - a purely cosmetic reordering, nothing
       # here depends on which one visually sits on top.
-      @pause_on_focus_loss_switch = Tryst::Switch.new(@app,
+      # animate_set: false on every switch/segmented control in this
+      # window. #load_from_config pushes the saved config into all of
+      # them during MainWindow#initialize, and each animated set arms a
+      # 16ms tween - sliding controls in a window that isn't on screen
+      # yet, before the event loop has even started. A user toggle still
+      # animates; only the config-driven set jumps.
+      @pause_on_focus_loss_switch = Tryst::Switch.new(@app, animate_set: false,
         text: Locale.translate("settings.pause_on_focus_loss"), parent: general)
       @pause_on_focus_loss_switch.pack(anchor: :w, pady: 8)
       @pause_on_focus_loss_switch.on_action { |v| @events.pause_on_focus_loss_changed.emit(v) }
 
       @screenshot_scale_control = Tryst::SegmentedControl.new(@app, options: ["1x", "2x", "3x", "4x"],
-        selected: "2x", parent: screenshot_scale_row_handle.path)
+        selected: "2x", animate_set: false, parent: screenshot_scale_row_handle.path)
       @screenshot_scale_control.pack(side: :right)
       @screenshot_scale_control.on_action { |value| @events.screenshot_scale_changed.emit(value.rstrip('x').to_i) }
 
       # -- Video tab --
       @scale_control = Tryst::SegmentedControl.new(@app, options: ["1x", "2x", "3x", "4x"],
-        selected: "3x", parent: scale_row_handle.path)
+        selected: "3x", animate_set: false, parent: scale_row_handle.path)
       @scale_control.pack(side: :right)
       @scale_control.on_action { |value| @events.scale_changed.emit(value.rstrip('x').to_i) }
 
       nearest_label = Locale.translate("settings.filter_nearest")
       linear_label = Locale.translate("settings.filter_linear")
-      @filter_control = Tryst::SegmentedControl.new(@app, options: [nearest_label, linear_label], parent: filter_row_handle.path)
+      @filter_control = Tryst::SegmentedControl.new(@app, options: [nearest_label, linear_label],
+        animate_set: false, parent: filter_row_handle.path)
       @filter_control.pack(side: :right)
       @filter_control.on_action { |value| @events.filter_changed.emit(value == nearest_label ? :nearest : :linear) }
 
-      @aspect_switch = Tryst::Switch.new(@app, text: Locale.translate("settings.maintain_aspect"), parent: video)
+      @aspect_switch = Tryst::Switch.new(@app, text: Locale.translate("settings.maintain_aspect"),
+        animate_set: false, parent: video)
       @aspect_switch.pack(anchor: :w, pady: 8)
       @aspect_switch.on_action { |v| @events.aspect_ratio_changed.emit(v) }
 
-      @integer_scale_switch = Tryst::Switch.new(@app, text: Locale.translate("settings.integer_scale"), parent: video)
+      @integer_scale_switch = Tryst::Switch.new(@app, text: Locale.translate("settings.integer_scale"),
+        animate_set: false, parent: video)
       @integer_scale_switch.pack(anchor: :w, pady: 8)
       @integer_scale_switch.on_action { |v| @events.integer_scale_changed.emit(v) }
 
-      @color_correction_switch = Tryst::Switch.new(@app, text: Locale.translate("settings.color_correction"), parent: video)
+      @color_correction_switch = Tryst::Switch.new(@app, text: Locale.translate("settings.color_correction"),
+        animate_set: false, parent: video)
       @color_correction_switch.pack(anchor: :w, pady: 8)
       @color_correction_switch.on_action { |v| @events.color_correction_changed.emit(v) }
 
-      @frame_blending_switch = Tryst::Switch.new(@app, text: Locale.translate("settings.frame_blending"), parent: video)
+      @frame_blending_switch = Tryst::Switch.new(@app, text: Locale.translate("settings.frame_blending"),
+        animate_set: false, parent: video)
       @frame_blending_switch.pack(anchor: :w, pady: 8)
       @frame_blending_switch.on_action { |v| @events.frame_blending_changed.emit(v) }
 
@@ -179,13 +190,14 @@ module Gemba
       @volume_slider.pack(fill: "x", pady: 8)
       @volume_slider.on_change { |v| @events.volume_changed.emit(v / 100.0) }
 
-      @mute_switch = Tryst::Switch.new(@app, text: Locale.translate("settings.mute"), parent: audio)
+      @mute_switch = Tryst::Switch.new(@app, text: Locale.translate("settings.mute"),
+        animate_set: false, parent: audio)
       @mute_switch.pack(anchor: :w, pady: 8)
       @mute_switch.on_action { |v| @events.mute_changed.emit(v) }
 
       # -- Gameplay tab --
       @rewind_buffer_control = Tryst::SegmentedControl.new(@app, options: REWIND_OPTIONS.map { |seconds| "#{seconds}s" },
-        selected: "#{Config::DEFAULT_REWIND_SECONDS}s", parent: rewind_row_handle.path)
+        selected: "#{Config::DEFAULT_REWIND_SECONDS}s", animate_set: false, parent: rewind_row_handle.path)
       @rewind_buffer_control.pack(side: :right)
       @rewind_buffer_control.on_action { |value| @events.rewind_seconds_changed.emit(value.rstrip('s').to_i) }
 
