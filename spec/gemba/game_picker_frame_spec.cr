@@ -74,16 +74,14 @@ describe Gemba::GamePickerFrame do
         selected_path = nil
         picker = new_picker(app, library, dir, on_select: ->(path : String) { selected_path = path; nil })
 
-        # Query-and-eval, not simulate_event: a synthetic <Button-1>
-        # (even with simulate_event's deiconify+focus preamble) never
-        # reaches these card frames' instance bindings under Xvfb -
-        # re-verified on a cascade-free run, so it's the event delivery
-        # itself, not stray grab interference. SaveStatePicker's session
-        # -toplevel cells DO receive synthetic events; the difference
-        # (cards live on a bare Tryst::App's "." root) belongs to tryst
-        # to explain.
+        # Shown and updated first: simulate_event refuses an unviewable
+        # target, because Tk silently drops events aimed at one.
+        picker.show
+        app.show
+        app.update
+
         app.tcl_invoke("bind", picker.cards[0].frame.path, "<Button-1>").should_not be_empty
-        app.tcl_eval(app.tcl_invoke("bind", picker.cards[0].frame.path, "<Button-1>"))
+        app.interp.simulate_event(picker.cards[0].frame.path, "<Button-1>")
 
         selected_path.should eq "/roms/fill.gba"
       end
@@ -108,15 +106,15 @@ describe Gemba::GamePickerFrame do
 
       with_app("game_picker_4") do |app|
         picker = new_picker(app, library, dir)
+        picker.show
+        app.show
+        app.update
 
         # <<ContextMenu>>, not <Button-3>: GamePickerFrame binds the
         # portable virtual event (see EventSpec::VIRTUAL_ALIASES), which
         # sits on a different physical button per platform.
-        # Query-and-eval, not simulate_event - same non-delivery as the
-        # left-click test above (see its comment).
-        script = app.tcl_invoke("bind", picker.cards[0].frame.path, "<<ContextMenu>>")
-        script.should_not be_empty
-        app.tcl_eval(script)
+        app.tcl_invoke("bind", picker.cards[0].frame.path, "<<ContextMenu>>").should_not be_empty
+        app.interp.simulate_event(picker.cards[0].frame.path, "<<ContextMenu>>")
 
         menu_path = "#{picker.cards[0].frame.path}.ctx"
         app.winfo.exists?(menu_path).should be_true

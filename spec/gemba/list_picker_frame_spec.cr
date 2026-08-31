@@ -21,15 +21,6 @@ private def with_app(title : String, &)
   end
 end
 
-# Runs whatever script is bound to path/event directly. simulate_event
-# can't stand in here: Tk's `event generate` rejects Double/Triple/
-# Quadruple modifiers outright ("Double, Triple, or Quadruple modifier
-# not allowed"), and every caller of this is a <Double-Button-1>.
-private def invoke_binding(app : Tryst::App, path : String, event : String) : Nil
-  script = app.tcl_eval("bind #{path} #{event}")
-  app.tcl_eval(script) unless script.empty?
-end
-
 private def row_values(app : Tryst::App, tree_path : String, iid : String) : Array(String)
   app.split_list(app.command(tree_path, :item, iid, "-values"))
 end
@@ -135,8 +126,15 @@ describe Gemba::ListPickerFrame do
       with_app("list_picker_frame_spec_dblclick") do |app|
         selected_path = nil
         picker = new_picker(app, library, dir, on_select: ->(path : String) { selected_path = path; nil })
+        picker.show
+        app.show
+        app.update
 
-        invoke_binding(app, picker.tree.path, "<Double-Button-1>")
+        # A real double-click, aimed at the row's own center so the tree
+        # resolves an item under the pointer (0,0 would be the heading).
+        iid = app.command(picker.tree.path, :children, "").split.first
+        x, y = row_center(app, picker.tree.path, iid)
+        app.interp.simulate_event(picker.tree.path, "<Double-Button-1>", x: x, y: y)
 
         selected_path.should eq "/roms/fill.gba"
       end

@@ -12,13 +12,11 @@ ensure
   FileUtils.rm_rf(dir) if dir
 end
 
-# Runs whatever script is bound to path/event directly. simulate_event
-# can't stand in here: Tk's `event generate` rejects Double/Triple/
-# Quadruple modifiers outright ("Double, Triple, or Quadruple modifier
-# not allowed"), and every caller of this is a <Double-Button-1>.
+# Real event delivery, <Double-*> included: simulate_event expands a
+# repeat modifier into the timed press/release burst Tk's own click
+# counting turns back into a double-click.
 private def invoke_binding(app : Tryst::App, path : String, event : String) : Nil
-  script = app.tcl_eval("bind #{path} #{event}")
-  app.tcl_eval(script) unless script.empty?
+  app.interp.simulate_event(path, event)
 end
 
 # rom_library_path/config_path keep every real ROM load in these specs

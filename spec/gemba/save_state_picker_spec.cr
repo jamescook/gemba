@@ -17,17 +17,11 @@ ensure
   FileUtils.rm_rf(dir) if dir
 end
 
-# Runs whatever script is bound to path/event directly. simulate_event
-# can't stand in here: Tk's `event generate` rejects Double/Triple/
-# Quadruple modifiers outright ("Double, Triple, or Quadruple modifier
-# not allowed"), and every caller of this is a <Double-Button-1>.
-private def invoke_binding(app : Tryst::App, path : String, event : String) : Nil
-  script = app.tcl_eval("bind #{path} #{event}")
-  app.tcl_eval(script) unless script.empty?
-end
-
+# A real double-click: simulate_event expands the repeat modifier into
+# the timed press/release burst Tk's own click counting turns back into
+# a double-click.
 private def double_click(app : Tryst::App, path : String) : Nil
-  invoke_binding(app, path, "<Double-Button-1>")
+  app.interp.simulate_event(path, "<Double-Button-1>")
 end
 
 private def cell_path(picker : Gemba::SaveStatePicker, slot : Int32) : String
