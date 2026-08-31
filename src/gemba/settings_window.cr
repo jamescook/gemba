@@ -70,8 +70,11 @@ module Gemba
       @path = @handle.path
 
       # Bold button style for a customized (non-default) rebind, shared
-      # by GamepadTab's own button styling.
-      @app.tcl_eval("ttk::style configure Bold.TButton -font [list {*}[font actual TkDefaultFont] -weight bold]")
+      # by GamepadTab's own button styling. `font actual` resolves the
+      # default font's concrete -family/-size/... pairs; appending
+      # -weight bold to that list is a complete font spec.
+      default_font = @app.tcl_invoke("font", "actual", "TkDefaultFont")
+      @app.style.configure("Bold.TButton", font: "#{default_font} -weight bold")
 
       # Session#add's block builds the WHOLE new subtree first (no Tk
       # calls yet - realize happens once the block returns), so a node's

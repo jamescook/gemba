@@ -52,7 +52,7 @@ describe Gemba::HelpWindow do
       built.app.update
       built.window.visible?.should be_true
       # Non-modal: nothing grabbed.
-      built.app.tcl_eval("grab current").should eq ""
+      built.app.tcl_invoke("grab", "current").should eq ""
 
       built.window.hide
       built.window.visible?.should be_false

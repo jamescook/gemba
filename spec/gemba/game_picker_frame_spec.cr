@@ -74,9 +74,16 @@ describe Gemba::GamePickerFrame do
         selected_path = nil
         picker = new_picker(app, library, dir, on_select: ->(path : String) { selected_path = path; nil })
 
-        app.tcl_eval("bind #{picker.cards[0].frame.path} <Button-1>").should_not be_empty
-        script = app.tcl_eval("bind #{picker.cards[0].frame.path} <Button-1>")
-        app.tcl_eval(script)
+        # Query-and-eval, not simulate_event: a synthetic <Button-1>
+        # (even with simulate_event's deiconify+focus preamble) never
+        # reaches these card frames' instance bindings under Xvfb -
+        # re-verified on a cascade-free run, so it's the event delivery
+        # itself, not stray grab interference. SaveStatePicker's session
+        # -toplevel cells DO receive synthetic events; the difference
+        # (cards live on a bare Tryst::App's "." root) belongs to tryst
+        # to explain.
+        app.tcl_invoke("bind", picker.cards[0].frame.path, "<Button-1>").should_not be_empty
+        app.tcl_eval(app.tcl_invoke("bind", picker.cards[0].frame.path, "<Button-1>"))
 
         selected_path.should eq "/roms/fill.gba"
       end
@@ -89,7 +96,7 @@ describe Gemba::GamePickerFrame do
 
       with_app("game_picker_3") do |app|
         picker = new_picker(app, library, dir)
-        app.tcl_eval("bind #{picker.cards[0].frame.path} <Button-1>").should be_empty
+        app.tcl_invoke("bind", picker.cards[0].frame.path, "<Button-1>").should be_empty
       end
     end
   end
@@ -105,13 +112,9 @@ describe Gemba::GamePickerFrame do
         # <<ContextMenu>>, not <Button-3>: GamePickerFrame binds the
         # portable virtual event (see EventSpec::VIRTUAL_ALIASES), which
         # sits on a different physical button per platform.
-        #
-        # Queried and run directly rather than via `event generate`
-        # (tried: the synthetic virtual event doesn't reach this frame's
-        # instance binding, so the menu is never built) - the same
-        # limitation list_picker_frame_spec's own invoke_binding exists
-        # for. Tryst has no binding-query wrapper, so this is raw Tcl.
-        script = app.tcl_eval("bind #{picker.cards[0].frame.path} <<ContextMenu>>")
+        # Query-and-eval, not simulate_event - same non-delivery as the
+        # left-click test above (see its comment).
+        script = app.tcl_invoke("bind", picker.cards[0].frame.path, "<<ContextMenu>>")
         script.should_not be_empty
         app.tcl_eval(script)
 

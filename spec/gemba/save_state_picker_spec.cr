@@ -17,9 +17,10 @@ ensure
   FileUtils.rm_rf(dir) if dir
 end
 
-# Synthetic Tk event dispatch to a classic (non-ttk) widget's instance
-# binding is unreliable in this environment - invoke the bound script
-# directly instead.
+# Runs whatever script is bound to path/event directly. simulate_event
+# can't stand in here: Tk's `event generate` rejects Double/Triple/
+# Quadruple modifiers outright ("Double, Triple, or Quadruple modifier
+# not allowed"), and every caller of this is a <Double-Button-1>.
 private def invoke_binding(app : Tryst::App, path : String, event : String) : Nil
   script = app.tcl_eval("bind #{path} #{event}")
   app.tcl_eval(script) unless script.empty?
@@ -164,8 +165,8 @@ describe Gemba::SaveStatePicker do
       app, picker = build("save_state_picker_spec_7")
       picker.refresh(dir, quick_slot: 1)
 
-      app.tcl_eval("bind #{cell_path(picker, 2)} <Button-1>").should eq ""
-      app.tcl_eval("bind #{cell_path(picker, 2)}.thumb <Button-1>").should eq ""
+      app.tcl_invoke("bind", cell_path(picker, 2), "<Button-1>").should eq ""
+      app.tcl_invoke("bind", "#{cell_path(picker, 2)}.thumb", "<Button-1>").should eq ""
 
       app.destroy
     end

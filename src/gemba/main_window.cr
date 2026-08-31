@@ -740,7 +740,7 @@ module Gemba
       # auto-pauses the game (#watch_menu_bar). Neutralize the
       # traversal binding so hotkeys own the function keys; menus stay
       # reachable by mouse, and Aqua never had this binding at all.
-      @app.tcl_eval("bind all <F10> {}")
+      @app.unbind("all", "<F10>")
       bind_hotkey(:quit) { quit }
       bind_hotkey(:pause) { toggle_pause }
       bind_hotkey(:fast_forward) { toggle_turbo }

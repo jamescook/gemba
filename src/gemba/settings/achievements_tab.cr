@@ -152,7 +152,7 @@ module Gemba
       # Current feedback label text - for a spec to synchronize on
       # (wait_until) after emitting a login/verify Events signal.
       def feedback_text : String
-        @app.tcl_eval("#{@feedback_lbl} cget -text")
+        @app.command(@feedback_lbl, :cget, "-text")
       end
 
       # Pushes Config into the presenter and every widget - call before
@@ -220,13 +220,13 @@ module Gemba
       # relative to the token label, same as ruby's own swap_cred_fields.
       private def swap_credential_fields(readonly : Bool) : Nil
         if readonly
-          @app.tcl_eval("pack forget #{@username_entry} #{@token_entry}")
-          @app.tcl_eval("pack #{@username_ro} -in #{@creds_row} -side left -padx {0 10} -before #{@token_lbl}")
-          @app.tcl_eval("pack #{@token_ro} -in #{@creds_row} -side left")
+          @app.command(:pack, :forget, @username_entry, @token_entry)
+          @app.command(:pack, @username_ro, in: @creds_row, side: :left, padx: [0, 10], before: @token_lbl)
+          @app.command(:pack, @token_ro, in: @creds_row, side: :left)
         else
-          @app.tcl_eval("pack forget #{@username_ro} #{@token_ro}")
-          @app.tcl_eval("pack #{@username_entry} -in #{@creds_row} -side left -padx {0 10} -before #{@token_lbl}")
-          @app.tcl_eval("pack #{@token_entry} -in #{@creds_row} -side left -after #{@username_entry}")
+          @app.command(:pack, :forget, @username_ro, @token_ro)
+          @app.command(:pack, @username_entry, in: @creds_row, side: :left, padx: [0, 10], before: @token_lbl)
+          @app.command(:pack, @token_entry, in: @creds_row, side: :left, after: @username_entry)
           @app.command(@username_entry, :configure, state: @presenter.fields_state)
           @app.command(@token_entry, :configure, state: @presenter.fields_state)
         end

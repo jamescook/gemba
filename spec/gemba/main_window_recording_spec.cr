@@ -33,7 +33,7 @@ describe Gemba::MainWindow do
         item.options["label"].should eq "Start Capture"
         frame.recording?.should be_false
 
-        window.app.tcl_eval("event generate . <F10>")
+        window.app.interp.simulate_event(".", "<F10>")
         window.app.interp.wait_until(5.seconds) { frame.recording? }
         window.video.recording_dot?.should be_true
         item.options["label"].should eq "Stop Capture"
@@ -42,7 +42,7 @@ describe Gemba::MainWindow do
         start = Time.instant
         window.app.interp.wait_until(2.seconds) { (Time.instant - start) > 300.milliseconds }
 
-        window.app.tcl_eval("event generate . <F10>")
+        window.app.interp.simulate_event(".", "<F10>")
         window.app.interp.wait_until(5.seconds) { !frame.recording? }
         window.video.recording_dot?.should be_false
         item.options["label"].should eq "Start Capture"

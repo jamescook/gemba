@@ -23,6 +23,11 @@ module Gemba
 
     getter handle : Tryst::UI::Handle
 
+    # The shared placeholder image's Tk name - what an empty/previewless
+    # cell shows. Public so specs can tell "still the placeholder" from
+    # "a real thumbnail arrived".
+    getter blank_thumb : String
+
     # Seam for specs: the delete confirmation is a WM-modal
     # tk_messageBox, undriveable headless - same seam shape (and
     # reason) as PatcherWindow#overwrite_prompt. Takes the slot, returns
@@ -42,8 +47,8 @@ module Gemba
       @thumbnails = Array(Tryst::Photo?).new(SLOTS, nil)
 
       path = @handle.path
-      @blank_thumb = "#{path}_blank_thumb"
-      @app.tcl_eval("image create photo #{@blank_thumb} -width #{THUMB_W} -height #{THUMB_H}")
+      @blank_photo = Tryst::Photo.new(@app, width: THUMB_W, height: THUMB_H)
+      @blank_thumb = @blank_photo.name
 
       grid = "#{path}.grid"
       @app.command("ttk::frame", grid, padding: 8)

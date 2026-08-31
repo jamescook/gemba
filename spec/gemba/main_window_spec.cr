@@ -12,10 +12,10 @@ ensure
   FileUtils.rm_rf(dir) if dir
 end
 
-# Runs whatever script is bound to path/event directly - see
-# save_state_picker_spec.cr's own note on why (a synthetic `event
-# generate` doesn't reliably reach a classic Tk widget's own instance
-# binding in this environment, even once shown).
+# Runs whatever script is bound to path/event directly. simulate_event
+# can't stand in here: Tk's `event generate` rejects Double/Triple/
+# Quadruple modifiers outright ("Double, Triple, or Quadruple modifier
+# not allowed"), and every caller of this is a <Double-Button-1>.
 private def invoke_binding(app : Tryst::App, path : String, event : String) : Nil
   script = app.tcl_eval("bind #{path} #{event}")
   app.tcl_eval(script) unless script.empty?
@@ -107,12 +107,12 @@ describe Gemba::MainWindow do
       # Invoked the way a real menu click does, by entry label - what's
       # under test is the wiring from menu item to pre-selected tab, so
       # calling #show_settings directly would prove nothing.
-      menu = window.app.tcl_eval(". cget -menu")
-      settings_menu = window.app.tcl_eval("#{menu} entrycget Settings -menu")
+      menu = window.app.command(".", :cget, "-menu")
+      settings_menu = window.app.command(menu, :entrycget, "Settings", "-menu")
 
       {"General" => :general, "Video" => :video, "Audio" => :audio,
        "Gameplay" => :gameplay, "Gamepad" => :gamepad, "Achievements" => :achievements}.each do |label, tab|
-        window.app.tcl_eval("#{settings_menu} invoke #{label}")
+        window.app.command(settings_menu, :invoke, label)
         window.settings_window.selected_tab.should eq tab
         window.modal_stack.pop
       end
@@ -270,6 +270,23 @@ describe Gemba::MainWindow do
       window = new_window(dir)
       window.load_rom(SPACE_BLAST_ROM)
 
+      frame = window.emulator_frame
+      raise "expected an emulator frame after load_rom" unless frame
+      # state_dir is computed by the worker once the core is up - poll
+      # for it rather than reading straight after load_rom.
+      window.app.interp.wait_until(5.seconds) { !frame.state_dir.nil? }
+      state_dir = frame.state_dir
+      raise "expected a state_dir after load_rom" unless state_dir
+      # The per-ROM state dir is keyed on game code + CRC, NOT the
+      # tempdir - an earlier example that saved this same ROM leaves
+      # slot files behind, which once made the exists-wait below pass
+      # BEFORE this spec's own save; the save's backup rotation then
+      # renamed the file away mid-check and the resulting
+      # File::NotFoundError crashed the example with the picker's modal
+      # grab still held, cascading "grab failed" errors through every
+      # later modal spec in the run.
+      FileUtils.rm_rf(state_dir)
+
       window.app.interp.wait_until(5.seconds) do
         window.show_save_states
         window.modal_stack.active?
@@ -278,26 +295,27 @@ describe Gemba::MainWindow do
       thumb_path = "#{window.save_state_picker.handle.path}.grid.slot1.thumb"
       invoke_binding(window.app, thumb_path, "<Double-Button-1>")
 
-      frame = window.emulator_frame
-      raise "expected an emulator frame after load_rom" unless frame
-      state_dir = frame.state_dir
-      raise "expected a state_dir once show_save_states has succeeded" unless state_dir
       state_path = Gemba::SaveStateManager.state_path(state_dir, 1)
-      window.app.interp.wait_until(5.seconds) { File.exists?(state_path) }
       # No separate thumbnail PNG anymore: the state file itself is a
       # PNG whose visible image is the screenshot (see
       # Core#save_state_to_file), and the picker loads it directly.
+      # File.read, tolerating a transient miss, rather than exists-then-
+      # size: the worker writes concurrently with this poll.
       png_magic = Bytes[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
       window.app.interp.wait_until(5.seconds) do
-        File.size(state_path) >= png_magic.size &&
-          File.read(state_path).to_slice[0, png_magic.size] == png_magic
+        bytes = begin
+          File.read(state_path).to_slice
+        rescue File::NotFoundError
+          Bytes.empty
+        end
+        bytes.size >= png_magic.size && bytes[0, png_magic.size] == png_magic
       end
       File.exists?(Gemba::SaveStateManager.screenshot_path(state_dir, 1)).should be_false
 
       # Feedback: the open picker redraws in place once the save lands -
       # the cell's blank placeholder gives way to a real thumbnail
       # without closing and reopening.
-      blank = "#{window.save_state_picker.handle.path}_blank_thumb"
+      blank = window.save_state_picker.blank_thumb
       window.app.interp.wait_until(5.seconds) do
         window.app.command(thumb_path, :cget, "-image") != blank
       end
@@ -327,7 +345,7 @@ describe Gemba::MainWindow do
       raise "expected an emulator frame after load_rom" unless frame
       paused_before = frame.paused?
 
-      window.app.tcl_eval("event generate . <p>")
+      window.app.interp.simulate_event(".", "<p>")
       window.app.update
 
       frame.paused?.should_not eq paused_before

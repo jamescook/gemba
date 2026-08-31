@@ -203,7 +203,7 @@ module Gemba
       return [] of {String, String, String} if children.empty?
 
       children.split.map do |iid|
-        values = (0..2).map { |i| @app.tcl_eval("lindex [#{@table.path} item #{iid} -values] #{i}") }
+        values = @app.split_list(@app.command(@table.path, :item, iid, "-values"))
         {values[0], values[1], values[2]}
       end
     end

@@ -21,9 +21,10 @@ private def with_app(title : String, &)
   end
 end
 
-# A synthetic `event generate` for a classic (non-ttk) widget's own
-# instance binding is unreliable in this environment - queries the real
-# bound script and runs it directly instead.
+# Runs whatever script is bound to path/event directly. simulate_event
+# can't stand in here: Tk's `event generate` rejects Double/Triple/
+# Quadruple modifiers outright ("Double, Triple, or Quadruple modifier
+# not allowed"), and every caller of this is a <Double-Button-1>.
 private def invoke_binding(app : Tryst::App, path : String, event : String) : Nil
   script = app.tcl_eval("bind #{path} #{event}")
   app.tcl_eval(script) unless script.empty?

@@ -35,12 +35,12 @@ describe Gemba::MainWindow do
           item.options["label"].should eq "Start Recording Inputs"
           frame.input_recording?.should be_false
 
-          window.app.tcl_eval("event generate . <F4>")
+          window.app.interp.simulate_event(".", "<F4>")
           window.app.interp.wait_until(5.seconds) { frame.input_recording? }
           window.video.input_recording_dot?.should be_true
           item.options["label"].should eq "Stop Recording Inputs"
 
-          window.app.tcl_eval("event generate . <F4>")
+          window.app.interp.simulate_event(".", "<F4>")
           window.app.interp.wait_until(5.seconds) { !frame.input_recording? }
           window.video.input_recording_dot?.should be_false
           item.options["label"].should eq "Start Recording Inputs"

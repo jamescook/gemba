@@ -171,15 +171,18 @@ describe Gemba::MainWindow do
         window = new_window(dir)
         begin
           app = window.app
-          bar = app.tcl_eval(". cget -menu")
+          bar = app.command(".", :cget, "-menu")
           bar.should_not be_empty
 
-          app.tcl_eval("#{bar} activate 0")
-          app.tcl_eval("event generate #{bar} <<MenuSelect>>")
+          app.command(bar, :activate, 0)
+          # tcl_invoke, not simulate_event: its deiconify+focus preamble
+          # is a real focus change, and this test is exactly about
+          # focus/menu-driven auto-pause transitions.
+          app.tcl_invoke("event", "generate", bar, "<<MenuSelect>>")
           app.update
           window.auto_pause.held?(:menu).should be_true
 
-          app.tcl_eval("#{bar} activate none")
+          app.command(bar, :activate, :none)
           # Nothing tells us the menu closed on macOS, so the release is
           # the poll noticing the bar has no active entry left.
           app.interp.wait_until(5.seconds) { !window.auto_pause.held?(:menu) }

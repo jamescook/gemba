@@ -40,7 +40,7 @@ private def stop_and_destroy(window : Gemba::MainWindow) : Nil
 end
 
 private def press_question(window : Gemba::MainWindow) : Nil
-  window.app.tcl_eval("event generate . <question>")
+  window.app.interp.simulate_event(".", "<question>")
   window.app.update
 end
 
