@@ -294,6 +294,19 @@ describe Gemba::MainWindow do
       end
       File.exists?(Gemba::SaveStateManager.screenshot_path(state_dir, 1)).should be_false
 
+      # Feedback: the open picker redraws in place once the save lands -
+      # the cell's blank placeholder gives way to a real thumbnail
+      # without closing and reopening.
+      blank = "#{window.save_state_picker.handle.path}_blank_thumb"
+      window.app.interp.wait_until(5.seconds) do
+        window.app.command(thumb_path, :cget, "-image") != blank
+      end
+
+      # Feedback for a load: double-clicking the now-populated slot
+      # loads it and closes the picker - the game itself is the result.
+      invoke_binding(window.app, thumb_path, "<Double-Button-1>")
+      window.app.interp.wait_until(5.seconds) { !window.modal_stack.active? }
+
       window.worker.try(&.stop)
       window.destroy
     end

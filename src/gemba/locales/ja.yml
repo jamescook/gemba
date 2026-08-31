@@ -183,6 +183,13 @@ picker:
   no_preview: "プレビューなし"
   slot: "スロット{n}"
   close: "閉じる"
+  delete_title: "ステートセーブを削除"
+  delete_msg: "スロット{n}のセーブを削除しますか？"
+  menu:
+    load: "ロード"
+    save: "セーブ"
+    overwrite: "上書き"
+    delete: "削除…"
   toolbar:
     boxart_view: "ボックスアート表示"
     list_view: "リスト表示"

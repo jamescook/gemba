@@ -183,6 +183,13 @@ picker:
   no_preview: "No preview"
   slot: "Slot {n}"
   close: "Close"
+  delete_title: "Delete Save State"
+  delete_msg: "Delete the save in slot {n}?"
+  menu:
+    load: "Load"
+    save: "Save"
+    overwrite: "Overwrite"
+    delete: "Delete…"
   toolbar:
     boxart_view: "Box art view"
     list_view: "List view"

@@ -1150,6 +1150,7 @@ module Gemba
       when "save_result"
         if ok == "true"
           @video.show_toast(Locale.translate("toast.state_saved", slot: slot))
+          refresh_picker_if_open
         else
           STDERR.puts "[Gemba] #{message}"
         end
@@ -1162,10 +1163,28 @@ module Gemba
         if ok == "true"
           @video.painter.reset!
           @video.show_toast(Locale.translate("toast.state_loaded", slot: slot))
+          # A load's feedback is seeing the game at the loaded state -
+          # close the picker (a quick load with no picker up is a no-op
+          # here, hence the current check rather than a bare pop).
+          @modal_stack.pop if @modal_stack.current == :save_states
         else
           STDERR.puts "[Gemba] #{message}"
         end
       end
+    end
+
+    # The picker never hears worker results itself - after a save lands
+    # while it's the active modal, redraw it in place so the new
+    # thumbnail and timestamp appear immediately. Before this, a
+    # double-click save gave no visible feedback at all: the cell only
+    # updated on the next #show, and the toast sat behind the modal.
+    private def refresh_picker_if_open : Nil
+      return unless @modal_stack.current == :save_states
+
+      dir = @emulator_frame.try(&.state_dir)
+      return unless dir
+
+      @save_state_picker.refresh(dir, @config.quick_save_slot)
     end
 
     # Rewrites path in place at scale x its native size, via Tk::Photo's

@@ -41,6 +41,15 @@ private def write_fixture_png(app : Tryst::App, path : String) : Nil
   photo.delete
 end
 
+# <<ContextMenu>> is the portable virtual event :right_click binds
+# (see Tryst::EventSpec) - simulate_event delivers it for real
+# (deiconify + focus + `event generate`), no raw binding-script
+# round-trip needed.
+private def open_slot_menu(app : Tryst::App, picker : Gemba::SaveStatePicker, slot : Int32) : String
+  app.interp.simulate_event(cell_path(picker, slot), "<<ContextMenu>>")
+  "#{cell_path(picker, slot)}.ctx"
+end
+
 describe Gemba::SaveStatePicker do
   it "#refresh shows Empty for a slot with no save, and the timestamp for one with a save" do
     with_tempdir do |dir|
@@ -157,6 +166,89 @@ describe Gemba::SaveStatePicker do
 
       app.tcl_eval("bind #{cell_path(picker, 2)} <Button-1>").should eq ""
       app.tcl_eval("bind #{cell_path(picker, 2)}.thumb <Button-1>").should eq ""
+
+      app.destroy
+    end
+  end
+
+  it "right-clicking a populated slot offers Load/Overwrite/Delete; an empty one offers only Save" do
+    with_tempdir do |dir|
+      app, picker = build("save_state_picker_spec_9")
+      stub_tk_popup(app)
+      File.write(Gemba::SaveStateManager.state_path(dir, 2), "fake state")
+      picker.refresh(dir, quick_slot: 1)
+
+      menu = open_slot_menu(app, picker, 2)
+      app.command(menu, :entrycget, 0, "-label").should eq "Load"
+      app.command(menu, :entrycget, 1, "-label").should eq "Overwrite"
+      app.command(menu, :entrycget, 3, "-label").should eq "Delete…"
+
+      empty_menu = open_slot_menu(app, picker, 5)
+      app.command(empty_menu, :entrycget, 0, "-label").should eq "Save"
+      app.tcl_invoke(empty_menu, "index", "end").should eq "0"
+
+      app.destroy
+    end
+  end
+
+  it "the menu's Overwrite fires on_save for a populated slot - the action double-click can't reach" do
+    with_tempdir do |dir|
+      app, picker = build("save_state_picker_spec_10")
+      stub_tk_popup(app)
+      File.write(Gemba::SaveStateManager.state_path(dir, 2), "fake state")
+      picker.refresh(dir, quick_slot: 1)
+
+      saved = nil
+      loaded = nil
+      picker.on_save { |slot| saved = slot }
+      picker.on_load { |slot| loaded = slot }
+
+      menu = open_slot_menu(app, picker, 2)
+      app.tcl_invoke(menu, "invoke", "1")
+
+      saved.should eq 2
+      loaded.should be_nil
+
+      app.destroy
+    end
+  end
+
+  it "#delete_slot removes the state, its backup, and the legacy PNG once confirmed, and redraws" do
+    with_tempdir do |dir|
+      app, picker = build("save_state_picker_spec_11")
+      ss = Gemba::SaveStateManager.state_path(dir, 2)
+      File.write(ss, "fake state")
+      File.write("#{ss}.bak", "old state")
+      write_fixture_png(app, Gemba::SaveStateManager.screenshot_path(dir, 2))
+      picker.refresh(dir, quick_slot: 1)
+
+      asked = nil
+      picker.delete_prompt = ->(slot : Int32) { asked = slot; true }
+      picker.delete_slot(2)
+
+      asked.should eq 2
+      File.exists?(ss).should be_false
+      File.exists?("#{ss}.bak").should be_false
+      File.exists?(Gemba::SaveStateManager.screenshot_path(dir, 2)).should be_false
+      thumb2 = "#{cell_path(picker, 2)}.thumb"
+      app.command(thumb2, :cget, "-text").should eq "Empty"
+
+      app.destroy
+    end
+  end
+
+  it "#delete_slot leaves everything in place when the prompt declines" do
+    with_tempdir do |dir|
+      app, picker = build("save_state_picker_spec_12")
+      ss = Gemba::SaveStateManager.state_path(dir, 2)
+      File.write(ss, "fake state")
+      picker.refresh(dir, quick_slot: 1)
+
+      picker.delete_prompt = ->(_slot : Int32) { false }
+      picker.delete_slot(2)
+
+      File.exists?(ss).should be_true
+      app.command("#{cell_path(picker, 2)}.time", :cget, "-text").should_not be_empty
 
       app.destroy
     end

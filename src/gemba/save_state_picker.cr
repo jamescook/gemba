@@ -23,6 +23,12 @@ module Gemba
 
     getter handle : Tryst::UI::Handle
 
+    # Seam for specs: the delete confirmation is a WM-modal
+    # tk_messageBox, undriveable headless - same seam shape (and
+    # reason) as PatcherWindow#overwrite_prompt. Takes the slot, returns
+    # whether to go ahead.
+    setter delete_prompt : (Int32 -> Bool)? = nil
+
     @on_save : (Int32 -> Nil)? = nil
     @on_load : (Int32 -> Nil)? = nil
     @on_close : (-> Nil)? = nil
@@ -78,9 +84,12 @@ module Gemba
       @app.command(:pack, time_lbl, fill: :x)
 
       # Double-click, not single - a single click (or just closing the
-      # window afterward) must never trigger a save/load.
+      # window afterward) must never trigger a save/load. Right-click
+      # opens the per-slot menu, the explicit route to every action
+      # double-click can't express (overwrite, delete).
       {cell, thumb, info, time_lbl}.each do |widget|
         @app.bind(widget, :double_click) { |_v, _s| on_slot_click(slot) }
+        @app.bind(widget, :right_click) { |_v, _s| popup_slot_menu(slot) }
       end
 
       Cell.new(cell, thumb, info, time_lbl)
@@ -186,6 +195,59 @@ module Gemba
       thumb
     rescue Tryst::TclError
       nil
+    end
+
+    # Populated slot: Load / Overwrite / Delete…; empty slot: Save.
+    # Overwrite is the piece double-click can't express - its populated
+    # gesture is always load - so without this a slot could only ever
+    # be saved to once. Same menu pattern as PickerRowActions'
+    # popup_rom_menu.
+    private def popup_slot_menu(slot : Int32) : Nil
+      menu_path = "#{@cells[slot - 1].frame}.ctx"
+      @app.menu(menu_path)
+      @app.command(menu_path, :delete, 0, :end)
+
+      if @slots[slot - 1].populated
+        @app.command(menu_path, :add, :command, label: Locale.translate("picker.menu.load"),
+          command: @app.callback { @on_load.try(&.call(slot)) })
+        @app.command(menu_path, :add, :command, label: Locale.translate("picker.menu.overwrite"),
+          command: @app.callback { @on_save.try(&.call(slot)) })
+        @app.command(menu_path, :add, :separator)
+        @app.command(menu_path, :add, :command, label: Locale.translate("picker.menu.delete"),
+          command: @app.callback { delete_slot(slot) })
+      else
+        @app.command(menu_path, :add, :command, label: Locale.translate("picker.menu.save"),
+          command: @app.callback { @on_save.try(&.call(slot)) })
+      end
+
+      @app.popup_menu(menu_path, @app.winfo.pointerx, @app.winfo.pointery)
+    end
+
+    # Deletes slot's state after confirmation (see #delete_prompt) -
+    # the .ss itself, its backup rotation, and any legacy thumbnail
+    # PNG - then redraws in place. Public so specs can drive it without
+    # a WM-modal menu/messageBox round-trip; the context menu is the
+    # production caller.
+    def delete_slot(slot : Int32) : Nil
+      return unless @slots[slot - 1].populated
+
+      confirmed = if prompt = @delete_prompt
+                    prompt.call(slot)
+                  else
+                    @app.message_box(Locale.translate("picker.delete_msg", n: slot),
+                      title: Locale.translate("picker.delete_title"),
+                      icon: :warning, type: :yesno, default: :no) == :yes
+                  end
+      return unless confirmed
+
+      ss = SaveStateManager.state_path(@state_dir, slot)
+      png = SaveStateManager.screenshot_path(@state_dir, slot)
+      @app.off_thread do
+        File.delete?(ss)
+        File.delete?("#{ss}.bak")
+        File.delete?(png)
+      end
+      refresh(@state_dir, @quick_slot)
     end
 
     private def on_slot_click(slot : Int32) : Nil
