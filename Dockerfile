@@ -111,7 +111,11 @@ RUN set -eux; \
     cd ../..; \
     rm -rf vendor/rcheevos
 
-COPY shard.yml ./
+# shard.override.yml must ride along with shard.yml: it is what forces
+# tryst/tryst-vector to branch HEAD past the released shards' own ~> 0.1
+# constraints (see its own comment) - without it, `shards install` below
+# fails to resolve at all.
+COPY shard.yml shard.override.yml ./
 COPY native/ native/
 
 # native/null_logger.c can't be built until libmgba's own headers exist

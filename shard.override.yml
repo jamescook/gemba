@@ -1,0 +1,23 @@
+# Forces tryst and tryst-vector to their main-branch HEAD EVERYWHERE in
+# the dependency graph, not just for gemba's own direct deps. Needed
+# because the released tryst-* shards each pin `tryst: ~> 0.1` (and the
+# vector-based widgets pin tryst-vector the same way) in their own
+# shard.ymls - shards cannot reconcile that version requirement with
+# this app's `branch: main`, and fails to resolve outright. An override
+# REPLACES the requirement wherever the shard appears, which is the one
+# mechanism that wins over a dependency's own constraint.
+#
+# tryst-vector is listed even though gemba doesn't depend on it directly:
+# it reaches the graph via tryst-switch/tryst-segmented/tryst-value-slider,
+# and without the override it would silently resolve to the last TAG while
+# everything else tracks HEAD.
+#
+# Committed on purpose, and COPY'd into the Docker image (see Dockerfile)
+# so host and Docker resolve identically.
+dependencies:
+  tryst:
+    github: jamescook/tryst
+    branch: main
+  tryst-vector:
+    github: jamescook/tryst-vector
+    branch: main

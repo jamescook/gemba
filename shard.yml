@@ -14,18 +14,27 @@ description: |
 
 # tryst, tryst-sdl, and the settings UI's tryst-switch/tryst-segmented/
 # tryst-value-slider are all independent repos - plain github:
-# dependencies, no monorepo path or submodule needed.
+# dependencies, no monorepo path or submodule needed. `branch: main` is
+# load-bearing on every one: since those repos now publish version tags,
+# a bare github: dependency would resolve to the latest TAG, silently
+# freezing gemba at the last release - this app deliberately tracks
+# their HEAD instead.
 dependencies:
   tryst:
     github: jamescook/tryst
+    branch: main
   tryst-sdl:
     github: jamescook/tryst-sdl
+    branch: main
   tryst-switch:
     github: jamescook/tryst-switch
+    branch: main
   tryst-segmented:
     github: jamescook/tryst-segmented
+    branch: main
   tryst-value-slider:
     github: jamescook/tryst-value-slider
+    branch: main
 
 development_dependencies:
   ameba:
