@@ -32,6 +32,57 @@ SDL3), plus libmgba and rcheevos - see the Dockerfile for how the
 container builds both from source, or tryst-sdl's own README for
 per-platform SDL package names.
 
+## Installing
+
+```
+make                      # release build -> bin/release/gemba
+make install              # -> ~/.local/bin/gemba + ~/.local/share/gemba
+make && sudo make install PREFIX=/usr/local   # system-wide
+make DESTDIR=/tmp/stage install       # staged, for a formula or .deb
+make uninstall
+```
+
+`make install` only rebuilds when a source file is newer than the
+release binary, so the `sudo` half of the system-wide line just copies -
+no second release build running as root. The release build lands in
+`bin/release/`, not `bin/`, so a debug `shards build` never gets
+installed by mistake.
+
+`PREFIX` defaults to `~/.local` - no sudo, and it is the XDG/systemd
+user convention most modern Linux distros put on `PATH` when it exists
+(Debian/Ubuntu's stock `~/.profile` does). macOS does not, so `make
+install` prints a hint if the target bin dir is missing from `PATH`.
+`/usr/local` is the system-wide choice on both: it is in `/etc/paths` on
+every Mac, and on Apple Silicon it is not Homebrew's prefix
+(`/opt/homebrew`), so it collides with nothing brew owns.
+
+The install writes two things, and both are needed:
+
+```
+$PREFIX/bin/gemba
+$PREFIX/share/gemba/{assets,data,locales}
+```
+
+The binary finds that second half through `../share/gemba` relative to
+itself, so the pair relocates anywhere as a unit without the prefix
+being compiled in. `gemba config` prints which one it resolved:
+
+```
+Data: /usr/local/share/gemba (installed)
+Data: /path/to/checkout (source tree)
+```
+
+A build run straight out of a checkout (`crystal run`, or `shards build`
+with no `make install`) has no `share/` beside its binary and reads the
+source tree instead - which is why the second line exists and why a
+checkout needs no install to be developed in.
+
+Note that the binary links Homebrew's dylibs by absolute path
+(`/opt/homebrew/opt/{sdl3,sdl3_ttf,tcl-tk,...}`), so a copy handed to
+someone else only runs if they have the same formulae installed. A tap
+formula declaring those as `depends_on` is the fix, and is not written
+yet.
+
 ## Developing (host build)
 
 `crystal run`/`crystal spec` on host need three vendored artifacts that
