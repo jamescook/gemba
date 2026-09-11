@@ -1,4 +1,5 @@
 require "yaml"
+require "./paths"
 
 module Gemba
   # Lightweight YAML-backed localization - no external gem/shard, just
@@ -65,7 +66,7 @@ module Gemba
     end
 
     private def self.locale_path(lang : String) : String
-      File.join(__DIR__, "locales", "#{lang}.yml")
+      File.join(Paths.locales_dir, "#{lang}.yml")
     end
 
     load("en") if @@strings.empty?

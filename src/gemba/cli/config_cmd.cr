@@ -1,5 +1,6 @@
 require "option_parser"
 require "../config"
+require "../paths"
 
 module Gemba
   module CLI
@@ -52,14 +53,25 @@ module Gemba
         exists = File.exists?(@config_path)
         @io.puts "Config: #{@config_path}"
         @io.puts "  Exists: #{exists}"
-        return unless exists
 
-        config = Config.new(@config_path)
-        @io.puts "  Scale: #{config.scale}"
-        @io.puts "  Volume: #{config.volume}"
-        @io.puts "  Muted: #{config.muted?}"
-        @io.puts "  Locale: #{config.locale}"
-        @io.puts "  Show FPS: #{config.show_fps?}"
+        if exists
+          config = Config.new(@config_path)
+          @io.puts "  Scale: #{config.scale}"
+          @io.puts "  Volume: #{config.volume}"
+          @io.puts "  Muted: #{config.muted?}"
+          @io.puts "  Locale: #{config.locale}"
+          @io.puts "  Show FPS: #{config.show_fps?}"
+        end
+
+        # Where the bundled assets/game index/locales resolved from: an
+        # installed prefix's share/gemba, or the source checkout for a
+        # dev build. Worth printing because it is the one thing that
+        # differs silently between the two - it is how you tell a
+        # correct install from one still reading the build machine's
+        # source tree. Outside the `if` so it shows even with no
+        # settings file yet.
+        root = Paths.data_root
+        @io.puts "Data: #{root || Paths::SOURCE_REPO_DIR} (#{root ? "installed" : "source tree"})"
       end
 
       private def do_reset(yes : Bool) : Nil

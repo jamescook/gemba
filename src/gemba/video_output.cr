@@ -1,4 +1,5 @@
 require "tryst-sdl"
+require "./paths"
 require "./frame_painter"
 require "./toast_overlay"
 require "./hud_overlay"
@@ -44,7 +45,7 @@ module Gemba
     # The same font every toast/HUD overlay in this port draws with -
     # bundled at gemba/assets, same file ruby gemba ships (JetBrains Mono,
     # SIL OFL - freely redistributable).
-    FONT_PATH = File.expand_path("../../assets/JetBrainsMonoNL-Regular.ttf", __DIR__)
+    FONT_NAME = "JetBrainsMonoNL-Regular.ttf"
 
     @texture : Tryst::SDL::Texture
     @font : Tryst::SDL::Font
@@ -66,7 +67,7 @@ module Gemba
         width: native_width * scale, height: native_height * scale, vsync: false)
       @texture = @viewport.renderer.create_texture(native_width, native_height,
         Tryst::SDL::Texture::Access::Streaming)
-      @font = @viewport.renderer.load_font(FONT_PATH, 14)
+      @font = @viewport.renderer.load_font(Paths.asset(FONT_NAME), 14)
       @toast = ToastOverlay.new(@viewport.renderer, @font)
       @hud = HudOverlay.new(@viewport.renderer, @font)
       self.filter = :nearest

@@ -1,4 +1,5 @@
 require "tryst"
+require "./paths"
 require "./rom_library"
 require "./rom_info"
 require "./boxart_fetcher"
@@ -24,7 +25,7 @@ module Gemba
 
     IMG_SIZE = 128 # height/width of the scaled card image, in pixels
 
-    PLACEHOLDER_PNG = File.expand_path("../../assets/placeholder_boxart.png", __DIR__)
+    PLACEHOLDER_PNG = "placeholder_boxart.png"
 
     CARD_BG  = "#2a2a2a"
     TITLE_FG = "#cccccc"
@@ -52,7 +53,7 @@ module Gemba
       # A transparent placeholder gives every card a fixed pixel size
       # whether or not box art has been fetched yet - loaded once, here,
       # shared by every hollow/unresolved card slot.
-      @app.command(:image, :create, :photo, "gemba_boxart_placeholder", file: PLACEHOLDER_PNG)
+      @app.command(:image, :create, :photo, "gemba_boxart_placeholder", file: Paths.asset(PLACEHOLDER_PNG))
 
       @cards_frame = @app.create_widget("ttk::frame", parent: @path, padding: 16)
       @cards_frame.pack(fill: :both, expand: 1)

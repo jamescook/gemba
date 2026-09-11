@@ -42,3 +42,20 @@ Gemba.logger = Gemba::SessionLogger.new(File.tempname("gemba_spec_logs"))
 def stub_tk_popup(app) : Nil
   app.tcl_eval("proc ::tk_popup {menu x y {entry {}}} {}")
 end
+
+# Runs the block with GEMBA_DATA_DIR set, restoring whatever was there
+# before (usually nothing). Paths.data_root reads the variable on every
+# call precisely so a spec can vary it like this.
+def with_data_dir(dir : String, &)
+  previous = ENV["GEMBA_DATA_DIR"]?
+  ENV["GEMBA_DATA_DIR"] = dir
+  begin
+    yield
+  ensure
+    if previous
+      ENV["GEMBA_DATA_DIR"] = previous
+    else
+      ENV.delete("GEMBA_DATA_DIR")
+    end
+  end
+end

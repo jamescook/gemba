@@ -1,4 +1,5 @@
 require "json"
+require "./paths"
 
 module Gemba
   #   GameIndex.lookup("AGB-AXVE")                    # => "Pokemon - Ruby Version (USA)"
@@ -10,8 +11,6 @@ module Gemba
   # File.read on Tk's own thread with no App to route it through
   # #off_thread.
   module GameIndex
-    DATA_DIR = File.join(__DIR__, "data")
-
     # game_code prefix -> the serial-keyed JSON file for that platform.
     PLATFORM_FILES = {
       "AGB" => "gba_games.json",
@@ -72,7 +71,10 @@ module Gemba
                                 files : Hash(String, String)) : Nil
       return if into.has_key?(platform)
 
-      path = File.join(DATA_DIR, files[platform])
+      # Paths.game_data_dir per call rather than a compile-time
+      # constant: an installed binary reads these out of its own
+      # prefix's share/gemba/data, which no __DIR__ can name.
+      path = File.join(Paths.game_data_dir, files[platform])
       into[platform] = File.exists?(path) ? Hash(String, String).from_json(File.read(path)) : {} of String => String
     end
   end
