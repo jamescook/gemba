@@ -28,9 +28,11 @@ and `shard.lock` pins the exact commits it was last tested against - see
 brew install jamescook/tap/gemba
 ```
 
-This builds from source, including libmgba and rcheevos, and pulls in
-SDL3, Tcl/Tk and the rest as Homebrew dependencies. The formula lives in
-[jamescook/homebrew-tap](https://github.com/jamescook/homebrew-tap).
+On Apple Silicon Macs running macOS 15 or later this installs a
+prebuilt binary, with SDL3, Tcl/Tk and the rest as Homebrew
+dependencies. Intel Macs build from source instead, including libmgba
+and rcheevos, which also installs Crystal and CMake. The formula lives
+in [jamescook/homebrew-tap](https://github.com/jamescook/homebrew-tap).
 
 ### From source
 
@@ -166,13 +168,15 @@ suite, and commit the updated lock.
 3. `scripts/docker-test.sh` - the full suite must pass.
 4. Add a `CHANGELOG.md` entry dated today, commit, then tag and push:
    `git tag vX.Y.Z && git push origin main vX.Y.Z`.
-5. In jamescook/homebrew-tap, point `Formula/gemba.rb` at the new tag's
-   tarball and update its checksum:
+5. Bump the Homebrew formula and publish its bottles - see
+   [Maintaining](https://github.com/jamescook/homebrew-tap#maintaining)
+   in jamescook/homebrew-tap. In short, open the bump pull request:
 
    ```
-   curl -fsSL https://github.com/jamescook/gemba/archive/refs/tags/vX.Y.Z.tar.gz | shasum -a 256
+   brew bump-formula-pr --no-fork --no-browse \
+     --url https://github.com/jamescook/gemba/archive/refs/tags/vX.Y.Z.tar.gz \
+     jamescook/tap/gemba
    ```
 
-   Then `brew install --build-from-source jamescook/tap/gemba`,
-   `brew test jamescook/tap/gemba` and
-   `brew audit --strict jamescook/tap/gemba`, and push.
+   and once its checks pass, run the tap's publish workflow with that
+   pull request's number instead of merging it.
