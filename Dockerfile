@@ -61,7 +61,11 @@ WORKDIR /app
 # unconditionally when ffmpeg dev headers are merely present, unrelated
 # to whether USE_FFMPEG is requested) links against libswscale, which
 # this minimal build deliberately has no other use for. Confirmed
-# directly on host - see lib_mgba.cr's own comment.
+# directly on host - see lib_mgba.cr's own comment. USE_LUA, USE_MINIZIP
+# and USE_DISCORD_RPC are pinned off too: mGBA switches each on whenever
+# it happens to find the library, so leaving them unset makes the build
+# depend on what else is installed. Keep these flags in sync with the
+# README and the Homebrew formula.
 #
 # Deliberately BEFORE copying gemba's own source below: this step
 # depends on nothing from this shard (only the pinned mgba tag), so
@@ -77,8 +81,9 @@ RUN set -eux; \
       -DBUILD_SHARED=OFF -DBUILD_STATIC=ON \
       -DBUILD_QT=OFF -DBUILD_SDL=OFF \
       -DBUILD_GL=OFF -DBUILD_GLES2=OFF -DBUILD_GLES3=OFF \
-      -DBUILD_LIBRETRO=OFF -DSKIP_FRONTEND=ON \
+      -DBUILD_LIBRETRO=OFF \
       -DUSE_SQLITE3=OFF -DUSE_ELF=OFF -DUSE_LZMA=OFF -DUSE_EDITLINE=OFF -DUSE_FFMPEG=OFF \
+      -DUSE_LUA=OFF -DUSE_MINIZIP=OFF -DUSE_DISCORD_RPC=OFF \
       -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
       -DCMAKE_INSTALL_PREFIX=/app/vendor/mgba-install \
       -DCMAKE_POLICY_VERSION_MINIMUM=3.5; \
