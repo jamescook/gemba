@@ -1,0 +1,31 @@
+# NOTICE: This lockfile contains some overrides from shard.override.yml
+version: 2.0
+shards:
+  ameba:
+    git: https://github.com/crystal-ameba/ameba.git
+    version: 1.7.0+git.commit.9a19f5f98abdf792a5a0ef6ca5c5d89459740e2f
+
+  tryst: # Overridden
+    git: https://github.com/jamescook/tryst.git
+    version: 0.1.0+git.commit.6e54cb3618339f611ccc0b26e7de80370404a2e2
+
+  tryst-sdl:
+    git: https://github.com/jamescook/tryst-sdl.git
+    version: 0.1.0+git.commit.4ae197342219f684928bb0ed7ac5cb94e0c304be
+
+  tryst-segmented:
+    git: https://github.com/jamescook/tryst-segmented.git
+    version: 0.1.0+git.commit.b9155a54ef31a0e320e3d7f8af41e4928dfdf197
+
+  tryst-switch:
+    git: https://github.com/jamescook/tryst-switch.git
+    version: 0.1.0+git.commit.397715f12a432458a19fc0543455268aa614c850
+
+  tryst-value-slider:
+    git: https://github.com/jamescook/tryst-value-slider.git
+    version: 0.1.0+git.commit.ed68dab6045ee92b80e9c4d281a36e7f9a7bd8eb
+
+  tryst-vector: # Overridden
+    git: https://github.com/jamescook/tryst-vector.git
+    version: 0.1.0+git.commit.22b7e19e91021efa0575ad6b34d1adee4121fb57
+

@@ -114,8 +114,9 @@ RUN set -eux; \
 # shard.override.yml must ride along with shard.yml: it is what forces
 # tryst/tryst-vector to branch HEAD past the released shards' own ~> 0.1
 # constraints (see its own comment) - without it, `shards install` below
-# fails to resolve at all.
-COPY shard.yml shard.override.yml ./
+# fails to resolve at all. shard.lock rides along too, so the image
+# tests the exact tryst-family commits a release build installs.
+COPY shard.yml shard.override.yml shard.lock ./
 COPY native/ native/
 
 # native/null_logger.c can't be built until libmgba's own headers exist
@@ -130,20 +131,15 @@ COPY src/ src/
 COPY spec/ spec/
 COPY assets/ assets/
 
-# shards install resolves tryst/tryst-sdl/tryst-vector/etc. via their
-# `github:` branch refs in shard.yml - Docker's cache key for this layer
-# is shard.yml's own content, which never changes just because an
-# upstream dependency got a new commit. On a one-shot build (GitHub's
-# old hosted runners) that was invisible; on this machine's persistent
-# self-hosted Docker daemon it meant every build silently kept
-# resolving whatever commit was fetched the FIRST time this layer ever
-# ran, no matter how many times the actual dependency repos changed
-# afterward (confirmed directly: stuck testing an hours-stale tryst
-# commit through several rounds of pushed fixes). CACHEBUST forces this
-# layer (and only this one - everything above it still caches normally)
-# to always re-resolve.
-ARG CACHEBUST=1
-RUN shards install
+# Installs the commits pinned in the committed shard.lock, not whatever
+# the tryst-family `branch: main` refs point at today. To test newer
+# upstream commits, `shards update` on the host first - the changed lock
+# is part of this layer's cache key, so the layer re-runs on its own.
+# (It used to resolve the branches afresh, which needed a CACHEBUST
+# build arg: a persistent Docker daemon otherwise kept reusing the first
+# commit it ever fetched.) --frozen fails the build if the lock no
+# longer satisfies shard.yml instead of quietly re-resolving.
+RUN shards install --frozen
 
 # Sorted file list rather than bare `crystal spec`: the runner's own
 # glob returns files in readdir order, which reshuffles whenever a spec

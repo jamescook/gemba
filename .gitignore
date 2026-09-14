@@ -1,9 +1,14 @@
 # The root .gitignore anchors its Crystal entries to the repo root
 # (/lib/, /.shards/, /shard.lock), so this shard needs its own copies -
 # same convention every other shard's own .gitignore already uses.
+#
+# Except shard.lock, which is committed: gemba is an app, and every
+# tryst-family dependency tracks `branch: main`, so without a lock a
+# tagged release would build against whatever those repos' HEADs are on
+# the day someone installs it. Pick up new upstream commits with
+# `shards update`, then commit the lock.
 /lib/
 /.shards/
-/shard.lock
 /docs/
 /bin/
 *.dwarf
