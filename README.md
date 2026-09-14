@@ -11,28 +11,30 @@ a settings UI, modals, hotkeys, all of it. Every gap it exposes in Tryst
 gets fixed in Tryst, not worked around here. A working, genuinely
 playable GBA frontend is very much the goal too - just the second one.
 
-It lives inside this monorepo so a change to Tryst/tryst-sdl that gemba
-needed can land in the same commit as the code that needed it, rather
-than across two repos with a version bump in between.
+Tryst, tryst-sdl and the tryst widget shards each live in their own
+repo. gemba follows their `main` branches rather than their releases,
+and `shard.lock` pins the exact commits it was last tested against - see
+[Dependencies](#dependencies).
 
 ## Screenshots
 
 ![goodboy](assets/goodboy.png)
 
-## Building
-
-```
-shards install
-crystal spec                    # host
-scripts/docker-test.sh          # Debian forky, same suite
-```
-
-Needs whatever tryst and tryst-sdl need (Crystal >= 1.21.0, Tcl/Tk 8.6,
-SDL3), plus libmgba and rcheevos - see the Dockerfile for how the
-container builds both from source, or tryst-sdl's own README for
-per-platform SDL package names.
-
 ## Installing
+
+### Homebrew (macOS)
+
+```
+brew install jamescook/tap/gemba
+```
+
+This builds from source, including libmgba and rcheevos, and pulls in
+SDL3, Tcl/Tk and the rest as Homebrew dependencies. The formula lives in
+[jamescook/homebrew-tap](https://github.com/jamescook/homebrew-tap).
+
+### From source
+
+Needs a working host build first - see [Developing](#developing). Then:
 
 ```
 make                      # release build -> bin/release/gemba
@@ -54,7 +56,9 @@ user convention most modern Linux distros put on `PATH` when it exists
 install` prints a hint if the target bin dir is missing from `PATH`.
 `/usr/local` is the system-wide choice on both: it is in `/etc/paths` on
 every Mac, and on Apple Silicon it is not Homebrew's prefix
-(`/opt/homebrew`), so it collides with nothing brew owns.
+(`/opt/homebrew`), so it collides with nothing brew owns. Under `sudo`,
+pass `PREFIX` explicitly - `sudo make install` alone installs root-owned
+files into your own `~/.local`.
 
 The install writes two things, and both are needed:
 
@@ -77,22 +81,26 @@ with no `make install`) has no `share/` beside its binary and reads the
 source tree instead - which is why the second line exists and why a
 checkout needs no install to be developed in.
 
-Note that the binary links Homebrew's dylibs by absolute path
-(`/opt/homebrew/opt/{sdl3,sdl3_ttf,tcl-tk,...}`), so a copy handed to
-someone else only runs if they have the same formulae installed. A tap
-formula declaring those as `depends_on` is the fix, and is not written
-yet.
+The binary links Homebrew's dylibs by absolute path
+(`/opt/homebrew/opt/{sdl3,sdl3_ttf,tcl-tk,...}`), so a copy built this
+way and handed to someone else only runs if they have the same formulae
+installed. Point them at the Homebrew install instead.
 
-## Developing (host build)
+## Developing
 
-`crystal run`/`crystal spec` on host need three vendored artifacts that
-git does not track and nothing builds automatically - do this once
-before your first host build (the Dockerfile runs the identical recipe
-for the container image):
+Needs whatever tryst and tryst-sdl need (Crystal >= 1.21.0, Tcl/Tk 8.6
+or 9, SDL3), plus libmgba and rcheevos - see tryst-sdl's own README for
+per-platform SDL package names.
+
+### Host build
+
+A host build needs three vendored artifacts that git does not track and
+nothing builds automatically - do this once before your first host
+build. The Dockerfile and the Homebrew formula run the identical recipe,
+so keep all three in sync if the versions or flags change.
 
 ```
-# 1. libmgba, built minimal (no Qt/SDL frontend, no GL) - same flags
-#    the Dockerfile uses, so keep them in sync if either changes.
+# 1. libmgba, built minimal (no Qt/SDL frontend, no GL).
 mkdir -p vendor
 git clone --depth 1 --branch 0.10.5 https://github.com/mgba-emu/mgba.git vendor/mgba
 cmake -S vendor/mgba -B vendor/build \
@@ -105,7 +113,7 @@ cmake -S vendor/mgba -B vendor/build \
   -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
   -DCMAKE_INSTALL_PREFIX="$(pwd)/vendor/mgba-install" \
   -DCMAKE_POLICY_VERSION_MINIMUM=3.5
-cmake --build vendor/build -j "$(nproc)"
+cmake --build vendor/build -j "$(getconf _NPROCESSORS_ONLN)"
 cmake --install vendor/build
 rm -rf vendor/mgba vendor/build
 
@@ -119,9 +127,51 @@ rm -rf vendor/rcheevos
 # 3. native/null_logger.o - real C (a genuine va_list parameter Crystal
 #    can't express), built against libmgba's just-installed headers.
 cc -c -I vendor/mgba-install/include native/null_logger.c -o native/null_logger.o
+
+# 4. The Crystal dependencies, at the commits in shard.lock.
+shards install
 ```
 
 `vendor/` and `native/*.o` are both gitignored - this is a local build
 step, not something to commit. Re-run it whenever `vendor/mgba-install`,
 `vendor/rcheevos-build`, or `native/null_logger.o` go missing (e.g.
 after a clean checkout).
+
+### Tests
+
+```
+scripts/docker-test.sh                      # full suite, Debian forky
+scripts/docker-test.sh spec/gemba_spec.cr   # one file
+```
+
+Run specs in Docker, not with `crystal spec` on the host: the suite
+opens real Tk windows, which steal focus while it runs. Docker builds
+libmgba and rcheevos itself, so it needs none of the host setup above.
+
+### Dependencies
+
+Every tryst-family dependency tracks `branch: main`, and
+`shard.override.yml` forces tryst and tryst-vector to `main` everywhere
+in the dependency graph. `shard.lock` is committed, so `shards install`,
+the Docker image and the Homebrew formula all build the same commits. To
+pick up new upstream commits, run `shards update`, run the full Docker
+suite, and commit the updated lock.
+
+## Releasing
+
+1. Bump the version in `shard.yml`, `src/gemba.cr` and
+   `spec/gemba_spec.cr`.
+2. If the release should include newer tryst commits, `shards update`.
+3. `scripts/docker-test.sh` - the full suite must pass.
+4. Add a `CHANGELOG.md` entry dated today, commit, then tag and push:
+   `git tag vX.Y.Z && git push origin main vX.Y.Z`.
+5. In jamescook/homebrew-tap, point `Formula/gemba.rb` at the new tag's
+   tarball and update its checksum:
+
+   ```
+   curl -fsSL https://github.com/jamescook/gemba/archive/refs/tags/vX.Y.Z.tar.gz | shasum -a 256
+   ```
+
+   Then `brew install --build-from-source jamescook/tap/gemba`,
+   `brew test jamescook/tap/gemba` and
+   `brew audit --strict jamescook/tap/gemba`, and push.
